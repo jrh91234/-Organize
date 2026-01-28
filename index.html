@@ -52,7 +52,6 @@
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; transition: background-color 0.2s; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         
-        /* Collapse Button */
         .collapse-btn { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; background: white; border: 1px solid #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 51; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .collapse-btn:hover { background-color: #f9fafb; color: #2563eb; }
 
@@ -119,7 +118,8 @@
             ZoomOut: (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>,
             LogOut: (p) => <IconBase {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></IconBase>,
             Cloud: (p) => <IconBase {...p}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></IconBase>,
-            UserPlus: (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></IconBase>
+            UserPlus: (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></IconBase>,
+            Refresh: (p) => <IconBase {...p}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
@@ -177,11 +177,9 @@
                     className={`relative flex flex-col items-center p-3 rounded-xl border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer bg-white ${className} ${isSelected ? 'ring-4 ring-blue-400 scale-105 z-20' : 'hover:scale-105'} ${isLocked || isViewOnly ? 'cursor-default' : 'draggable-source'}`}
                     onClick={(e) => { e.stopPropagation(); if(!isViewOnly || isLocked) onClick(employee); }} 
                 >
-                    {/* Badge ประเภทพนักงาน */}
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${isSubcontract ? 'bg-orange-500' : 'bg-blue-600'}`}>
                         {isSubcontract ? 'S' : 'P'}
                     </div>
-
                     <div className="relative">
                         <img src={employee.image || "https://via.placeholder.com/100?text=No+Img"} alt={employee.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/>
                         <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status === 'Active' ? 'bg-green-500' : 'bg-red-500'}`}></div></div>
@@ -190,9 +188,7 @@
                         <p className="text-[10px] sm:text-xs font-bold text-gray-500">{employee.id}</p>
                         <h3 className="text-xs sm:text-sm font-bold text-gray-800 leading-tight truncate w-full">{employee.name}</h3>
                         <p className="text-[10px] sm:text-xs text-gray-600 truncate w-full">{employee.position}</p>
-                        {isSubcontract && employee.company && (
-                            <p className="text-[9px] text-orange-600 truncate w-full mt-0.5 font-semibold">({employee.company})</p>
-                        )}
+                        {isSubcontract && employee.company && <p className="text-[9px] text-orange-600 truncate w-full mt-0.5 font-semibold">({employee.company})</p>}
                     </div>
                     {isStaging && !isLocked && !isViewOnly && (
                         <button onClick={(e) => { e.stopPropagation(); onMoveInit(employee); }} className={`absolute top-1 right-1 p-1.5 rounded-full ${isSelected ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icons.Move size={14} /></button>
@@ -279,14 +275,8 @@
                             <h2 className="text-xl font-bold text-gray-800">เข้าสู่ระบบ</h2>
                         </div>
                         <form onSubmit={handleLogin} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">ชื่อผู้ใช้</label>
-                                <input type="text" value={user} onChange={e => setUser(e.target.value)} className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" required />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">รหัสผ่าน</label>
-                                <input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" required />
-                            </div>
+                            <div><label className="block text-sm font-medium text-gray-700">ชื่อผู้ใช้</label><input type="text" value={user} onChange={e => setUser(e.target.value)} className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" required /></div>
+                            <div><label className="block text-sm font-medium text-gray-700">รหัสผ่าน</label><input type="password" value={pass} onChange={e => setPass(e.target.value)} className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none" required /></div>
                             {error && <p className="text-red-500 text-xs text-center">{error}</p>}
                             <button type="submit" className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 font-bold transition-colors">เข้าสู่ระบบ</button>
                         </form>
@@ -299,14 +289,29 @@
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl }) => {
             const [users, setUsers] = useState(() => JSON.parse(localStorage.getItem('users')) || []);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' });
+            const [editingUsername, setEditingUsername] = useState(null); // Track editing state
 
-            const addUser = () => {
+            const saveUser = () => {
                 if (newUser.username && newUser.password) {
-                    const updated = [...users, newUser];
+                    let updated;
+                    if (editingUsername) {
+                        // Update existing
+                        updated = users.map(u => u.username === editingUsername ? newUser : u);
+                        setEditingUsername(null);
+                    } else {
+                        // Add new
+                        if(users.some(u => u.username === newUser.username)) { alert('ชื่อผู้ใช้นี้มีอยู่แล้ว'); return; }
+                        updated = [...users, newUser];
+                    }
                     setUsers(updated);
                     localStorage.setItem('users', JSON.stringify(updated));
                     setNewUser({ username: '', password: '', role: 'leader', name: '' });
                 }
+            };
+
+            const startEdit = (user) => {
+                setNewUser(user);
+                setEditingUsername(user.username);
             };
 
             const deleteUser = (username) => {
@@ -319,49 +324,43 @@
 
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
-                    <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+                    <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b flex justify-between items-center">
-                            <h2 className="text-xl font-bold">Admin Panel (จัดการผู้ใช้ & ระบบ)</h2>
+                            <h2 className="text-xl font-bold">Admin Panel</h2>
                             <button onClick={onClose}><Icons.X /></button>
                         </div>
                         <div className="p-6 overflow-y-auto space-y-6">
-                            {/* Google Drive Settings */}
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <h3 className="font-bold text-blue-800 mb-2 flex items-center"><Icons.Cloud className="mr-2"/> Google Drive Integration</h3>
-                                <p className="text-xs text-blue-600 mb-2">ใส่ URL ของ Google Apps Script Web App เพื่อเปิดใช้งานการอัพโหลดรูปไปที่ Drive (ถ้าเว้นว่างไว้จะเก็บในเครื่อง)</p>
-                                <input 
-                                    type="text" 
-                                    value={driveUrl} 
-                                    onChange={(e) => setDriveUrl(e.target.value)}
-                                    placeholder="https://script.google.com/macros/s/..." 
-                                    className="w-full p-2 border rounded text-sm"
-                                />
+                                <h3 className="font-bold text-blue-800 mb-2 flex items-center"><Icons.Cloud className="mr-2"/> Google Apps Script URL</h3>
+                                <p className="text-xs text-blue-600 mb-2">ใส่ Web App URL ที่ได้จาก Google Apps Script เพื่อเปิดใช้งานการอัปโหลดรูป</p>
+                                <input type="text" value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} placeholder="https://script.google.com/macros/s/..." className="w-full p-2 border rounded text-sm"/>
                             </div>
 
-                            {/* User Management */}
                             <div>
-                                <h3 className="font-bold mb-4 flex items-center"><Icons.Users className="mr-2"/> รายชื่อผู้ใช้งาน</h3>
-                                <div className="flex gap-2 mb-4">
-                                    <input placeholder="Username" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="border p-2 rounded text-sm flex-1" />
-                                    <input placeholder="Password" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm flex-1" />
-                                    <input placeholder="Name" value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm flex-1" />
-                                    <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm">
-                                        <option value="admin">Admin</option>
-                                        <option value="supervisor">Supervisor</option>
-                                        <option value="leader">Leader</option>
-                                        <option value="viewer">Viewer</option>
-                                    </select>
-                                    <button onClick={addUser} className="bg-green-600 text-white p-2 rounded"><Icons.Plus /></button>
+                                <h3 className="font-bold mb-4 flex items-center"><Icons.Users className="mr-2"/> จัดการผู้ใช้งาน</h3>
+                                <div className="flex gap-2 mb-4 items-end bg-gray-50 p-3 rounded">
+                                    <div className="flex-1"><label className="text-xs text-gray-500">Username</label><input value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="border p-2 rounded text-sm w-full" disabled={!!editingUsername}/></div>
+                                    <div className="flex-1"><label className="text-xs text-gray-500">Password</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
+                                    <div className="flex-1"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
+                                    <div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div>
+                                    <button onClick={saveUser} className={`${editingUsername ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'} text-white p-2 rounded h-[38px] w-[38px] flex items-center justify-center`}>
+                                        {editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}
+                                    </button>
+                                    {editingUsername && <button onClick={() => { setEditingUsername(null); setNewUser({ username: '', password: '', role: 'leader', name: '' }); }} className="bg-gray-400 text-white p-2 rounded h-[38px] w-[38px] flex items-center justify-center"><Icons.X size={18}/></button>}
                                 </div>
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100"><tr><th className="p-2">User</th><th className="p-2">Name</th><th className="p-2">Role</th><th className="p-2">Action</th></tr></thead>
+                                    <thead className="bg-gray-100"><tr><th className="p-2">User</th><th className="p-2">Password</th><th className="p-2">Name</th><th className="p-2">Role</th><th className="p-2">Action</th></tr></thead>
                                     <tbody>
                                         {users.map((u, i) => (
                                             <tr key={i} className="border-b">
-                                                <td className="p-2">{u.username}</td>
+                                                <td className="p-2 font-medium">{u.username}</td>
+                                                <td className="p-2 font-mono text-xs text-gray-500">{u.password}</td>
                                                 <td className="p-2">{u.name}</td>
                                                 <td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${u.role==='admin'?'bg-red-100 text-red-800':u.role==='supervisor'?'bg-blue-100 text-blue-800':'bg-gray-100'}`}>{u.role}</span></td>
-                                                <td className="p-2">{u.username !== 'admin' && <button onClick={() => deleteUser(u.username)} className="text-red-500"><Icons.Trash2 size={16}/></button>}</td>
+                                                <td className="p-2 flex gap-2">
+                                                    <button onClick={() => startEdit(u)} className="text-orange-500 hover:bg-orange-50 p-1 rounded" title="Edit"><Icons.Edit size={16}/></button>
+                                                    {u.username !== 'admin' && <button onClick={() => deleteUser(u.username)} className="text-red-500 hover:bg-red-50 p-1 rounded" title="Delete"><Icons.Trash2 size={16}/></button>}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -381,7 +380,6 @@
             const [isUploading, setIsUploading] = useState(false);
             const fileInputRef = useRef(null);
             
-            // Permissions
             const isEditMode = employee && !employee.isNew;
             const canEditStructure = role === 'admin' || role === 'supervisor';
             const canDelete = canEditStructure;
@@ -389,7 +387,6 @@
             useEffect(() => {
                 setShowDeleteConfirm(false); setIsManagingPos(false);
                 if (isEditMode) {
-                    // Backwards compatibility for data without 'type'
                     setFormData({ type: 'Permanent', company: '', ...employee });
                 } else {
                     setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: positions[0] || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '' });
@@ -398,7 +395,7 @@
 
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
             
-            // --- GOOGLE DRIVE / LOCAL IMAGE HANDLER ---
+            // --- UPDATED IMAGE UPLOAD (Real Fetch) ---
             const handleImageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -406,18 +403,51 @@
                 if (driveUrl) {
                     setIsUploading(true);
                     const reader = new FileReader();
-                    reader.onloadend = () => {
+                    reader.onloadend = async () => {
                         const base64Data = reader.result;
-                        // Simulating Admin-configured Link Usage
-                        console.log(`[System] Uploading to Admin Configured Link: ${driveUrl}`);
-                        setTimeout(() => {
-                            setFormData(prev => ({ ...prev, image: base64Data })); 
+                        // Real fetch to Google Apps Script
+                        try {
+                            // Extract pure base64 (remove data:image/jpeg;base64, prefix)
+                            const base64Content = base64Data.split(',')[1];
+                            const mimeType = base64Data.split(';')[0].split(':')[1];
+                            
+                            // Using no-cors mode for basic fire-and-forget if script returns text/plain, 
+                            // but standard is using a proxy or correctly setting up GAS for JSONP/CORS.
+                            // For modern GAS Web App set to 'Anyone', simple POST works often.
+                            // However, strictly sticking to 'text/plain' payload to avoid CORS preflight is safest for simple GAS.
+                            
+                            const payload = {
+                                file: base64Content,
+                                filename: `emp_${formData.id}_${Date.now()}.jpg`,
+                                mimetype: mimeType
+                            };
+
+                            const response = await fetch(driveUrl, {
+                                method: 'POST',
+                                body: JSON.stringify(payload)
+                            });
+                            
+                            const result = await response.json();
+                            
+                            if (result && result.url) {
+                                setFormData(prev => ({ ...prev, image: result.url }));
+                                alert("อัปโหลดไปยัง Google Drive สำเร็จ!");
+                            } else {
+                                throw new Error("No URL returned");
+                            }
+
+                        } catch (error) {
+                            console.error("Upload Error:", error);
+                            // Fallback to local storage if upload fails
+                            alert("การอัปโหลดไป Drive ขัดข้อง (อาจติดสิทธิ์ CORS หรือเน็ต) ระบบจะบันทึกลงเครื่องแทนชั่วคราว");
+                            setFormData(prev => ({ ...prev, image: base64Data }));
+                        } finally {
                             setIsUploading(false);
-                            alert(`กำลังส่งข้อมูลไปยัง Google Drive (ตามลิงค์ที่ Admin ตั้งค่าไว้)\nURL: ${driveUrl.substring(0, 30)}...`); 
-                        }, 1500);
+                        }
                     };
                     reader.readAsDataURL(file);
                 } else {
+                    // Local Storage Mode
                     const reader = new FileReader();
                     reader.onloadend = () => setFormData(prev => ({ ...prev, image: reader.result }));
                     reader.readAsDataURL(file);
@@ -440,27 +470,20 @@
                                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><span className="text-white text-xs">แตะเพื่อถ่ายรูป</span></div>
                                 </div>
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageUpload} />
-                                <p className="text-xs text-gray-500 mt-2">{driveUrl ? "Cloud Upload Active" : "Local Storage Mode"}</p>
+                                {/* Show status only if debugging/admin, otherwise hidden logic */}
+                                {role === 'admin' && <p className="text-[10px] text-gray-400 mt-2">{driveUrl ? "Cloud Sync Active" : "Local Mode"}</p>}
                             </div>
                             
-                            {/* Type & ID Grid */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">รหัส</label><input type="text" name="id" required value={formData.id} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" disabled={!canEditStructure && isEditMode}/></div>
                                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div>
                             </div>
 
-                            {/* Subcontract Selector */}
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">ประเภทพนักงาน</label>
                                 <div className="flex gap-4 mt-1">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="type" value="Permanent" checked={formData.type === 'Permanent'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
-                                        <span className="text-sm">พนักงานประจำ</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="type" value="Subcontract" checked={formData.type === 'Subcontract'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
-                                        <span className="text-sm">Subcontract</span>
-                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="type" value="Permanent" checked={formData.type === 'Permanent'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" /><span className="text-sm">พนักงานประจำ</span></label>
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="type" value="Subcontract" checked={formData.type === 'Subcontract'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" /><span className="text-sm">Subcontract</span></label>
                                 </div>
                             </div>
 
@@ -507,17 +530,13 @@
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const defaultAdmin = { username: 'admin', password: 'password', role: 'admin', name: 'Admin' };
 
-            // Auth State
             const [currentUser, setCurrentUser] = useState(null);
             const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
-
-            // Data State
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
             const [deptName, setDeptName] = useState(() => localStorage.getItem('deptName') || "Assembly Dept");
             const [driveUrl, setDriveUrl] = useState(() => localStorage.getItem('driveUrl') || "");
             
-            // UI State
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
             const [viewMode, setViewMode] = useState('chart');
@@ -533,11 +552,7 @@
             const isResizing = useRef(false);
             const [moveSource, setMoveSource] = useState(null);
 
-            // Init Default User if not exists
-            useEffect(() => {
-                if (!localStorage.getItem('users')) localStorage.setItem('users', JSON.stringify([defaultAdmin]));
-            }, []);
-
+            useEffect(() => { if (!localStorage.getItem('users')) localStorage.setItem('users', JSON.stringify([defaultAdmin])); }, []);
             useEffect(() => { localStorage.setItem('orgData', JSON.stringify(employees)); }, [employees]);
             useEffect(() => { localStorage.setItem('orgPositions', JSON.stringify(positions)); }, [positions]);
             useEffect(() => { localStorage.setItem('deptName', deptName); }, [deptName]);
@@ -548,7 +563,6 @@
             const resize = useCallback((e) => { if (isResizing.current) { const w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
 
-            // Permissions Logic
             const role = currentUser?.role;
             const isLocked = role !== 'admin' && role !== 'supervisor';
             const isViewOnly = role === 'viewer';
