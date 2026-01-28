@@ -28,7 +28,7 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions, .ruler-container, .sidebar-resizer, .zoom-controls, .login-screen, .sidebar-expander, .cloud-status { display: none !important; }
+            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions, .ruler-container, .sidebar-resizer, .zoom-controls, .login-screen, .sidebar-expander, .cloud-status, .debug-console { display: none !important; }
             main { padding: 0; margin: 0; max-width: none; width: 100%; overflow: visible !important; }
             .org-container { border: none !important; box-shadow: none !important; margin: 0 auto; transform: none !important; }
             .sidebar-overlay { display: none; }
@@ -65,6 +65,15 @@
         /* Spinner */
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Debug Console */
+        .debug-console { position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: #1e293b; color: #33ff33; font-family: monospace; font-size: 12px; z-index: 100; display: flex; flex-direction: column; border-top: 2px solid #334155; box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .debug-header { padding: 5px 10px; background: #0f172a; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; color: white; font-weight: bold; }
+        .debug-content { flex: 1; overflow-y: auto; padding: 10px; white-space: pre-wrap; }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
+        .log-time { color: #94a3b8; margin-right: 8px; }
+        .log-error { color: #ff5555; }
+        .log-info { color: #60a5fa; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen overflow-hidden">
@@ -108,7 +117,8 @@
             UserPlus: (p) => <IconBase {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></IconBase>,
             Refresh: (p) => <IconBase {...p}><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></IconBase>,
             Loader: (p) => <IconBase {...p} className={`spinner ${p.className}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconBase>,
-            Alert: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>
+            Alert: (p) => <IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>,
+            Terminal: (p) => <IconBase {...p}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
@@ -127,24 +137,35 @@
             );
         };
 
-        // --- HELPERS ---
-        // ฟังก์ชันกลางสำหรับคุยกับ Google Apps Script
-        const apiCall = async (driveUrl, action, payload = {}) => {
-            if (!driveUrl) return null; // ไม่ได้ตั้งค่า Cloud
-            try {
-                // ต้องใช้ text/plain เพื่อเลี่ยงปัญหา CORS Preflight ใน GAS Web App แบบ Simple
-                const response = await fetch(driveUrl, {
-                    method: 'POST',
-                    body: JSON.stringify({ action, ...payload })
-                });
-                return await response.json();
-            } catch (error) {
-                console.error("API Error:", error);
-                throw error;
-            }
-        };
-
         // --- COMPONENTS ---
+
+        const DebugConsole = ({ logs, onClose, onClear }) => {
+            const endRef = useRef(null);
+            useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [logs]);
+            
+            return (
+                <div className="debug-console animate-in slide-in-from-bottom duration-300">
+                    <div className="debug-header">
+                        <span className="flex items-center gap-2"><Icons.Terminal size={14}/> System Log</span>
+                        <div className="flex gap-2">
+                            <button onClick={onClear} className="text-xs bg-gray-700 px-2 py-0.5 rounded hover:bg-gray-600">Clear</button>
+                            <button onClick={onClose}><Icons.X size={16}/></button>
+                        </div>
+                    </div>
+                    <div className="debug-content">
+                        {logs.length === 0 && <span className="text-gray-500">No logs yet...</span>}
+                        {logs.map((log, i) => (
+                            <div key={i} className={`log-entry ${log.type === 'error' ? 'log-error' : log.type === 'info' ? 'log-info' : ''}`}>
+                                <span className="log-time">[{log.time}]</span>
+                                {log.msg}
+                                {log.data && <div className="pl-4 text-gray-400 text-[10px] overflow-x-auto">{JSON.stringify(log.data)}</div>}
+                            </div>
+                        ))}
+                        <div ref={endRef}></div>
+                    </div>
+                </div>
+            );
+        };
 
         const Ruler = ({ orientation = 'horizontal', length = 2000 }) => {
             const ticks = [];
@@ -263,7 +284,7 @@
 
         // --- AUTH & ADMIN COMPONENTS ---
 
-        const LoginScreen = ({ onLogin, driveUrl }) => {
+        const LoginScreen = ({ onLogin, driveUrl, apiCall }) => {
             const [user, setUser] = useState('');
             const [pass, setPass] = useState('');
             const [error, setError] = useState('');
@@ -322,13 +343,12 @@
             );
         };
 
-        const AdminPanel = ({ onClose, driveUrl, setDriveUrl }) => {
+        const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall }) => {
             const [users, setUsers] = useState([]);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' });
             const [editingUsername, setEditingUsername] = useState(null);
             const [loading, setLoading] = useState(false);
 
-            // Fetch users from Cloud or Local
             useEffect(() => {
                 const loadUsers = async () => {
                     setLoading(true);
@@ -351,8 +371,6 @@
             const saveUserAction = async () => {
                 if (!newUser.username || !newUser.password) return alert("กรุณากรอก User/Pass");
                 setLoading(true);
-                
-                // Optimistic UI Update
                 let updatedUsers;
                 if (editingUsername) updatedUsers = users.map(u => u.username === editingUsername ? newUser : u);
                 else {
@@ -361,13 +379,10 @@
                 }
                 setUsers(updatedUsers);
                 localStorage.setItem('users', JSON.stringify(updatedUsers));
-
-                // Cloud Sync
                 if (driveUrl) {
                     try { await apiCall(driveUrl, 'saveUser', { user: newUser }); } 
                     catch (e) { alert("บันทึก Cloud ไม่สำเร็จ"); }
                 }
-
                 setEditingUsername(null);
                 setNewUser({ username: '', password: '', role: 'leader', name: '' });
                 setLoading(false);
@@ -466,7 +481,7 @@
                         try {
                             const base64Content = reader.result.split(',')[1];
                             const mimeType = reader.result.split(';')[0].split(':')[1];
-                            // Send oldFileUrl if available to allow backend to handle deletion if needed
+                            // Send oldFileUrl to Backend for deletion
                             const payload = {
                                 file: base64Content,
                                 filename: `emp_${formData.id}.jpg`,
@@ -474,15 +489,18 @@
                                 oldFileUrl: formData.image 
                             };
                             
+                            // Direct fetch inside component can be tricky with logging, but let's try
                             const response = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) });
                             const result = await response.json();
+                            
                             if (result && result.url) {
                                 setFormData(prev => ({ ...prev, image: result.url }));
                                 alert("อัปโหลดรูปภาพสำเร็จเรียบร้อยแล้ว!");
-                            } else throw new Error("No URL");
+                            } else throw new Error("No URL returned from server");
                         } catch (error) {
-                            console.error(error); alert("Cloud Error. Saving locally.");
-                            setFormData(prev => ({ ...prev, image: reader.result }));
+                            console.error(error); 
+                            alert("เกิดข้อผิดพลาดในการอัปโหลดรูป (โปรดดู Debug Console)");
+                            // Fallback logging handled by global window logger if possible, or just console
                         } finally { setIsUploading(false); }
                     };
                     reader.readAsDataURL(file);
@@ -490,7 +508,7 @@
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         setFormData(prev => ({ ...prev, image: reader.result }));
-                        alert("บันทึกรูปภาพลงในเครื่องสำเร็จเรียบร้อยแล้ว!");
+                        alert("บันทึกรูปภาพลงในเครื่องสำเร็จ!");
                     };
                     reader.readAsDataURL(file);
                 }
@@ -498,20 +516,17 @@
 
             const handleSubmit = (e) => { 
                 e.preventDefault(); 
-                
                 let finalData = { ...formData };
                 // Operator Logic Check: Operator -> Operator -> Attach to supervisor
                 if (finalData.position.toLowerCase().includes('operator') && finalData.reportsTo) {
                     const supervisor = supervisors.find(s => s.id === finalData.reportsTo);
                     if (supervisor && supervisor.position.toLowerCase().includes('operator')) {
-                         // Ensure supervisor isn't Staging or Top level before reassignment
                          if (supervisor.reportsTo && supervisor.reportsTo !== 'STAGING') {
                              finalData.reportsTo = supervisor.reportsTo;
                              alert(`ระบบปรับสายงานอัตโนมัติ: ${finalData.name} จะขึ้นตรงกับหัวหน้าของ ${supervisor.name} แทน (เนื่องจาก Operator ไม่ควรคุม Operator)`);
                          }
                     }
                 }
-                
                 onSave(finalData); 
             };
 
@@ -588,7 +603,6 @@
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const defaultAdmin = { username: 'admin', password: 'password', role: 'admin', name: 'Admin' };
 
-            // Auth State: Initialize from localStorage to persist login
             const [currentUser, setCurrentUser] = useState(() => {
                 const savedUser = localStorage.getItem('currentUser');
                 return savedUser ? JSON.parse(savedUser) : null;
@@ -610,6 +624,8 @@
             const [isEditingDept, setIsEditingDept] = useState(false);
             const [zoom, setZoom] = useState(1);
             const [cloudStatus, setCloudStatus] = useState('offline'); // offline, syncing, online, error
+            const [debugLogs, setDebugLogs] = useState([]);
+            const [showDebug, setShowDebug] = useState(false);
             
             const sidebarRef = useRef(null);
             const isResizing = useRef(false);
@@ -617,14 +633,37 @@
 
             useEffect(() => { if (!localStorage.getItem('users')) localStorage.setItem('users', JSON.stringify([defaultAdmin])); }, []);
             
+            const addLog = (msg, data = null, type = 'info') => {
+                const time = new Date().toLocaleTimeString();
+                setDebugLogs(prev => [...prev, { time, msg, data, type }]);
+                if(prev.length > 50) prev.shift(); // Keep last 50 logs
+            };
+
+            const appApiCall = async (url, action, payload) => {
+                addLog(`Request: ${action}`, payload);
+                if (!url) { addLog("Skipped (No URL)", null, 'error'); return null; }
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: JSON.stringify({ action, ...payload })
+                    });
+                    const resJson = await response.json();
+                    addLog(`Response: ${action}`, resJson, resJson.status === 'error' ? 'error' : 'info');
+                    return resJson;
+                } catch (error) {
+                    addLog(`Network Error: ${action}`, error.toString(), 'error');
+                    throw error;
+                }
+            };
+
             // Sync Data Effect
             useEffect(() => {
                 localStorage.setItem('orgData', JSON.stringify(employees));
                 if (driveUrl) {
                     setCloudStatus('syncing');
-                    const timer = setTimeout(() => { if(cloudStatus === 'syncing') setCloudStatus('error'); }, 10000); 
+                    const timer = setTimeout(() => { if(cloudStatus === 'syncing') setCloudStatus('error'); }, 15000); 
                     
-                    apiCall(driveUrl, 'saveData', { orgData: employees, orgPositions: positions })
+                    appApiCall(driveUrl, 'saveData', { orgData: employees, orgPositions: positions })
                     .then(res => {
                         clearTimeout(timer);
                         setCloudStatus(res?.status === 'success' ? 'online' : 'error');
@@ -642,11 +681,11 @@
             useEffect(() => { localStorage.setItem('deptName', deptName); }, [deptName]);
             useEffect(() => { localStorage.setItem('driveUrl', driveUrl); }, [driveUrl]);
 
-            // Initial Data Load from Cloud
+            // Initial Data Load
             useEffect(() => {
                 if (driveUrl) {
                     setCloudStatus('syncing');
-                    apiCall(driveUrl, 'getData').then(res => {
+                    appApiCall(driveUrl, 'getData').then(res => {
                         if (res && res.status === 'success' && res.data) {
                             if (res.data.orgData) setEmployees(res.data.orgData);
                             if (res.data.orgPositions) setPositions(res.data.orgPositions);
@@ -683,6 +722,15 @@
             const handleAddPosition = (pos) => { if (!positions.includes(pos)) setPositions([...positions, pos]); };
             const handleDeletePosition = (pos) => { setPositions(positions.filter(p => p !== pos)); };
 
+            const handleLoginSuccess = (user) => {
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                setCurrentUser(user);
+            };
+            const handleLogout = () => {
+                localStorage.removeItem('currentUser');
+                setCurrentUser(null);
+            };
+
             const handleDownloadPDF = async () => {
                 setIsExporting(true); const prevZoom = zoom; setZoom(1); await new Promise(r => setTimeout(r, 200));
                 const element = document.getElementById('org-chart-full-view');
@@ -701,19 +749,7 @@
                 } catch (e) { alert("Error PDF Exporting"); console.error(e); } finally { setZoom(prevZoom); setIsExporting(false); }
             };
 
-            // Wrap login to save to localStorage
-            const handleLoginSuccess = (user) => {
-                localStorage.setItem('currentUser', JSON.stringify(user));
-                setCurrentUser(user);
-            };
-
-            // Wrap logout to clear localStorage
-            const handleLogout = () => {
-                localStorage.removeItem('currentUser');
-                setCurrentUser(null);
-            };
-
-            if (!currentUser) return <LoginScreen onLogin={handleLoginSuccess} driveUrl={driveUrl} />;
+            if (!currentUser) return <LoginScreen onLogin={handleLoginSuccess} driveUrl={driveUrl} apiCall={appApiCall} />;
 
             const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING');
             const rootEmployees = employees.filter(e => (!e.reportsTo || e.reportsTo === '') && e.reportsTo !== 'STAGING');
@@ -740,12 +776,13 @@
                                         {driveUrl ? (
                                             cloudStatus === 'online' ? <span className="text-green-600 flex items-center"><Icons.Cloud size={14} className="mr-1"/> Online</span> :
                                             cloudStatus === 'syncing' ? <span className="text-blue-500 flex items-center"><Icons.Loader size={14} className="mr-1"/> Syncing...</span> :
-                                            cloudStatus === 'error' ? <span className="text-red-500 flex items-center cursor-help" title="Check connection or API URL"><Icons.Alert size={14} className="mr-1"/> Error</span> :
+                                            cloudStatus === 'error' ? <span className="text-red-500 flex items-center cursor-help" title="Click for debug" onClick={() => setShowDebug(true)}><Icons.Alert size={14} className="mr-1"/> Error</span> :
                                             <span className="text-gray-400">Offline</span>
                                         ) : <span className="text-gray-400">Local</span>}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 sm:gap-2">
+                                    <button onClick={() => setShowDebug(!showDebug)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full" title="Debug Console"><Icons.Terminal size={18}/></button>
                                     <div className="hidden md:flex flex-col items-end mr-2">
                                         <span className="text-xs font-bold text-gray-700">{currentUser.name}</span>
                                         <span className="text-[10px] text-gray-500 uppercase">{currentUser.role}</span>
@@ -849,8 +886,10 @@
                         </main>
                     </div>
 
+                    {showDebug && <DebugConsole logs={debugLogs} onClose={() => setShowDebug(false)} onClear={() => setDebugLogs([])} />}
+
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} onSave={handleSave} onCancel={() => setIsModalOpen(false)} onDelete={handleDelete} onAddPosition={handleAddPosition} onDeletePosition={handleDeletePosition} role={role} driveUrl={driveUrl} />}
-                    {isAdminPanelOpen && <AdminPanel onClose={() => setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} />}
+                    {isAdminPanelOpen && <AdminPanel onClose={() => setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} />}
                 </div>
             );
         };
