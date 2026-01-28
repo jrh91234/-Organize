@@ -611,7 +611,8 @@
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
             const [deptName, setDeptName] = useState(() => localStorage.getItem('deptName') || "Assembly Dept");
-            const [driveUrl, setDriveUrl] = useState(() => localStorage.getItem('driveUrl') || "");
+            // ใส่ URL ที่ได้จากการ Deploy Web App ของคุณลงในเครื่องหมายคำพูด
+const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
