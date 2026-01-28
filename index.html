@@ -23,7 +23,6 @@
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Print & Export */
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -32,14 +31,12 @@
             .org-container { border: none !important; box-shadow: none !important; transform: none !important; }
         }
 
-        /* Logic Styles */
         .draggable-source { cursor: grab; }
         .draggable-source:active { cursor: grabbing; }
         .drop-target-hover { background-color: #dbeafe !important; border-color: #2563eb !important; transform: scale(1.05); }
         .sidebar-resizer { width: 5px; cursor: col-resize; background: transparent; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover { background: #3b82f6; }
         
-        /* Ruler */
         .ruler-tick { position: absolute; background-color: #94a3b8; }
         .ruler-label { position: absolute; font-size: 8px; color: #64748b; pointer-events: none; }
         .paper-marker { position: absolute; border-left: 1px dashed #ef4444; height: 100%; top: 0; pointer-events: none; z-index: 5; }
@@ -53,10 +50,8 @@
         const { useState, useEffect, useRef, useCallback } = React;
         const { jsPDF } = window.jspdf;
 
-        // --- 1. ICONS ---
-        const IconBase = ({ children, size = 18, className = "" }) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
-        );
+        // --- ICONS ---
+        const IconBase = ({ children, size = 18, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>);
         const Icons = {
             Camera: (p) => <IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>,
             Plus: (p) => <IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>,
@@ -85,7 +80,7 @@
             Terminal: (p) => <IconBase {...p}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></IconBase>
         };
 
-        // --- 2. COMMON COMPONENTS ---
+        // --- COMPONENTS ---
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
             const baseStyle = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base whitespace-nowrap";
             const variants = {
@@ -144,7 +139,7 @@
             );
         };
 
-        // --- 3. ORG CHART COMPONENTS ---
+        // --- ORG CHART COMPONENTS ---
         const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className = "", isStaging = false, isSelected = false, isLocked = false, isViewOnly = false }) => {
             const isSubcontract = employee.type === 'Subcontract';
             return (
@@ -224,7 +219,7 @@
             );
         };
 
-        // --- 4. MODALS & FORMS ---
+        // --- AUTH & ADMIN ---
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => {
             const [user, setUser] = useState('');
             const [pass, setPass] = useState('');
@@ -317,8 +312,10 @@
             );
         };
 
-        const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl }) => {
+        const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl, onAddPosition, onDeletePosition }) => {
             const [formData, setFormData] = useState({ id: '', name: '', position: positions[0] || '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '' });
+            const [isManagingPos, setIsManagingPos] = useState(false);
+            const [newPosInput, setNewPosInput] = useState("");
             const [isUploading, setIsUploading] = useState(false);
             const isEditMode = employee && !employee.isNew;
             const canEdit = role === 'admin' || role === 'supervisor';
@@ -337,9 +334,8 @@
                     const reader = new FileReader();
                     reader.onloadend = async () => {
                         try {
-                            // ใช้ fetch แบบ text/plain เหมือนกันเพื่อแก้ CORS สำหรับ Upload
                             const payload = { 
-                                action: 'upload', // Backend จะเช็ค property file เอาเอง แต่ส่ง action กันไว้
+                                action: 'upload', 
                                 file: reader.result.split(',')[1], 
                                 filename: `emp_${formData.id}.jpg`, 
                                 mimetype: file.type,
@@ -358,6 +354,21 @@
                 }
             };
 
+            const handleSubmit = () => {
+                let finalData = { ...formData };
+                // Logic: Operator cannot manage Operator
+                if (finalData.position.toLowerCase().includes('operator') && finalData.reportsTo) {
+                    const supervisor = supervisors.find(s => s.id === finalData.reportsTo);
+                    if (supervisor && supervisor.position.toLowerCase().includes('operator')) {
+                        if (supervisor.reportsTo && supervisor.reportsTo !== 'STAGING') {
+                            finalData.reportsTo = supervisor.reportsTo;
+                            alert(`Auto-Adjust: ${finalData.name} จะขึ้นตรงกับหัวหน้าของ ${supervisor.name} แทน (Operator ไม่ควรคุม Operator)`);
+                        }
+                    }
+                }
+                onSave(finalData);
+            };
+
             return (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -374,21 +385,41 @@
                                 <div><label className="text-xs text-gray-500">Status</label><select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Resigned">Resigned</option></select></div>
                             </div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded"/></div>
-                            <div><label className="text-xs text-gray-500">Position</label><select value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{positions.map(p=><option key={p} value={p}>{p}</option>)}</select></div>
+                            
+                            {/* Position Manager */}
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="text-xs text-gray-500">Position</label>
+                                    <button type="button" onClick={() => setIsManagingPos(!isManagingPos)} className="text-xs text-blue-600 flex items-center"><Icons.Settings size={12} className="mr-1"/>{isManagingPos ? "Done" : "Manage"}</button>
+                                </div>
+                                {isManagingPos ? (
+                                    <div className="p-3 bg-gray-50 rounded-lg border space-y-2">
+                                        <div className="flex gap-2">
+                                            <input type="text" value={newPosInput} onChange={(e) => setNewPosInput(e.target.value)} placeholder="New Position..." className="flex-1 px-2 py-1.5 text-sm border rounded"/>
+                                            <button type="button" onClick={() => { if(newPosInput.trim()) { onAddPosition(newPosInput); setNewPosInput(""); } }} className="bg-blue-600 text-white px-2 py-1 rounded text-xs">Add</button>
+                                        </div>
+                                        <div className="max-h-24 overflow-y-auto space-y-1">
+                                            {positions.map(p => <div key={p} className="flex justify-between bg-white px-2 py-1 rounded border text-xs"><span>{p}</span><button type="button" onClick={() => onDeletePosition(p)} className="text-red-400"><Icons.X size={12} /></button></div>)}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <select value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{positions.map(p=><option key={p} value={p}>{p}</option>)}</select>
+                                )}
+                            </div>
+
                             <div><label className="text-xs text-gray-500">Head</label><select value={formData.reportsTo} onChange={e => setFormData({...formData, reportsTo: e.target.value})} disabled={!canEdit && isEditMode} className="w-full border p-2 rounded"><option value="STAGING">-- Pending --</option><option value="">-- Top Level --</option>{supervisors.filter(s=>s.id!==formData.id).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
                         </div>
                         <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">
                             {isEditMode && canEdit ? <Button variant="danger" onClick={() => onDelete(formData.id)} icon={Icons.Trash2}>Del</Button> : <div></div>}
-                            <div className="flex gap-2"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button onClick={() => onSave(formData)} icon={Icons.Check}>Save</Button></div>
+                            <div className="flex gap-2"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button onClick={handleSubmit} icon={Icons.Check}>Save</Button></div>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        // --- 5. MAIN APPLICATION ---
+        // --- MAIN APP ---
         const App = () => {
-            // State Initialization
             const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser')));
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || []);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || ["Manager", "Supervisor", "Leader", "Operator"]);
@@ -407,20 +438,18 @@
             const [adminOpen, setAdminOpen] = useState(false);
             const [moveSource, setMoveSource] = useState(null);
 
-            // Logging & API
             const addLog = (msg, data = null, type = 'info') => {
                 setDebugLogs(prev => [...prev.slice(-49), { time: new Date().toLocaleTimeString(), msg, data, type }]);
             };
 
-            // *** CRITICAL FIX: CORS HANDLING ***
+            // *** FIXED API CALL (CORS BYPASS) ***
             const appApiCall = async (url, action, payload) => {
                 addLog(`Request: ${action}`, payload);
                 if (!url) return null;
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
-                        // เปลี่ยน Header เป็น text/plain เพื่อหลีกเลี่ยง Preflight Options Request
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                        headers: { "Content-Type": "text/plain;charset=utf-8" }, // Key Fix!
                         body: JSON.stringify({ action, ...payload })
                     });
                     const resJson = await response.json();
@@ -432,9 +461,9 @@
                 }
             };
 
-            // Sync Effects
             useEffect(() => {
                 localStorage.setItem('orgData', JSON.stringify(employees));
+                localStorage.setItem('orgPositions', JSON.stringify(positions)); // Save Positions
                 if (driveUrl && currentUser) {
                     setCloudStatus('syncing');
                     const timer = setTimeout(() => setCloudStatus(s => s==='syncing'?'error':s), 15000);
@@ -457,7 +486,6 @@
                 }
             }, [driveUrl, currentUser]);
 
-            // Handlers
             const handleSaveEmp = (data) => {
                 setEmployees(prev => {
                     const exists = prev.find(e => e.id === data.id);
@@ -467,6 +495,9 @@
             };
             const handleDeleteEmp = (id) => { setEmployees(prev => prev.filter(e => e.id !== id)); setModal({ open: false, data: null }); };
             const handleDrop = (srcId, targetId) => setEmployees(prev => prev.map(e => e.id === srcId ? { ...e, reportsTo: targetId } : e));
+            const handleAddPosition = (pos) => { if (!positions.includes(pos)) setPositions([...positions, pos]); };
+            const handleDeletePosition = (pos) => { setPositions(positions.filter(p => p !== pos)); };
+
             const handleExport = async () => {
                 const el = document.getElementById('org-chart-full-view');
                 if(!el) return;
@@ -491,7 +522,6 @@
 
             return (
                 <div className="flex flex-col h-full bg-gray-50">
-                    {/* Navbar */}
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 h-14 flex items-center justify-between px-4">
                         <div className="flex items-center gap-2">
                             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button>
@@ -514,7 +544,6 @@
                     {moveSource && <div className="bg-blue-600 text-white p-2 text-center text-sm sticky top-14 z-50 animate-bounce cursor-pointer" onClick={() => setMoveSource(null)}>Moving: <b>{moveSource.name}</b> (Tap destination) - Tap here to Cancel</div>}
 
                     <div className="flex flex-1 overflow-hidden relative">
-                        {/* Sidebar */}
                         {viewMode === 'chart' && (
                             <aside className={`fixed inset-y-0 left-0 z-30 bg-white border-r shadow-xl md:shadow-none md:relative transform transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`} style={{ width: sidebarWidth }}>
                                 <div className="p-4 h-full overflow-y-auto pb-20">
@@ -528,7 +557,6 @@
                             </aside>
                         )}
 
-                        {/* Main Canvas */}
                         <main className="flex-1 bg-gray-100 p-8 overflow-auto relative touch-pan-x touch-pan-y" style={viewMode==='chart' ? { backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' } : {}}>
                             {viewMode === 'chart' && <Ruler orientation="horizontal" length={3000} />}
                             {viewMode === 'chart' && <Ruler orientation="vertical" length={2000} />}
@@ -558,11 +586,21 @@
                         </main>
                     </div>
 
-                    {/* Overlays */}
                     {showDebug && <DebugConsole logs={debugLogs} onClose={() => setShowDebug(false)} onClear={() => setDebugLogs([])} />}
                     <div className="fixed bottom-4 left-4 z-50"><button onClick={() => setShowDebug(!showDebug)} className="bg-gray-800 text-white p-2 rounded-full opacity-50 hover:opacity-100"><Icons.Terminal size={16}/></button></div>
 
-                    {modal.open && <EmployeeForm employee={modal.data} supervisors={employees} positions={positions} onSave={handleSaveEmp} onCancel={() => setModal({ open: false })} onDelete={handleDeleteEmp} role={role} driveUrl={driveUrl} />}
+                    {modal.open && <EmployeeForm 
+                        employee={modal.data} 
+                        supervisors={employees} 
+                        positions={positions} 
+                        onSave={handleSaveEmp} 
+                        onCancel={() => setModal({ open: false })} 
+                        onDelete={handleDeleteEmp} 
+                        role={role} 
+                        driveUrl={driveUrl} 
+                        onAddPosition={handleAddPosition} 
+                        onDeletePosition={handleDeletePosition} 
+                    />}
                     {adminOpen && <AdminPanel onClose={() => setAdminOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} />}
                 </div>
             );
