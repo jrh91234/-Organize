@@ -28,71 +28,86 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions { display: none !important; }
-            main { padding: 0; margin: 0; max-width: none; width: 100%; }
-            .org-container { border: none !important; box-shadow: none !important; }
-            /* Hide sidebar overlay in print */
+            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions, .ruler-container, .sidebar-resizer, .zoom-controls { display: none !important; }
+            main { padding: 0; margin: 0; max-width: none; width: 100%; overflow: visible !important; }
+            .org-container { border: none !important; box-shadow: none !important; margin: 0 auto; transform: none !important; }
             .sidebar-overlay { display: none; }
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { height: 6px; width: 6px; }
+        ::-webkit-scrollbar { height: 8px; width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Drag & Drop & Interaction Styles */
         .draggable-source { cursor: grab; }
         .draggable-source:active { cursor: grabbing; }
         .drop-target-hover { background-color: #dbeafe !important; border-color: #2563eb !important; transform: scale(1.05); }
         
-        /* Selection Mode Animation */
-        .selection-mode-active { animation: pulse-border 2s infinite; border-color: #2563eb !important; background-color: #eff6ff; }
-        @keyframes pulse-border {
-            0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
-        }
+        /* Ruler Styles (Millimeters) */
+        .ruler-tick { position: absolute; background-color: #94a3b8; }
+        .ruler-label { position: absolute; font-size: 8px; color: #64748b; pointer-events: none; }
+        .paper-marker { position: absolute; border-left: 1px dashed #ef4444; height: 100%; top: 0; pointer-events: none; z-index: 5; }
+        .paper-marker-label { position: absolute; top: 2px; left: 4px; font-size: 10px; color: #ef4444; font-weight: bold; background: rgba(255,255,255,0.8); padding: 0 2px; }
+
+        .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; transition: background-color 0.2s; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
+        .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
+        
+        .collapse-btn { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; background: white; border: 1px solid #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 51; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .collapse-btn:hover { background-color: #f9fafb; color: #2563eb; }
+
+        /* Zoom Slider */
+        .zoom-controls { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 40; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; }
+        .zoom-slider { appearance: none; width: 100px; height: 4px; background: #e2e8f0; border-radius: 2px; outline: none; }
+        .zoom-slider::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #2563eb; cursor: pointer; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen overflow-hidden">
     <div id="root" class="h-full"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
         const { jsPDF } = window.jspdf;
 
-        // --- ICON COMPONENTS ---
+        // --- ICONS ---
         const IconBase = ({ children, size = 18, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {children}
             </svg>
         );
-
         const Icons = {
-            Camera: (props) => <IconBase {...props}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>,
-            Plus: (props) => <IconBase {...props}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>,
-            Trash2: (props) => <IconBase {...props}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>,
-            Download: (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>,
-            FileSpreadsheet: (props) => <IconBase {...props}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconBase>,
-            Users: (props) => <IconBase {...props}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
-            X: (props) => <IconBase {...props}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>,
-            Check: (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>,
-            Settings: (props) => <IconBase {...props}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>,
-            Move: (props) => <IconBase {...props}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>,
-            Menu: (props) => <IconBase {...props}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>,
-            List: (props) => <IconBase {...props}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>,
-            Grid: (props) => <IconBase {...props}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>
+            Camera: (p) => <IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>,
+            Plus: (p) => <IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>,
+            Trash2: (p) => <IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>,
+            Download: (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>,
+            FileSpreadsheet: (p) => <IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconBase>,
+            Users: (p) => <IconBase {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
+            X: (p) => <IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>,
+            Check: (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>,
+            Settings: (p) => <IconBase {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>,
+            Move: (p) => <IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>,
+            Menu: (p) => <IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>,
+            List: (p) => <IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>,
+            Grid: (p) => <IconBase {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>,
+            ChevronLeft: (p) => <IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>,
+            ChevronRight: (p) => <IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>,
+            Ruler: (p) => <IconBase {...p}><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><line x1="14.5" y1="3.2" x2="18.8" y2="7.5"/><line x1="12.5" y1="5.2" x2="16.8" y2="9.5"/><line x1="10.5" y1="7.2" x2="14.8" y2="11.5"/><line x1="8.5" y1="9.2" x2="12.8" y2="13.5"/><line x1="6.5" y1="11.2" x2="10.8" y2="15.5"/><line x1="4.5" y1="13.2" x2="8.8" y2="17.5"/></IconBase>,
+            Edit: (p) => <IconBase {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></IconBase>,
+            Lock: (p) => <IconBase {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></IconBase>,
+            Unlock: (p) => <IconBase {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></IconBase>,
+            ZoomIn: (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>,
+            ZoomOut: (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>
         };
 
-        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled }) => {
+        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
             const baseStyle = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base whitespace-nowrap";
             const variants = {
                 primary: "bg-blue-600 text-white hover:bg-blue-700",
                 secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50",
                 danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100",
+                ghost: "bg-transparent text-gray-500 hover:bg-gray-100 shadow-none border-0"
             };
             return (
-                <button type="button" onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+                <button type="button" onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`} title={title}>
                     {Icon && <Icon size={18} className="mr-2" />}
                     {children}
                 </button>
@@ -101,11 +116,59 @@
 
         // --- COMPONENTS ---
 
-        const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className = "", isStaging = false, isSelected = false }) => (
+        const Ruler = ({ orientation = 'horizontal', length = 2000 }) => {
+            const ticks = [];
+            // Conversion: 96 DPI. 1 inch = 25.4 mm.
+            // 1 mm = 3.78 px.
+            const pxPerMm = 3.7795;
+            const maxMm = length / pxPerMm;
+
+            for (let i = 0; i <= maxMm; i += 10) { // Tick every 10mm (1cm)
+                const pos = i * pxPerMm;
+                ticks.push(
+                    <div 
+                        key={i} 
+                        className="ruler-tick" 
+                        style={
+                            orientation === 'horizontal' 
+                            ? { left: `${pos}px`, height: '6px', width: '1px', bottom: 0 }
+                            : { top: `${pos}px`, width: '6px', height: '1px', right: 0 }
+                        }
+                    >
+                        <span className="ruler-label" style={orientation === 'horizontal' ? { left: '2px', bottom: '8px' } : { top: '2px', right: '8px' }}>{i}</span>
+                    </div>
+                );
+            }
+
+            // Paper Sizes (Landscape @ 96 DPI)
+            const paperSizes = [
+                { name: 'A4', w: 297 * pxPerMm, h: 210 * pxPerMm, color: '#ef4444' }, // 297mm x 210mm
+                { name: 'A3', w: 420 * pxPerMm, h: 297 * pxPerMm, color: '#f59e0b' }, // 420mm x 297mm
+                { name: 'A2', w: 594 * pxPerMm, h: 420 * pxPerMm, color: '#10b981' }, // 594mm x 420mm
+            ];
+
+            return (
+                <div className={`absolute bg-gray-50 border-gray-300 z-10 opacity-80 pointer-events-none ruler-container ${orientation === 'horizontal' ? 'h-8 border-b w-full top-0 left-8' : 'w-8 border-r h-full left-0 top-8'}`}>
+                    {ticks}
+                    {orientation === 'horizontal' && paperSizes.map(size => (
+                        <div key={size.name} className="paper-marker" style={{ left: `${size.w}px`, borderColor: size.color }}>
+                            <span className="paper-marker-label" style={{ color: size.color }}>{size.name}</span>
+                        </div>
+                    ))}
+                    {orientation === 'vertical' && paperSizes.map(size => (
+                        <div key={size.name} className="paper-marker w-full border-t border-l-0" style={{ top: `${size.h}px`, borderColor: size.color, height: '1px' }}>
+                             <span className="paper-marker-label" style={{ color: size.color, top: '-14px', left: '2px' }}>{size.name}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className = "", isStaging = false, isSelected = false, isLocked = false }) => (
             <div 
-                draggable="true"
-                onDragStart={(e) => onDragStart && onDragStart(e, employee.id)}
-                className={`relative flex flex-col items-center p-3 rounded-xl border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer bg-white ${className} ${isSelected ? 'ring-4 ring-blue-400 scale-105 z-20' : 'hover:scale-105'}`}
+                draggable={!isLocked}
+                onDragStart={(e) => !isLocked && onDragStart && onDragStart(e, employee.id)}
+                className={`relative flex flex-col items-center p-3 rounded-xl border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer bg-white ${className} ${isSelected ? 'ring-4 ring-blue-400 scale-105 z-20' : 'hover:scale-105'} ${isLocked ? 'cursor-default' : 'draggable-source'}`}
                 onClick={(e) => { e.stopPropagation(); onClick(employee); }}
             >
                 <div className="relative">
@@ -125,8 +188,7 @@
                     <p className="text-[10px] sm:text-xs text-gray-600 truncate w-full">{employee.position}</p>
                 </div>
                 
-                {/* ปุ่มย้าย (Move) สำหรับมือถือ */}
-                {isStaging && (
+                {isStaging && !isLocked && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onMoveInit(employee); }}
                         className={`absolute top-1 right-1 p-1.5 rounded-full ${isSelected ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
@@ -137,20 +199,19 @@
             </div>
         );
 
-        const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, level = 0 }) => {
+        const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, level = 0 }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
 
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id);
             const levelColors = ["border-blue-500 bg-blue-50", "border-indigo-500 bg-indigo-50", "border-green-500 bg-green-50", "border-gray-300 bg-white"];
             const cardColor = level < 3 ? levelColors[level] : levelColors[3];
-
-            // Logic เมื่ออยู่ในโหมดย้าย (Move Mode) และคนนี้ถูกเลือก
             const isMoveTarget = moveTargetId === employee.id;
 
-            const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
+            const handleDragOver = (e) => { if(!isLocked) { e.preventDefault(); setIsDragOver(true); } };
             const handleDragLeave = () => { setIsDragOver(false); };
             const handleDropInternal = (e) => {
+                if(isLocked) return;
                 e.preventDefault(); setIsDragOver(false);
                 const draggedId = e.dataTransfer.getData("empId");
                 if (draggedId && draggedId !== employee.id) onDrop(draggedId, employee.id);
@@ -162,11 +223,10 @@
 
                     <div 
                         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDropInternal}
-                        onClick={() => moveTargetId && onMoveSelect(employee.id)} // แตะเพื่อเลือกเป็นเป้าหมายย้าย
+                        onClick={() => moveTargetId && !isLocked && onMoveSelect(employee.id)}
                         className={`relative z-10 group transition-all duration-200 ${isDragOver ? 'drop-target-hover scale-110' : ''} ${moveTargetId ? 'cursor-crosshair' : ''}`}
                     >
-                        {/* Overlay เมื่ออยู่ในโหมดย้าย เพื่อบอกว่ากดที่นี่ได้ */}
-                        {moveTargetId && (
+                        {moveTargetId && !isLocked && (
                             <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none">
                                 <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span>
                             </div>
@@ -176,9 +236,10 @@
                             employee={employee} onClick={onEdit} 
                             onDragStart={(e, id) => e.dataTransfer.setData("empId", id)}
                             className={cardColor}
+                            isLocked={isLocked}
                         />
 
-                        {!moveTargetId && (
+                        {!moveTargetId && !isLocked && (
                             <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); onAddSubordinate(employee.id); }}
@@ -205,6 +266,7 @@
                                                 onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop}
                                                 onMoveSelect={onMoveSelect} moveTargetId={moveTargetId}
                                                 level={level + 1}
+                                                isLocked={isLocked}
                                             />
                                         </div>
                                     ))}
@@ -282,25 +344,39 @@
         };
 
         const App = () => {
-            // Initial Data
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null }, { id: '63009', name: 'Phakphum Y.', position: 'Leader Shift A', reportsTo: '68040', status: 'Active', image: null }, { id: '65024', name: 'Miss Thida C.', position: 'Assembly Operator', reportsTo: '63009', status: 'Active', image: null } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
 
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
+            const [deptName, setDeptName] = useState(() => localStorage.getItem('deptName') || "Assembly Dept");
             
-            // UI States
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null);
             const [viewMode, setViewMode] = useState('chart');
             const [isExporting, setIsExporting] = useState(false);
-            const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile Sidebar Toggle
+            const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+            const [sidebarWidth, setSidebarWidth] = useState(256);
+            const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+            const [showRulers, setShowRulers] = useState(false);
+            const [isEditingDept, setIsEditingDept] = useState(false);
+            const [zoom, setZoom] = useState(1);
+            const [isLocked, setIsLocked] = useState(false); // New: Lock Structure Mode
             
-            // Move Mode State (สำหรับมือถือ Tap to Move)
+            const sidebarRef = useRef(null);
+            const isResizing = useRef(false);
+
+            const startResizing = useCallback(() => { isResizing.current = true; }, []);
+            const stopResizing = useCallback(() => { isResizing.current = false; }, []);
+            const resize = useCallback((e) => { if (isResizing.current) { const w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
+
+            useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
+            
             const [moveSource, setMoveSource] = useState(null);
 
             useEffect(() => { localStorage.setItem('orgData', JSON.stringify(employees)); }, [employees]);
             useEffect(() => { localStorage.setItem('orgPositions', JSON.stringify(positions)); }, [positions]);
+            useEffect(() => { localStorage.setItem('deptName', deptName); }, [deptName]);
 
             const handleSave = (data) => {
                 setEmployees(prev => {
@@ -313,39 +389,48 @@
 
             const handleDelete = (id) => { setEmployees(prev => prev.filter(e => e.id !== id)); setIsModalOpen(false); };
             const handleDropOnChart = (draggedId, targetId) => { setEmployees(prev => prev.map(emp => emp.id === draggedId ? { ...emp, reportsTo: targetId } : emp)); };
-            
-            // Logic สำหรับ Tap to Move
-            const handleMoveInit = (employee) => {
-                setMoveSource(employee);
-                setIsSidebarOpen(false); // ปิด Sidebar เพื่อให้เห็นผังง่ายๆ
-            };
-            const handleMoveCommit = (targetId) => {
-                if (moveSource && moveSource.id !== targetId) {
-                    handleDropOnChart(moveSource.id, targetId);
-                    setMoveSource(null); // จบโหมดย้าย
-                }
-            };
-
+            const handleMoveInit = (employee) => { setMoveSource(employee); setIsSidebarOpen(false); };
+            const handleMoveCommit = (targetId) => { if (moveSource && moveSource.id !== targetId) { handleDropOnChart(moveSource.id, targetId); setMoveSource(null); } };
             const handleAddPosition = (pos) => { if (!positions.includes(pos)) setPositions([...positions, pos]); };
             const handleDeletePosition = (pos) => { setPositions(positions.filter(p => p !== pos)); };
 
             const handleDownloadPDF = async () => {
                 setIsExporting(true);
-                await new Promise(r => setTimeout(r, 100));
+                // Reset zoom/transform specifically for capture
+                const prevZoom = zoom;
+                setZoom(1); 
+                
+                await new Promise(r => setTimeout(r, 200)); // Wait for render
+                
                 const element = document.getElementById('org-chart-full-view');
-                if (!element) return setIsExporting(false);
+                if (!element) { setZoom(prevZoom); return setIsExporting(false); }
+
                 try {
-                    const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                    // Use scale 2 for high quality, but ensure the element isn't constrained
+                    const canvas = await html2canvas(element, { 
+                        scale: 3, 
+                        useCORS: true, 
+                        backgroundColor: '#ffffff',
+                        windowWidth: element.scrollWidth + 100 // Ensure full width capture
+                    });
+                    
                     const pdf = new jsPDF('l', 'mm', 'a4');
                     const pdfW = pdf.internal.pageSize.getWidth();
                     const pdfH = pdf.internal.pageSize.getHeight();
-                    const imgProps = pdf.getImageProperties(canvas.toDataURL('image/jpeg'));
+                    const imgProps = pdf.getImageProperties(canvas.toDataURL('image/jpeg', 1.0));
                     const ratio = imgProps.width / imgProps.height;
-                    let w = pdfW - 20, h = w / ratio;
+                    
+                    let w = pdfW - 20; 
+                    let h = w / ratio;
                     if (h > pdfH - 20) { h = pdfH - 20; w = h * ratio; }
+                    
                     pdf.addImage(imgProps.data, 'JPEG', (pdfW - w) / 2, (pdfH - h) / 2, w, h);
                     pdf.save('org-chart.pdf');
-                } catch (e) { alert("Error PDF"); } finally { setIsExporting(false); }
+                } catch (e) { alert("Error PDF Exporting"); console.error(e); } 
+                finally { 
+                    setZoom(prevZoom);
+                    setIsExporting(false); 
+                }
             };
 
             const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING');
@@ -353,92 +438,95 @@
 
             return (
                 <div className="flex flex-col h-full bg-gray-50">
-                    {/* Header */}
                     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40 shrink-0">
                         <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
                             <div className="flex justify-between h-14 items-center">
                                 <div className="flex items-center gap-2">
-                                    {/* Mobile: Toggle Sidebar */}
-                                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 text-gray-600 rounded-lg hover:bg-gray-100">
-                                        <Icons.Menu size={20} />
-                                    </button>
+                                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2 text-gray-600 rounded-lg hover:bg-gray-100"><Icons.Menu size={20} /></button>
                                     <div className="bg-red-600 p-1 rounded text-white font-bold text-sm sm:text-xl">HR</div>
-                                    <h1 className="text-sm sm:text-lg font-bold text-gray-800 hidden sm:block">Assembly Dept</h1>
+                                    <div className="flex items-center gap-2">
+                                         {isEditingDept ? (
+                                            <input autoFocus type="text" value={deptName} onChange={(e) => setDeptName(e.target.value)} onBlur={() => setIsEditingDept(false)} onKeyDown={(e) => e.key === 'Enter' && setIsEditingDept(false)} className="text-sm sm:text-lg font-bold text-gray-800 border-b border-blue-500 outline-none px-1"/>
+                                         ) : (
+                                            <h1 className="text-sm sm:text-lg font-bold text-gray-800 hidden sm:flex items-center gap-2 group cursor-pointer" onClick={() => setIsEditingDept(true)}>
+                                                {deptName}
+                                                <Icons.Edit size={14} className="text-gray-400 group-hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                                            </h1>
+                                         )}
+                                    </div>
                                 </div>
-                                
                                 <div className="flex items-center gap-1 sm:gap-2">
-                                    {/* View Toggles */}
-                                    <div className="flex bg-gray-100 rounded-lg p-0.5 sm:p-1 mr-1 sm:mr-2">
-                                        <button onClick={() => setViewMode('chart')} className={`p-1.5 sm:px-3 sm:py-1.5 rounded-md transition-all ${viewMode === 'chart' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>
-                                            <Icons.Grid size={18} className="sm:hidden" /><span className="hidden sm:inline text-sm font-medium">Chart</span>
-                                        </button>
-                                        <button onClick={() => setViewMode('list')} className={`p-1.5 sm:px-3 sm:py-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>
-                                            <Icons.List size={18} className="sm:hidden" /><span className="hidden sm:inline text-sm font-medium">List</span>
-                                        </button>
+                                    {/* View Mode Toggle */}
+                                    <div className="flex bg-gray-100 rounded-lg p-0.5 mr-1">
+                                        <button onClick={() => setViewMode('chart')} className={`p-1.5 rounded ${viewMode === 'chart' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Icons.Grid size={18}/></button>
+                                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Icons.List size={18}/></button>
                                     </div>
 
-                                    {/* Actions */}
+                                    {/* Lock Toggle */}
+                                    <button 
+                                        onClick={() => setIsLocked(!isLocked)} 
+                                        className={`p-2 rounded-full border ${isLocked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-green-50 text-green-600 border-green-200'}`}
+                                        title={isLocked ? "โครงสร้างถูกล็อค (Leader Mode)" : "แก้ไขโครงสร้างได้ (Supervisor Mode)"}
+                                    >
+                                        {isLocked ? <Icons.Lock size={18} /> : <Icons.Unlock size={18} />}
+                                    </button>
+
+                                    <button onClick={() => setShowRulers(!showRulers)} className={`p-2 rounded-full hidden sm:block ${showRulers ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`} title="ไม้บรรทัด"><Icons.Ruler size={20}/></button>
                                     <button onClick={() => { const link = document.createElement("a"); link.href = `data:text/csv;charset=utf-8,${encodeURI(["ID,Name,Position,ReportsTo,Status"].join(",") + "\n" + employees.map(e => `${e.id},${e.name},${e.position},${e.reportsTo},${e.status}`).join("\n"))}`; link.download="data.csv"; link.click(); }} className="p-2 text-green-600 hover:bg-green-50 rounded-full hidden sm:block"><Icons.FileSpreadsheet size={20}/></button>
                                     <button onClick={handleDownloadPDF} disabled={isExporting} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-50"><Icons.Download size={20}/></button>
-                                    <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} variant="primary" icon={Icons.Plus}><span className="hidden sm:inline">เพิ่ม</span></Button>
+                                    
+                                    {/* Only show Add button if NOT Locked */}
+                                    {!isLocked && (
+                                        <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} variant="primary" icon={Icons.Plus}><span className="hidden sm:inline">เพิ่ม</span></Button>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </nav>
 
-                    {/* Move Mode Alert Banner (Mobile) */}
-                    {moveSource && (
-                        <div className="bg-blue-600 text-white p-2 text-center text-sm sticky top-14 z-50 shadow-md animate-bounce">
-                            กำลังย้าย: <b>{moveSource.name}</b> <br/> <span className="text-xs opacity-80">แตะที่รูปหัวหน้าในผังเพื่อวาง</span>
-                            <button onClick={() => setMoveSource(null)} className="ml-4 underline text-xs">ยกเลิก</button>
-                        </div>
-                    )}
+                    {moveSource && <div className="bg-blue-600 text-white p-2 text-center text-sm sticky top-14 z-50 shadow-md animate-bounce">กำลังย้าย: <b>{moveSource.name}</b> <br/> <span className="text-xs opacity-80">แตะที่รูปหัวหน้าในผังเพื่อวาง</span><button onClick={() => setMoveSource(null)} className="ml-4 underline text-xs">ยกเลิก</button></div>}
 
                     <div className="flex flex-1 overflow-hidden relative">
-                        {/* Sidebar (Staging) - Responsive Drawer */}
                         {viewMode === 'chart' && (
                             <>
-                                {/* Backdrop for mobile */}
                                 {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>}
-                                
-                                <aside className={`
-                                    fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 p-4 overflow-y-auto transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
-                                    md:relative md:translate-x-0 pt-20 md:pt-4
-                                    ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                                `}>
-                                    <div className="flex justify-between items-center mb-4">
+                                <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 transform transition-transform duration-300 shadow-xl md:shadow-none md:relative md:translate-x-0 pt-20 md:pt-4 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'hidden md:hidden' : 'block'}`} style={{ width: window.innerWidth > 768 ? `${sidebarWidth}px` : '16rem' }}>
+                                    <div className="px-4 flex justify-between items-center mb-4">
                                         <h2 className="text-sm font-bold text-gray-600 uppercase">รอจัดสายงาน ({stagingEmployees.length})</h2>
-                                        <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Icons.Plus size={18}/></button>
+                                        {!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Icons.Plus size={18}/></button>}
                                     </div>
-                                    <div className="space-y-3 pb-20 md:pb-0">
+                                    <div className="px-4 space-y-3 pb-20 md:pb-0 overflow-y-auto h-[calc(100%-3rem)]">
                                         {stagingEmployees.length > 0 ? (
                                             stagingEmployees.map(emp => (
-                                                <EmployeeCard 
-                                                    key={emp.id} employee={emp} 
-                                                    onClick={(e) => { setEditingEmployee({...e, isNew:false}); setIsModalOpen(true); }}
-                                                    onDragStart={(e, id) => e.dataTransfer.setData("empId", id)}
-                                                    onMoveInit={handleMoveInit}
-                                                    className="w-full border-l-4 border-gray-400"
-                                                    isStaging={true}
-                                                    isSelected={moveSource?.id === emp.id}
-                                                />
+                                                <EmployeeCard key={emp.id} employee={emp} onClick={(e) => { setEditingEmployee({...e, isNew:false}); setIsModalOpen(true); }} onDragStart={(e, id) => e.dataTransfer.setData("empId", id)} onMoveInit={handleMoveInit} className="w-full border-l-4 border-gray-400" isStaging={true} isSelected={moveSource?.id === emp.id} isLocked={isLocked} />
                                             ))
                                         ) : (
                                             <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg"><p className="text-xs">ว่างเปล่า</p></div>
                                         )}
                                     </div>
                                     <button onClick={() => setIsSidebarOpen(false)} className="md:hidden absolute top-4 right-4 text-gray-400"><Icons.X size={24}/></button>
+                                    <div className="sidebar-resizer hidden md:block" onMouseDown={startResizing}></div>
+                                    <button className="collapse-btn hidden md:flex" onClick={() => setIsSidebarCollapsed(true)} title="ซ่อนแถบ"><Icons.ChevronLeft size={14} /></button>
                                 </aside>
+                                {isSidebarCollapsed && (
+                                    <div className="hidden md:flex flex-col border-r border-gray-200 bg-white w-10 py-4 items-center gap-4 z-30">
+                                        <button className="p-2 hover:bg-gray-100 rounded" onClick={() => setIsSidebarCollapsed(false)} title="แสดงแถบ"><Icons.ChevronRight size={18} /></button>
+                                        <div className="writing-vertical text-xs font-bold text-gray-400 tracking-wider">STAGING</div>
+                                        <div className="bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">{stagingEmployees.length}</div>
+                                    </div>
+                                )}
                             </>
                         )}
 
-                        {/* Main Content */}
-                        <main className="flex-1 bg-gray-100 p-2 sm:p-8 overflow-auto relative touch-pan-x touch-pan-y">
+                        <main className="flex-1 bg-gray-100 p-2 sm:p-8 overflow-auto relative touch-pan-x touch-pan-y" style={viewMode === 'chart' ? { backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '20px 20px' } : {}}>
+                            
+                            {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
+
                             {viewMode === 'chart' ? (
-                                <div className="min-h-full flex flex-col items-center">
-                                    <div id="org-chart-full-view" className="bg-white p-4 sm:p-8 rounded-2xl border border-gray-200 shadow-sm inline-block min-w-max scale-90 sm:scale-100 origin-top">
+                                <div className={`min-h-full flex flex-col items-center origin-top-left transition-transform duration-200 ${showRulers ? 'mt-8 ml-8' : ''}`} style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
+                                    <div id="org-chart-full-view" className="bg-white p-4 sm:p-8 rounded-2xl border border-gray-200 shadow-xl inline-block min-w-max">
                                         <div className="text-center mb-6 border-b-2 border-red-600 pb-2">
-                                            <h1 className="text-xl sm:text-3xl font-bold text-gray-800 uppercase">Assembly Dept</h1>
+                                            <h1 className="text-xl sm:text-3xl font-bold text-gray-800 uppercase">{deptName}</h1>
                                             <p className="text-gray-500 text-[10px] sm:text-sm">Updated: {new Date().toLocaleDateString('th-TH')}</p>
                                         </div>
                                         <div className="flex gap-8 sm:gap-16 justify-center">
@@ -452,6 +540,7 @@
                                                         onDrop={handleDropOnChart}
                                                         onMoveSelect={handleMoveCommit}
                                                         moveTargetId={moveSource ? moveSource.id : null}
+                                                        isLocked={isLocked}
                                                     />
                                                 ))
                                             ) : (
@@ -459,7 +548,7 @@
                                             )}
                                         </div>
                                     </div>
-                                    <div className="h-20 sm:hidden"></div> {/* Spacer for scrolling on mobile */}
+                                    <div className="h-20 sm:hidden"></div>
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -473,6 +562,16 @@
                                             </tr>
                                         ))}</tbody>
                                     </table>
+                                </div>
+                            )}
+                            
+                            {/* Zoom Controls */}
+                            {viewMode === 'chart' && (
+                                <div className="zoom-controls">
+                                    <Icons.ZoomOut size={16} className="text-gray-500"/>
+                                    <input type="range" min="0.3" max="1.5" step="0.1" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="zoom-slider"/>
+                                    <Icons.ZoomIn size={16} className="text-gray-500"/>
+                                    <span className="text-xs font-mono w-8 text-right">{Math.round(zoom * 100)}%</span>
                                 </div>
                             )}
                         </main>
