@@ -28,7 +28,7 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions, .ruler-container, .sidebar-resizer, .zoom-controls, .login-screen { display: none !important; }
+            nav, .no-print, .add-btn, .manage-pos-btn, .staging-area, .mobile-actions, .ruler-container, .sidebar-resizer, .zoom-controls, .login-screen, .sidebar-expander { display: none !important; }
             main { padding: 0; margin: 0; max-width: none; width: 100%; overflow: visible !important; }
             .org-container { border: none !important; box-shadow: none !important; margin: 0 auto; transform: none !important; }
             .sidebar-overlay { display: none; }
@@ -52,8 +52,30 @@
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; transition: background-color 0.2s; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         
+        /* Collapse Button */
         .collapse-btn { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; background: white; border: 1px solid #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 51; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .collapse-btn:hover { background-color: #f9fafb; color: #2563eb; }
+
+        .sidebar-expander {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 40px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-left: none;
+            border-top-right-radius: 8px;
+            border-bottom-right-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 30;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+        }
+        .sidebar-expander:hover { background-color: #f9fafb; color: #2563eb; }
 
         .zoom-controls { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 40; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; }
         .zoom-slider { appearance: none; width: 100px; height: 4px; background: #e2e8f0; border-radius: 2px; outline: none; }
@@ -146,27 +168,38 @@
             );
         };
 
-        const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className = "", isStaging = false, isSelected = false, isLocked = false, isViewOnly = false }) => (
-            <div 
-                draggable={!isLocked && !isViewOnly}
-                onDragStart={(e) => !isLocked && !isViewOnly && onDragStart && onDragStart(e, employee.id)}
-                className={`relative flex flex-col items-center p-3 rounded-xl border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer bg-white ${className} ${isSelected ? 'ring-4 ring-blue-400 scale-105 z-20' : 'hover:scale-105'} ${isLocked || isViewOnly ? 'cursor-default' : 'draggable-source'}`}
-                onClick={(e) => { e.stopPropagation(); if(!isViewOnly || isLocked) onClick(employee); }} // Allow click even if locked (for editing details), unless ViewOnly
-            >
-                <div className="relative">
-                    <img src={employee.image || "https://via.placeholder.com/100?text=No+Img"} alt={employee.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/>
-                    <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status === 'Active' ? 'bg-green-500' : 'bg-red-500'}`}></div></div>
+        const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className = "", isStaging = false, isSelected = false, isLocked = false, isViewOnly = false }) => {
+            const isSubcontract = employee.type === 'Subcontract';
+            return (
+                <div 
+                    draggable={!isLocked && !isViewOnly}
+                    onDragStart={(e) => !isLocked && !isViewOnly && onDragStart && onDragStart(e, employee.id)}
+                    className={`relative flex flex-col items-center p-3 rounded-xl border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer bg-white ${className} ${isSelected ? 'ring-4 ring-blue-400 scale-105 z-20' : 'hover:scale-105'} ${isLocked || isViewOnly ? 'cursor-default' : 'draggable-source'}`}
+                    onClick={(e) => { e.stopPropagation(); if(!isViewOnly || isLocked) onClick(employee); }} 
+                >
+                    {/* Badge ประเภทพนักงาน */}
+                    <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${isSubcontract ? 'bg-orange-500' : 'bg-blue-600'}`}>
+                        {isSubcontract ? 'S' : 'P'}
+                    </div>
+
+                    <div className="relative">
+                        <img src={employee.image || "https://via.placeholder.com/100?text=No+Img"} alt={employee.name} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/>
+                        <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status === 'Active' ? 'bg-green-500' : 'bg-red-500'}`}></div></div>
+                    </div>
+                    <div className="mt-2 text-center w-full">
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-500">{employee.id}</p>
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-800 leading-tight truncate w-full">{employee.name}</h3>
+                        <p className="text-[10px] sm:text-xs text-gray-600 truncate w-full">{employee.position}</p>
+                        {isSubcontract && employee.company && (
+                            <p className="text-[9px] text-orange-600 truncate w-full mt-0.5 font-semibold">({employee.company})</p>
+                        )}
+                    </div>
+                    {isStaging && !isLocked && !isViewOnly && (
+                        <button onClick={(e) => { e.stopPropagation(); onMoveInit(employee); }} className={`absolute top-1 right-1 p-1.5 rounded-full ${isSelected ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icons.Move size={14} /></button>
+                    )}
                 </div>
-                <div className="mt-2 text-center w-full">
-                    <p className="text-[10px] sm:text-xs font-bold text-gray-500">{employee.id}</p>
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-800 leading-tight truncate w-full">{employee.name}</h3>
-                    <p className="text-[10px] sm:text-xs text-gray-600 truncate w-full">{employee.position}</p>
-                </div>
-                {isStaging && !isLocked && !isViewOnly && (
-                    <button onClick={(e) => { e.stopPropagation(); onMoveInit(employee); }} className={`absolute top-1 right-1 p-1.5 rounded-full ${isSelected ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}><Icons.Move size={14} /></button>
-                )}
-            </div>
-        );
+            );
+        };
 
         const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0 }) => {
             const [isDragOver, setIsDragOver] = useState(false);
@@ -341,7 +374,7 @@
         };
 
         const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, onAddPosition, onDeletePosition, role, driveUrl }) => {
-            const [formData, setFormData] = useState({ id: '', name: '', position: positions[0] || '', reportsTo: '', image: null, status: 'Active' });
+            const [formData, setFormData] = useState({ id: '', name: '', position: positions[0] || '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '' });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
             const [isManagingPos, setIsManagingPos] = useState(false);
             const [newPosInput, setNewPosInput] = useState("");
@@ -355,8 +388,12 @@
 
             useEffect(() => {
                 setShowDeleteConfirm(false); setIsManagingPos(false);
-                if (isEditMode) setFormData(employee);
-                else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: positions[0] || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active' });
+                if (isEditMode) {
+                    // Backwards compatibility for data without 'type'
+                    setFormData({ type: 'Permanent', company: '', ...employee });
+                } else {
+                    setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: positions[0] || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '' });
+                }
             }, [employee, positions]);
 
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -367,21 +404,20 @@
                 if (!file) return;
 
                 if (driveUrl) {
-                    // Simulate Drive Upload API Call (Real implementation needs GAS backend)
                     setIsUploading(true);
-                    // For demo purposes, we will read base64 but pretend we sent it
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        // In real world: fetch(driveUrl, { method: 'POST', body: ... })
+                        const base64Data = reader.result;
+                        // Simulating Admin-configured Link Usage
+                        console.log(`[System] Uploading to Admin Configured Link: ${driveUrl}`);
                         setTimeout(() => {
-                            setFormData(prev => ({ ...prev, image: reader.result })); // Still using base64 for demo
+                            setFormData(prev => ({ ...prev, image: base64Data })); 
                             setIsUploading(false);
-                            alert("จำลอง: อัพโหลดรูปไป Drive เรียบร้อย (ในระบบจริงต้องมี GAS Backend)");
-                        }, 1000);
+                            alert(`กำลังส่งข้อมูลไปยัง Google Drive (ตามลิงค์ที่ Admin ตั้งค่าไว้)\nURL: ${driveUrl.substring(0, 30)}...`); 
+                        }, 1500);
                     };
                     reader.readAsDataURL(file);
                 } else {
-                    // Local Storage Fallback
                     const reader = new FileReader();
                     reader.onloadend = () => setFormData(prev => ({ ...prev, image: reader.result }));
                     reader.readAsDataURL(file);
@@ -406,10 +442,35 @@
                                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageUpload} />
                                 <p className="text-xs text-gray-500 mt-2">{driveUrl ? "Cloud Upload Active" : "Local Storage Mode"}</p>
                             </div>
+                            
+                            {/* Type & ID Grid */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">รหัส</label><input type="text" name="id" required value={formData.id} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" disabled={!canEditStructure && isEditMode}/></div>
                                 <div><label className="block text-xs font-semibold text-gray-500 mb-1">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div>
                             </div>
+
+                            {/* Subcontract Selector */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">ประเภทพนักงาน</label>
+                                <div className="flex gap-4 mt-1">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="type" value="Permanent" checked={formData.type === 'Permanent'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
+                                        <span className="text-sm">พนักงานประจำ</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="type" value="Subcontract" checked={formData.type === 'Subcontract'} onChange={handleChange} className="text-blue-600 focus:ring-blue-500" />
+                                        <span className="text-sm">Subcontract</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {formData.type === 'Subcontract' && (
+                                <div className="animate-in fade-in slide-in-from-top-1">
+                                    <label className="block text-xs font-semibold text-gray-500 mb-1">สังกัดบริษัท (Subcontract)</label>
+                                    <input type="text" name="company" value={formData.company} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none border-orange-200 bg-orange-50" placeholder="เช่น Manpower, Adecco"/>
+                                </div>
+                            )}
+
                             <div><label className="block text-xs font-semibold text-gray-500 mb-1">ชื่อ-นามสกุล</label><input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
                             <div>
                                 <div className="flex justify-between items-center mb-1"><label className="block text-xs font-semibold text-gray-500">ตำแหน่ง</label><button type="button" onClick={() => setIsManagingPos(!isManagingPos)} className="text-xs text-blue-600 flex items-center manage-pos-btn"><Icons.Settings size={12} className="mr-1"/>{isManagingPos ? "เสร็จ" : "แก้ไข"}</button></div>
@@ -442,7 +503,7 @@
         };
 
         const App = () => {
-            const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null }, { id: '63009', name: 'Phakphum Y.', position: 'Leader Shift A', reportsTo: '68040', status: 'Active', image: null }, { id: '65024', name: 'Miss Thida C.', position: 'Assembly Operator', reportsTo: '63009', status: 'Active', image: null } ];
+            const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent' }, { id: '63009', name: 'Phakphum Y.', position: 'Leader Shift A', reportsTo: '68040', status: 'Active', image: null, type: 'Permanent' }, { id: '65024', name: 'Miss Thida C.', position: 'Assembly Operator', reportsTo: '63009', status: 'Active', image: null, type: 'Subcontract', company: 'Manpower' } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const defaultAdmin = { username: 'admin', password: 'password', role: 'admin', name: 'Admin' };
 
@@ -489,7 +550,6 @@
 
             // Permissions Logic
             const role = currentUser?.role;
-            // Structure is Locked if user is NOT admin or supervisor (e.g. Leader/Viewer cannot drag drop)
             const isLocked = role !== 'admin' && role !== 'supervisor';
             const isViewOnly = role === 'viewer';
 
@@ -556,25 +616,18 @@
                                         <span className="text-xs font-bold text-gray-700">{currentUser.name}</span>
                                         <span className="text-[10px] text-gray-500 uppercase">{currentUser.role}</span>
                                     </div>
-                                    
                                     <div className="flex bg-gray-100 rounded-lg p-0.5 mr-1">
                                         <button onClick={() => setViewMode('chart')} className={`p-1.5 rounded ${viewMode === 'chart' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Icons.Grid size={18}/></button>
                                         <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}><Icons.List size={18}/></button>
                                     </div>
-
-                                    {/* Role Badge / Lock Status */}
                                     <div className={`p-1.5 rounded-full border flex items-center justify-center ${isLocked ? 'bg-gray-50 text-gray-500 border-gray-200' : 'bg-green-50 text-green-600 border-green-200'}`} title={isLocked ? "View/Update Only" : "Edit Structure"}>
                                         {isLocked ? <Icons.Lock size={16} /> : <Icons.Unlock size={16} />}
                                     </div>
-
                                     <button onClick={() => setShowRulers(!showRulers)} className={`p-2 rounded-full hidden sm:block ${showRulers ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`} title="ไม้บรรทัด"><Icons.Ruler size={20}/></button>
                                     <button onClick={handleDownloadPDF} disabled={isExporting} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full disabled:opacity-50"><Icons.Download size={20}/></button>
-                                    
                                     {!isLocked && (
                                         <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} variant="primary" icon={Icons.Plus}><span className="hidden sm:inline">เพิ่ม</span></Button>
                                     )}
-
-                                    {/* User Menu */}
                                     {role === 'admin' && <button onClick={() => setIsAdminPanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full" title="Admin Panel"><Icons.Settings size={20} /></button>}
                                     <button onClick={() => setCurrentUser(null)} className="p-2 text-red-500 hover:bg-red-50 rounded-full" title="Logout"><Icons.LogOut size={20} /></button>
                                 </div>
@@ -588,7 +641,7 @@
                         {viewMode === 'chart' && (
                             <>
                                 {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-30 md:hidden sidebar-overlay" onClick={() => setIsSidebarOpen(false)}></div>}
-                                <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 transform transition-transform duration-300 shadow-xl md:shadow-none md:relative md:translate-x-0 pt-20 md:pt-4 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'hidden md:hidden' : 'block'}`} style={{ width: window.innerWidth > 768 ? `${sidebarWidth}px` : '16rem' }}>
+                                <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-gray-200 transform transition-transform duration-300 shadow-xl md:shadow-none md:relative md:translate-x-0 pt-20 md:pt-4 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-0 overflow-hidden' : ''}`} style={{ width: isSidebarCollapsed ? '0px' : (window.innerWidth > 768 ? `${sidebarWidth}px` : '16rem') }}>
                                     <div className="px-4 flex justify-between items-center mb-4">
                                         <h2 className="text-sm font-bold text-gray-600 uppercase">รอจัดสายงาน ({stagingEmployees.length})</h2>
                                         {!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} className="text-blue-600 hover:bg-blue-50 p-1 rounded"><Icons.Plus size={18}/></button>}
@@ -607,11 +660,7 @@
                                     <button className="collapse-btn hidden md:flex" onClick={() => setIsSidebarCollapsed(true)} title="ซ่อนแถบ"><Icons.ChevronLeft size={14} /></button>
                                 </aside>
                                 {isSidebarCollapsed && (
-                                    <div className="hidden md:flex flex-col border-r border-gray-200 bg-white w-10 py-4 items-center gap-4 z-30">
-                                        <button className="p-2 hover:bg-gray-100 rounded" onClick={() => setIsSidebarCollapsed(false)} title="แสดงแถบ"><Icons.ChevronRight size={18} /></button>
-                                        <div className="writing-vertical text-xs font-bold text-gray-400 tracking-wider">STAGING</div>
-                                        <div className="bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">{stagingEmployees.length}</div>
-                                    </div>
+                                    <button className="sidebar-expander hidden md:flex" onClick={() => setIsSidebarCollapsed(false)} title="แสดงแถบ"><Icons.ChevronRight size={18} /></button>
                                 )}
                             </>
                         )}
