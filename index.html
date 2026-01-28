@@ -588,7 +588,11 @@
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const defaultAdmin = { username: 'admin', password: 'password', role: 'admin', name: 'Admin' };
 
-            const [currentUser, setCurrentUser] = useState(null);
+            // Auth State: Initialize from localStorage to persist login
+            const [currentUser, setCurrentUser] = useState(() => {
+                const savedUser = localStorage.getItem('currentUser');
+                return savedUser ? JSON.parse(savedUser) : null;
+            });
             const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
@@ -697,7 +701,19 @@
                 } catch (e) { alert("Error PDF Exporting"); console.error(e); } finally { setZoom(prevZoom); setIsExporting(false); }
             };
 
-            if (!currentUser) return <LoginScreen onLogin={setCurrentUser} driveUrl={driveUrl} />;
+            // Wrap login to save to localStorage
+            const handleLoginSuccess = (user) => {
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                setCurrentUser(user);
+            };
+
+            // Wrap logout to clear localStorage
+            const handleLogout = () => {
+                localStorage.removeItem('currentUser');
+                setCurrentUser(null);
+            };
+
+            if (!currentUser) return <LoginScreen onLogin={handleLoginSuccess} driveUrl={driveUrl} />;
 
             const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING');
             const rootEmployees = employees.filter(e => (!e.reportsTo || e.reportsTo === '') && e.reportsTo !== 'STAGING');
@@ -747,7 +763,7 @@
                                         <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} variant="primary" icon={Icons.Plus}><span className="hidden sm:inline">เพิ่ม</span></Button>
                                     )}
                                     {role === 'admin' && <button onClick={() => setIsAdminPanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full" title="Admin Panel"><Icons.Settings size={20} /></button>}
-                                    <button onClick={() => setCurrentUser(null)} className="p-2 text-red-500 hover:bg-red-50 rounded-full" title="Logout"><Icons.LogOut size={20} /></button>
+                                    <button onClick={handleLogout} className="p-2 text-red-500 hover:bg-red-50 rounded-full" title="Logout"><Icons.LogOut size={20} /></button>
                                 </div>
                             </div>
                         </div>
