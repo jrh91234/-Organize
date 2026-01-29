@@ -23,7 +23,6 @@
             main { padding: 0; margin: 0; width: 100%; overflow: visible !important; }
             aside { display: none !important; }
             .org-chart-container { transform: none !important; margin: 0 !important; border: none !important; shadow: none !important; }
-            /* Hide Logo Border on Print */
             .draggable-logo { border: none !important; resize: none !important; }
         }
 
@@ -42,7 +41,6 @@
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Sidebar Styles */
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         
@@ -66,6 +64,27 @@
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
         // --- UTILS ---
+        
+        // [FIXED] Image URL Transformer
+        // แปลง URL รูปภาพให้เป็น format ที่โหลดง่ายที่สุด (lh3.googleusercontent.com)
+        const formatDriveUrl = (url) => {
+            if (!url) return "https://via.placeholder.com/100?text=No+Img";
+            // ถ้าเป็น URL แบบเก่าของ Drive
+            if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
+                let id = null;
+                // พยายามหา ID จาก pattern ต่างๆ
+                const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/);
+                if (idMatch1) id = idMatch1[1];
+                else {
+                    const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (idMatch2) id = idMatch2[1];
+                }
+                // ถ้าเจอ ID ให้สร้างลิงก์ใหม่แบบ lh3 (Direct CDN)
+                if (id) return `https://lh3.googleusercontent.com/d/${id}`;
+            }
+            return url;
+        };
+
         const compressImage = (file, targetSizeKB = 200) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -287,12 +306,13 @@
                     onClick={(e) => { e.stopPropagation(); if(!isViewOnly || isLocked) onClick(employee); }}>
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
                     <div className="relative">
+                        {/* [FIXED] Updated IMG tag logic */}
                         <img 
-                            src={employee.image || "https://via.placeholder.com/100?text=No+Img"} 
+                            src={formatDriveUrl(employee.image)} 
                             referrerPolicy="no-referrer"
+                            // Removed crossOrigin="anonymous" to prevent Drive CORS blocks
                             loading="eager"
-                            crossOrigin="anonymous"
-                            onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/100?text=Error"}}
+                            onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/100?text=No+Img"}}
                             className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"
                         />
                         <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div>
@@ -461,7 +481,7 @@
                         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto grow">
                             {tab === 'info' ? (
                                 <>
-                                    <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formData.image} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
+                                    <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
                                     <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={!canEditStructure && isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div>
                                     <div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>
                                     {formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}
