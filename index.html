@@ -620,13 +620,39 @@
                 setIsModalOpen(false); setEditingEmployee(null);
             };
 
+            // [MODIFIED] Delete Logic: Promote subordinates to Grandparent
             const handleDelete = (id) => {
+                let subordinatesUpdates = [];
+                
                 setEmployees(prev => {
-                    const newEmp = prev.filter(e => e.id !== id);
+                    const target = prev.find(e => e.id === id);
+                    if (!target) return prev;
+
+                    // 1. หาหัวหน้าของคนที่จะถูกลบ (Grandparent ID)
+                    // ถ้าไม่มีหัวหน้า (เป็น Root) ค่าจะเป็น "" หรือ null
+                    const grandParentId = target.reportsTo;
+
+                    // 2. หาว่าใครเป็นลูกน้องของคนนี้บ้าง แล้วจับย้ายไปหา Grandparent
+                    subordinatesUpdates = prev
+                        .filter(e => e.reportsTo === id)
+                        .map(e => ({ ...e, reportsTo: grandParentId }));
+
+                    // 3. สร้างข้อมูลชุดใหม่: ตัดคนที่จะลบออก และอัปเดตลูกน้อง
+                    const newEmp = prev
+                        .filter(e => e.id !== id) // ลบคนนั้นออก
+                        .map(e => {
+                            // เช็คว่า node นี้เป็นลูกน้องที่ต้องอัปเดตหรือไม่
+                            const updatedSub = subordinatesUpdates.find(sub => sub.id === e.id);
+                            return updatedSub ? updatedSub : e; 
+                        });
+
                     localStorage.setItem('orgData', JSON.stringify(newEmp));
                     return newEmp;
                 });
-                syncUpdatesToCloud([], [id]);
+
+                // 4. ส่งข้อมูลไป Cloud (ลบ 1 คน + อัปเดตลูกน้องกี่คนก็ว่าไป)
+                syncUpdatesToCloud(subordinatesUpdates, [id]);
+                
                 setIsModalOpen(false);
             };
 
