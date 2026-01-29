@@ -19,7 +19,7 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn, .batch-actions, .annotation-controls { display: none !important; }
+            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn, .batch-actions { display: none !important; }
             main { padding: 0; margin: 0; width: 100%; overflow: visible !important; }
             aside { display: none !important; }
             .org-chart-container { transform: none !important; margin: 0 !important; border: none !important; shadow: none !important; }
@@ -56,7 +56,6 @@
         .reorder-btn { background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .reorder-btn:hover { background: #f1f5f9; color: #2563eb; }
 
-        /* Annotation Connector Line */
         .connector-line { position: absolute; pointer-events: none; z-index: 5; }
     </style>
 </head>
@@ -80,8 +79,7 @@
 
         const compressImage = (file, targetSizeKB = 512) => {
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
+                const reader = new FileReader(); reader.readAsDataURL(file);
                 reader.onload = (event) => {
                     const img = new Image(); img.src = event.target.result;
                     img.onload = () => {
@@ -149,7 +147,8 @@
             Briefcase: (p)=><IconBase {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>,
             CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>,
             Type: (p)=><IconBase {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>,
-            Link: (p)=><IconBase {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>
+            Link: (p)=><IconBase {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>,
+            Search: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
@@ -211,21 +210,9 @@
             };
             return (
                 <div className={`absolute z-30 draggable-element group p-3 rounded shadow-md border min-w-[150px] ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-300' : ''}`} style={{ left: ann.x, top: ann.y, backgroundColor: ann.bg || '#ffffff', color: ann.color || '#000' }} onMouseDown={handleMouseDown}>
-                    {!isLocked ? (
-                        <textarea value={ann.text} onChange={(e)=>onUpdate(ann.id, {text: e.target.value})} className="w-full bg-transparent outline-none resize-none overflow-hidden text-center" style={{fontSize: '14px'}} placeholder="Type here..."/>
-                    ) : ( <div className="text-center whitespace-pre-wrap">{ann.text}</div> )}
-                    {!isLocked && (
-                        <div className="absolute -top-3 -right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e)=>{e.stopPropagation(); onLinkStart(ann.id);}} className="bg-blue-500 text-white p-1 rounded-full shadow" title="Link to Node"><Icons.Link size={10}/></button>
-                            <button onClick={(e)=>{e.stopPropagation(); onDelete(ann.id);}} className="bg-red-500 text-white p-1 rounded-full shadow"><Icons.X size={10}/></button>
-                        </div>
-                    )}
-                    {!isLocked && (
-                        <div className="absolute -bottom-8 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 bg-white/90 p-1 rounded shadow text-xs">
-                            <input type="color" value={ann.bg||'#ffffff'} onChange={(e)=>onUpdate(ann.id, {bg: e.target.value})} title="Background" className="w-4 h-4"/>
-                            <input type="color" value={ann.color||'#000000'} onChange={(e)=>onUpdate(ann.id, {color: e.target.value})} title="Text Color" className="w-4 h-4"/>
-                        </div>
-                    )}
+                    {!isLocked ? ( <textarea value={ann.text} onChange={(e)=>onUpdate(ann.id, {text: e.target.value})} className="w-full bg-transparent outline-none resize-none overflow-hidden text-center" style={{fontSize: '14px'}} placeholder="Type here..."/> ) : ( <div className="text-center whitespace-pre-wrap">{ann.text}</div> )}
+                    {!isLocked && (<div className="absolute -top-3 -right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e)=>{e.stopPropagation(); onLinkStart(ann.id);}} className="bg-blue-500 text-white p-1 rounded-full shadow" title="Link to Node"><Icons.Link size={10}/></button><button onClick={(e)=>{e.stopPropagation(); onDelete(ann.id);}} className="bg-red-500 text-white p-1 rounded-full shadow"><Icons.X size={10}/></button></div>)}
+                    {!isLocked && (<div className="absolute -bottom-8 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 bg-white/90 p-1 rounded shadow text-xs"><input type="color" value={ann.bg||'#ffffff'} onChange={(e)=>onUpdate(ann.id, {bg: e.target.value})} title="Background" className="w-4 h-4"/><input type="color" value={ann.color||'#000000'} onChange={(e)=>onUpdate(ann.id, {color: e.target.value})} title="Text Color" className="w-4 h-4"/></div>)}
                 </div>
             );
         };
@@ -259,6 +246,20 @@
                             <div className="bg-orange-50 p-4 rounded-xl text-center border border-orange-100"><h3 className="text-gray-500 text-sm font-medium">Subcontract</h3><p className="text-3xl font-bold text-orange-700">{stats.byType.Subcontract}</p></div>
                         </div>
                         <div><h3 className="font-bold text-gray-700 mb-4">By Position</h3><div className="space-y-3">{Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (<div key={pos} className="flex items-center"><div className="w-1/3 text-sm font-medium text-gray-600 truncate pr-2">{pos}</div><div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden"><div className="bg-blue-500 h-full rounded-full" style={{width: `${(count/stats.total)*100}%`}}></div></div><div className="w-10 text-right text-sm font-bold text-gray-800">{count}</div></div>))}</div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const BatchEditModal = ({ selectedCount, onClose, onSave }) => {
+            const [field, setField] = useState('position'); const [value, setValue] = useState('');
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80]">
+                    <div className="bg-white rounded-xl p-6 w-80">
+                        <h3 className="font-bold mb-4">Batch Edit ({selectedCount})</h3>
+                        <select className="w-full border p-2 rounded mb-2" value={field} onChange={e=>setField(e.target.value)}><option value="position">Change Position</option><option value="status">Change Status</option></select>
+                        <input className="w-full border p-2 rounded mb-4" value={value} onChange={e=>setValue(e.target.value)} placeholder="New Value..."/>
+                        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={()=>onSave(field, value)}>Apply</Button></div>
                     </div>
                 </div>
             );
@@ -349,7 +350,10 @@
             useEffect(() => { if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', ...employee }); else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937' }); }, [employee]);
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const payload = { file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }; const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); alert("อัปโหลดสำเร็จ"); } else throw new Error("Upload failed"); } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); alert("บันทึกรูปลงเครื่องสำเร็จ"); } } catch (err) { alert("Error: " + err.message); } finally { setIsUploading(false); } };
+            
+            // [Auto-Move Logic]
             const handleSubmit = (e) => { e.preventDefault(); let finalData = { ...formData }; if (finalData.position.toLowerCase().includes('operator') && finalData.reportsTo) { const boss = supervisors.find(s => s.id === finalData.reportsTo); if (boss && boss.position.toLowerCase().includes('operator')) { if (boss.reportsTo && boss.reportsTo !== 'STAGING') { alert(`[Auto-Move] ย้าย Operator ไปหาหัวหน้าของ ${boss.name}`); finalData.reportsTo = boss.reportsTo; } } } onSave(finalData); };
+            
             return (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -365,29 +369,6 @@
             );
         };
 
-        // --- BATCH EDIT MODAL ---
-        const BatchEditModal = ({ selectedCount, onClose, onSave }) => {
-            const [field, setField] = useState('position');
-            const [value, setValue] = useState('');
-            return (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80]">
-                    <div className="bg-white rounded-xl p-6 w-80">
-                        <h3 className="font-bold mb-4">Batch Edit ({selectedCount})</h3>
-                        <select className="w-full border p-2 rounded mb-2" value={field} onChange={e=>setField(e.target.value)}>
-                            <option value="position">Change Position</option>
-                            <option value="status">Change Status</option>
-                        </select>
-                        <input className="w-full border p-2 rounded mb-4" value={value} onChange={e=>setValue(e.target.value)} placeholder="New Value..."/>
-                        <div className="flex justify-end gap-2">
-                            <Button variant="secondary" onClick={onClose}>Cancel</Button>
-                            <Button onClick={()=>onSave(field, value)}>Apply</Button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // --- MAIN APP ---
         const App = () => {
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
@@ -395,6 +376,7 @@
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
             const [annotations, setAnnotations] = useState(() => JSON.parse(localStorage.getItem('orgAnnotations')) || []);
+            const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('lastUpdated') || new Date().toLocaleString('th-TH'));
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
             const [logo, setLogo] = useState({ url: null, x: 50, y: 50 });
@@ -402,8 +384,9 @@
             const [selectedIds, setSelectedIds] = useState([]);
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
-            const [headerColor, setHeaderColor] = useState('#1f2937'); // Default gray-800
-            const [linkStartId, setLinkStartId] = useState(null); // Annotation Link
+            const [headerColor, setHeaderColor] = useState('#1f2937'); 
+            const [linkStartId, setLinkStartId] = useState(null); 
+            const [searchTerm, setSearchTerm] = useState('');
 
             const [isModalOpen, setIsModalOpen] = useState(false); const [editingEmployee, setEditingEmployee] = useState(null); const [viewMode, setViewMode] = useState('chart'); const [isThemePanelOpen, setIsThemePanelOpen] = useState(false); const [isSummaryOpen, setIsSummaryOpen] = useState(false); const [showRulers, setShowRulers] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [sidebarWidth, setSidebarWidth] = useState(256); const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false); const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
             const [zoom, setZoom] = useState(1); const [appTheme, setAppTheme] = useState('blue'); const [appShape, setAppShape] = useState(SHAPES.rounded); const [cloudStatus, setCloudStatus] = useState('offline'); const [debugLogs, setDebugLogs] = useState([]); const [showDebug, setShowDebug] = useState(false); const [moveSource, setMoveSource] = useState(null); const [deptName, setDeptName] = useState("ASSEMBLY DEPT"); 
@@ -415,23 +398,86 @@
 
             useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]);
 
+            // Utility to update state + history + timestamp + sync
+            const updateStateFull = (newState, updates = [], deletes = []) => {
+                pushToHistory(employees);
+                setEmployees(newState);
+                const time = new Date().toLocaleString('th-TH');
+                setLastUpdated(time);
+                localStorage.setItem('orgData', JSON.stringify(newState));
+                localStorage.setItem('lastUpdated', time);
+                if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes);
+            };
+
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
-            const updateEmployeesWithHistory = (newState) => { pushToHistory(employees); setEmployees(newState); localStorage.setItem('orgData', JSON.stringify(newState)); };
             const handleUndo = () => { if (historyIndex >= 0) { const prevState = history[historyIndex]; setEmployees(prevState); localStorage.setItem('orgData', JSON.stringify(prevState)); setHistoryIndex(prev => prev - 1); if(driveUrl) appApiCall(driveUrl, 'saveData', { orgData: prevState }); } };
 
-            const handleSave = (data) => { let newData; setEmployees(prev => { const exists = prev.find(e => e.id === data.id); newData = exists ? prev.map(e => e.id === data.id ? data : e) : [...prev, data]; return newData; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud([data], []); setIsModalOpen(false); setEditingEmployee(null); };
-            const handleDelete = (id) => { let newData, subordinatesUpdates = []; setEmployees(prev => { const target = prev.find(e => e.id === id); if (!target) return prev; const grandParentId = target.reportsTo; subordinatesUpdates = prev.filter(e => e.reportsTo === id).map(e => ({ ...e, reportsTo: grandParentId })); newData = prev.filter(e => e.id !== id).map(e => { const updatedSub = subordinatesUpdates.find(sub => sub.id === e.id); return updatedSub ? updatedSub : e; }); return newData; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud(subordinatesUpdates, [id]); setIsModalOpen(false); };
-            const handleReorder = (id, direction) => { setEmployees(prev => { const target = prev.find(e => e.id === id); if(!target) return prev; const siblings = prev.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0)); const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return prev; const newIndex = currentIndex + direction; if (newIndex < 0 || newIndex >= siblings.length) return prev; const siblingToSwap = siblings[newIndex]; const targetOrder = target.order || 0; const siblingOrder = siblingToSwap.order || 0; const newEmp = prev.map(e => { if (e.id === target.id) return { ...e, order: siblingOrder }; if (e.id === siblingToSwap.id) return { ...e, order: targetOrder }; return e; }); if (targetOrder === siblingOrder) { return prev.map(e => { if(e.reportsTo === target.reportsTo) { if(e.id === target.id) return {...e, order: newIndex}; if(e.id === siblingToSwap.id) return {...e, order: currentIndex}; const idx = siblings.findIndex(s=>s.id === e.id); return {...e, order: idx}; } return e; }); } pushToHistory(prev); localStorage.setItem('orgData', JSON.stringify(newEmp)); const update1 = newEmp.find(e => e.id === target.id); const update2 = newEmp.find(e => e.id === siblingToSwap.id); syncUpdatesToCloud([update1, update2], []); return newEmp; }); };
-            
-            // --- Batch & Selection Logic ---
-            const handleBatchDelete = () => { if(!confirm(`Delete ${selectedIds.length} items?`)) return; let newData = employees.filter(e => !selectedIds.includes(e.id)); updateEmployeesWithHistory(newData); syncUpdatesToCloud([], selectedIds); setSelectedIds([]); setSelectionMode(false); };
-            const handleBatchEditSave = (field, value) => { let updates = []; let newData = employees.map(e => { if(selectedIds.includes(e.id)) { const u = {...e, [field]: value}; updates.push(u); return u; } return e; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud(updates, []); setIsBatchEditOpen(false); setSelectedIds([]); setSelectionMode(false); };
-            const handleBatchAdd = () => { const count = parseInt(prompt("How many cards?", "5")); if(!count) return; let newCards = []; for(let i=0; i<count; i++) { newCards.push({ id: Math.floor(Math.random()*100000).toString(), name: 'New Employee', position: 'Operator', reportsTo: 'STAGING', status: 'Active', type: 'Subcontract' }); } let newData = [...employees, ...newCards]; updateEmployeesWithHistory(newData); syncUpdatesToCloud(newCards, []); };
+            const handleSave = (data) => {
+                let updates = [data];
+                let newData = employees;
+                const exists = employees.find(e => e.id === data.id);
+                newData = exists ? employees.map(e => e.id === data.id ? data : e) : [...employees, data];
+                updateStateFull(newData, updates, []);
+                setIsModalOpen(false); setEditingEmployee(null);
+            };
 
-            // --- Annotation Logic ---
-            const handleAddAnnotation = () => { setAnnotations(prev => [...prev, { id: Date.now().toString(), x: 100, y: 100, text: 'New Text', bg: '#ffffff', color: '#000000', linkTo: null }]); };
-            const handleUpdateAnnotation = (id, updates) => { setAnnotations(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a)); };
-            const handleDeleteAnnotation = (id) => { setAnnotations(prev => prev.filter(a => a.id !== id)); };
+            const handleDelete = (id) => {
+                const target = employees.find(e => e.id === id);
+                if (!target) return;
+                const grandParentId = target.reportsTo;
+                // Promote subordinates
+                const subUpdates = employees.filter(e => e.reportsTo === id).map(e => ({ ...e, reportsTo: grandParentId }));
+                const newData = employees
+                    .filter(e => e.id !== id) // Remove target
+                    .map(e => {
+                        const updatedSub = subUpdates.find(sub => sub.id === e.id);
+                        return updatedSub ? updatedSub : e; 
+                    });
+                updateStateFull(newData, subUpdates, [id]);
+                setIsModalOpen(false);
+            };
+
+            const handleReorder = (id, direction) => {
+                const target = employees.find(e => e.id === id); if(!target) return;
+                const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0));
+                const currentIndex = siblings.findIndex(e => e.id === id);
+                if (currentIndex === -1) return;
+                const newIndex = currentIndex + direction;
+                if (newIndex < 0 || newIndex >= siblings.length) return;
+                const siblingToSwap = siblings[newIndex];
+                const targetOrder = target.order || 0;
+                const siblingOrder = siblingToSwap.order || 0;
+                
+                let newData = employees.map(e => {
+                    if (e.id === target.id) return { ...e, order: siblingOrder };
+                    if (e.id === siblingToSwap.id) return { ...e, order: targetOrder };
+                    return e;
+                });
+                
+                // Fix if same order
+                if (targetOrder === siblingOrder) {
+                     newData = employees.map(e => {
+                         if(e.reportsTo === target.reportsTo) {
+                             if(e.id === target.id) return {...e, order: newIndex};
+                             if(e.id === siblingToSwap.id) return {...e, order: currentIndex};
+                             const idx = siblings.findIndex(s=>s.id === e.id);
+                             return {...e, order: idx};
+                         }
+                         return e;
+                     });
+                }
+                const u1 = newData.find(e => e.id === target.id);
+                const u2 = newData.find(e => e.id === siblingToSwap.id);
+                updateStateFull(newData, [u1, u2], []);
+            };
+            
+            const handleBatchDelete = () => { if(!confirm(`Delete ${selectedIds.length} items?`)) return; const newData = employees.filter(e => !selectedIds.includes(e.id)); updateStateFull(newData, [], selectedIds); setSelectedIds([]); setSelectionMode(false); };
+            const handleBatchEditSave = (field, value) => { let updates = []; const newData = employees.map(e => { if(selectedIds.includes(e.id)) { const u = {...e, [field]: value}; updates.push(u); return u; } return e; }); updateStateFull(newData, updates, []); setIsBatchEditOpen(false); setSelectedIds([]); setSelectionMode(false); };
+            const handleBatchAdd = () => { const count = parseInt(prompt("How many cards?", "5")); if(!count) return; let newCards = []; for(let i=0; i<count; i++) { newCards.push({ id: Math.floor(Math.random()*100000).toString(), name: 'New Employee', position: 'Operator', reportsTo: 'STAGING', status: 'Active', type: 'Subcontract' }); } const newData = [...employees, ...newCards]; updateStateFull(newData, newCards, []); };
+
+            const handleAddAnnotation = () => { const newAnn = { id: Date.now().toString(), x: 100, y: 100, text: 'New Text', bg: '#ffffff', color: '#000000', linkTo: null }; setAnnotations(prev => { const n = [...prev, newAnn]; localStorage.setItem('orgAnnotations', JSON.stringify(n)); return n; }); };
+            const handleUpdateAnnotation = (id, updates) => { setAnnotations(prev => { const n = prev.map(a => a.id === id ? { ...a, ...updates } : a); localStorage.setItem('orgAnnotations', JSON.stringify(n)); return n; }); };
+            const handleDeleteAnnotation = (id) => { setAnnotations(prev => { const n = prev.filter(a => a.id !== id); localStorage.setItem('orgAnnotations', JSON.stringify(n)); return n; }); };
             const handleAnnotationLink = (nodeId) => { if(linkStartId) { handleUpdateAnnotation(linkStartId, { linkTo: nodeId }); setLinkStartId(null); } };
 
             const handleAddChild = (parent) => {
@@ -440,25 +486,46 @@
                 setIsModalOpen(true);
             };
 
-            const toggleSelection = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
-            
+            const handleAddPosition = (newPos) => { setPositions(prev => { const newArr = [...prev, newPos]; localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; }); };
+            const handleDeletePosition = (pos) => { setPositions(prev => { const newArr = prev.filter(p => p !== pos); localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; }); };
+            const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { setLogo(prev => ({ ...prev, url: ev.target.result })); }; reader.readAsDataURL(file); } };
+
             const handleDropOnChart = (draggedIds, targetId) => {
-                if(linkStartId) { handleAnnotationLink(targetId); return; } // Handle annotation link drop
+                if(linkStartId) { handleAnnotationLink(targetId); return; } 
                 if(currentUser.role !== 'admin' && currentUser.role !== 'supervisor') return;
                 const idsToMove = Array.isArray(draggedIds) ? draggedIds : [draggedIds];
-                let newData, updates = [];
-                setEmployees(prev => { newData = prev.map(e => { if(idsToMove.includes(e.id)) { const updated = { ...e, reportsTo: targetId }; updates.push(updated); return updated; } return e; }); return newData; });
-                updateEmployeesWithHistory(newData); if (updates.length > 0) syncUpdatesToCloud(updates, []); setSelectedIds([]);
+                let updates = [];
+                const newData = employees.map(e => {
+                    if(idsToMove.includes(e.id)) {
+                        const updated = { ...e, reportsTo: targetId };
+                        updates.push(updated);
+                        return updated;
+                    }
+                    return e;
+                });
+                updateStateFull(newData, updates, []);
+                setSelectedIds([]);
             };
 
+            const toggleSelection = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
             const resize = useCallback((e) => { if (isResizing.current) { const w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
 
             if (!currentUser) return <LoginScreen onLogin={(u)=>{localStorage.setItem('currentUser',JSON.stringify(u));setCurrentUser(u);}} driveUrl={driveUrl} apiCall={appApiCall} />;
 
-            const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING');
-            const rootEmployees = employees.filter(e => { if (e.reportsTo === 'STAGING') return false; if (!e.reportsTo) return true; const boss = employees.find(b => b.id === e.reportsTo); if (!boss) return true; if (boss.reportsTo === 'STAGING') return true; return false; });
+            const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING' && (searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
+            
+            // ORPHAN LOGIC: Show orphans as roots
+            const rootEmployees = employees.filter(e => {
+                if (e.reportsTo === 'STAGING') return false; 
+                if (!e.reportsTo) return true; 
+                const boss = employees.find(b => b.id === e.reportsTo);
+                if (!boss) return true; // Boss deleted -> Orphan -> Show as root
+                if (boss.reportsTo === 'STAGING') return true; // Boss in staging -> Show as root
+                return false; 
+            }).filter(e => searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
             const currentThemeConf = THEMES[appTheme];
 
@@ -468,8 +535,7 @@
                 if(!targetNode) return null;
                 const rect = targetNode.getBoundingClientRect();
                 const container = document.getElementById('org-chart-full-view').getBoundingClientRect();
-                // Simple calculation relative to container
-                const x1 = ann.x + 75; const y1 = ann.y + 20; // Center of annotation box
+                const x1 = ann.x + 75; const y1 = ann.y + 20; 
                 const x2 = (rect.left - container.left) + (rect.width/2);
                 const y2 = (rect.top - container.top) + (rect.height/2);
                 return <line key={ann.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="red" strokeWidth="2" strokeDasharray="5,5" className="connector-line"/>;
@@ -480,6 +546,9 @@
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 shrink-0 h-14 flex items-center px-4 justify-between">
                         <div className="flex items-center gap-2"><button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button><div className="bg-red-600 p-1 rounded text-white font-bold">HR</div><span className={`text-xs flex items-center ${cloudStatus==='online'?'text-green-600':cloudStatus==='error'?'text-red-500':'text-gray-400'}`}>{cloudStatus==='online'?<><Icons.Cloud size={14} className="mr-1"/>Online</>:cloudStatus==='syncing'?<><Icons.Loader size={14} className="mr-1"/>Syncing</>:<><Icons.Alert size={14} className="mr-1"/>Offline</>}</span></div>
                         <div className="flex items-center gap-1 sm:gap-2">
+                            {/* [NEW] Search Bar */}
+                            <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-2 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
+                            
                             <button onClick={()=>setViewMode('chart')} className={`p-1.5 rounded ${viewMode==='chart'?'bg-blue-50 text-blue-600':''}`}><Icons.Grid/></button>
                             <button onClick={()=>setViewMode('list')} className={`p-1.5 rounded ${viewMode==='list'?'bg-blue-50 text-blue-600':''}`}><Icons.List/></button>
                             {!isLocked && (<><button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} className={`p-1.5 rounded border flex items-center gap-1 transition-all ${selectionMode?'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-200':'text-gray-600 hover:bg-gray-100'}`} title="Multi-Select"><Icons.CheckSquare size={18}/>{selectionMode && <span className="text-xs font-bold px-1">{selectedIds.length}</span>}</button>
@@ -524,7 +593,7 @@
                                         <div className="text-left mb-6 border-b-2 border-gray-200 pb-2 pl-2">
                                             <input value={deptName} onChange={(e)=>setDeptName(e.target.value)} className="text-3xl font-bold uppercase outline-none bg-transparent" style={{color: headerColor}} disabled={isLocked}/>
                                             {!isLocked && <input type="color" value={headerColor} onChange={(e)=>setHeaderColor(e.target.value)} className="ml-2 w-6 h-6 border-none cursor-pointer" title="Header Color"/>}
-                                            <p className="text-gray-400 text-sm mt-1">Updated: {new Date().toLocaleString('th-TH')}</p>
+                                            <p className="text-gray-400 text-sm mt-1">Updated: {lastUpdated}</p>
                                         </div>
                                         <div className="flex gap-16 justify-center">{rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={employees} onEdit={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDelete={handleDelete} onAddSubordinate={(id)=>{setEditingEmployee({isNew:true,reportsTo:id});setIsModalOpen(true);}} onDrop={handleDropOnChart} onMoveSelect={(tid)=>{if(moveSource&&moveSource.id!==tid){handleDropOnChart(moveSource.id,tid);setMoveSource(null);}}} moveTargetId={moveSource?.id} isLocked={isLocked} themeConf={currentThemeConf} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} onAddChild={handleAddChild} />)}</div>
                                     </div>
