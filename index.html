@@ -298,7 +298,10 @@
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => (a.order || 0) - (b.order || 0));
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
-            const isLargeTeam = subordinates.length > 8; 
+            
+            // [CHECKED] Threshold > 4 for Grid View
+            const isLargeTeam = subordinates.length > 4; 
+
             const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
             
             return (
@@ -369,6 +372,29 @@
             );
         };
 
+        // --- BATCH EDIT MODAL ---
+        const BatchEditModal = ({ selectedCount, onClose, onSave }) => {
+            const [field, setField] = useState('position');
+            const [value, setValue] = useState('');
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80]">
+                    <div className="bg-white rounded-xl p-6 w-80">
+                        <h3 className="font-bold mb-4">Batch Edit ({selectedCount})</h3>
+                        <select className="w-full border p-2 rounded mb-2" value={field} onChange={e=>setField(e.target.value)}>
+                            <option value="position">Change Position</option>
+                            <option value="status">Change Status</option>
+                        </select>
+                        <input className="w-full border p-2 rounded mb-4" value={value} onChange={e=>setValue(e.target.value)} placeholder="New Value..."/>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                            <Button onClick={()=>onSave(field, value)}>Apply</Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
         const App = () => {
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
