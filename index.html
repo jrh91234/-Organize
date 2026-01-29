@@ -298,7 +298,7 @@
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => (a.order || 0) - (b.order || 0));
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
-            const isLargeTeam = subordinates.length > 8; 
+            const isLargeTeam = subordinates.length > 4; 
             const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
             
             return (
