@@ -314,7 +314,8 @@
                             <div className="h-4 sm:h-6 w-px bg-gray-300"></div>
                             <div className="flex relative">
                                 {isLargeTeam ? (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-300"> [cite: 210]
+                                    // แก้ไขบรรทัดที่มีปัญหา [cite: 210]
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start bg-gray-50/50 rounded-xl border border-dashed border-gray-300">
                                         {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} />))}
                                     </div>
                                 ) : (
