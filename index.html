@@ -157,7 +157,6 @@
 
         // --- COMPONENTS ---
         
-        // [NEW] Draggable Logo Component
         const DraggableLogo = ({ logo, setLogo, isLocked }) => {
             if (!logo.url) return null;
             
@@ -196,7 +195,6 @@
             );
         };
 
-        // [NEW] Manage Positions Modal
         const ManagePositionsModal = ({ positions, onAdd, onDelete, onClose }) => {
             const [newPos, setNewPos] = useState("");
             return (
@@ -264,7 +262,6 @@
             let bgClass = "bg-white";
             let borderClass = "border-gray-200";
             let radiusClass = shapeClass?.cls || 'rounded-xl';
-            // [MODIFIED] Distinct Colors for Badges
             let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
 
             if (employee.customColor && THEMES[employee.customColor]) {
@@ -282,7 +279,6 @@
                 radiusClass = SHAPES[employee.customShape].cls;
             }
             
-            // [NEW] Text Color Support
             const textColorStyle = employee.textColor ? { color: employee.textColor } : {};
 
             return (
@@ -291,7 +287,6 @@
                     onClick={(e) => { e.stopPropagation(); if(!isViewOnly || isLocked) onClick(employee); }}>
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
                     <div className="relative">
-                        {/* [MODIFIED] Image Eager Loading */}
                         <img 
                             src={employee.image || "https://via.placeholder.com/100?text=No+Img"} 
                             referrerPolicy="no-referrer"
@@ -355,6 +350,35 @@
             );
         };
 
+        const LoginScreen = ({ onLogin, driveUrl, apiCall }) => {
+            const [user, setUser] = useState(''); const [pass, setPass] = useState(''); const [error, setError] = useState(''); const [isLoading, setIsLoading] = useState(false);
+            const handleLogin = async (e) => {
+                e.preventDefault(); setIsLoading(true); setError('');
+                if (driveUrl) {
+                    try { const res = await apiCall(driveUrl, 'login', { username: user, password: pass });
+                        if (res?.status === 'success') { onLogin(res.user); return; } else setError('Cloud Login Failed: ' + (res?.message||'Unknown'));
+                    } catch (err) { setError('Connection failed. Trying local...'); }
+                }
+                const users = JSON.parse(localStorage.getItem('users')) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }];
+                const valid = users.find(u => u.username === user && u.password === pass);
+                if (valid) { if(driveUrl) setError('Offline Mode'); onLogin(valid); } else { if(!error) setError('Invalid credentials'); }
+                setIsLoading(false);
+            };
+            return (
+                <div className="fixed inset-0 bg-gray-100 flex items-center justify-center z-50 login-screen">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm">
+                        <div className="flex flex-col items-center mb-6"><div className="bg-red-600 p-3 rounded-lg text-white font-bold text-2xl mb-2">HR</div><h2 className="text-xl font-bold text-gray-800">เข้าสู่ระบบ</h2></div>
+                        <form onSubmit={handleLogin} className="space-y-4">
+                            <div><label className="text-sm font-medium">Username</label><input type="text" value={user} onChange={e=>setUser(e.target.value)} className="w-full mt-1 p-2 border rounded-lg" required /></div>
+                            <div><label className="text-sm font-medium">Password</label><input type="password" value={pass} onChange={e=>setPass(e.target.value)} className="w-full mt-1 p-2 border rounded-lg" required /></div>
+                            {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+                            <button type="submit" disabled={isLoading} className="w-full bg-red-600 text-white py-2 rounded-lg font-bold flex justify-center items-center">{isLoading ? <Icons.Loader className="mr-2"/> : "เข้าสู่ระบบ"}</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
         const ThemePanel = ({ onClose, currentTheme, setAppTheme, currentShape, setAppShape }) => {
             return (
                 <div className="fixed top-16 right-4 bg-white p-4 rounded-xl shadow-xl border w-64 z-[60] animate-in slide-in-from-top-2">
@@ -377,7 +401,6 @@
             );
         };
 
-        // --- THEMES & SHAPES (Defined Below) ---
         const THEMES = {
             blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' },
             teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' },
@@ -571,11 +594,13 @@
                 setIsModalOpen(false);
             };
 
-            // [NEW] Position Management Handlers
+            // [NEW] Position Management Handlers with Cloud Sync
             const handleAddPosition = (newPos) => {
                 setPositions(prev => {
                     const newArr = [...prev, newPos];
                     localStorage.setItem('orgPositions', JSON.stringify(newArr));
+                    // FIX: Sync to Cloud immediately
+                    if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); 
                     return newArr;
                 });
             };
@@ -583,6 +608,8 @@
                 setPositions(prev => {
                     const newArr = prev.filter(p => p !== pos);
                     localStorage.setItem('orgPositions', JSON.stringify(newArr));
+                    // FIX: Sync to Cloud immediately
+                    if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr });
                     return newArr;
                 });
             };
