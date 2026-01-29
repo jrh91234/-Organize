@@ -298,50 +298,38 @@
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => (a.order || 0) - (b.order || 0));
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
-            const isLargeTeam = subordinates.length > 4; 
+            const isLargeTeam = subordinates.length > 8; 
             const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
             
             return (
-    <div className="flex flex-col items-center">
-        {/* 1. เส้นแนวตั้งด้านบนหัวหน้า (ห้ามลบ) */}
-        {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>} 
-
-        {/* 2. ตัวการ์ดหัวหน้า (คงเดิมไว้) */}
-        <div onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && !isLocked && !isViewOnly && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
-            {moveTargetId && !isLocked && !isViewOnly && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
-            <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
-            {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
-        </div>
-
-        {/* 3. ส่วนของลูกทีม (แก้ตรงนี้) */}
-        {subordinates.length > 0 && (
-            <>
-                <div className="h-4 sm:h-6 w-px bg-gray-300"></div> [cite: 209]
-                <div className="flex relative">
-                    {/* แก้ไข Grid ตรงนี้: ถ้าลูกน้อง > 4 คน ให้จัดเป็น Grid 4 คอลัมน์ */}
-                    {subordinates.length > 4 ? ( 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-300"> 
-                            {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} />))}
-                        </div>
-                    ) : (
-                        /* แบบเดิมกรณีลูกน้องน้อยกว่าหรือเท่ากับ 4 คน */
-                        <> 
-                            {subordinates.length > 1 && <div className="absolute top-0 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/2)] -translate-y-px"></div>} [cite: 212]
-                            <div className="flex gap-4 sm:gap-6 pt-0"> [cite: 213]
-                                {subordinates.map((sub, i) => (
-                                    <div key={sub.id} className="relative flex flex-col items-center">
-                                        {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} [cite: 213]
-                                        <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} onAddChild={onAddChild} />
+                <div className="flex flex-col items-center">
+                    {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
+                    <div onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && !isLocked && !isViewOnly && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
+                        {moveTargetId && !isLocked && !isViewOnly && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
+                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
+                        {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
+                    </div>
+                    {subordinates.length > 0 && (
+                        <>
+                            <div className="h-4 sm:h-6 w-px bg-gray-300"></div>
+                            <div className="flex relative">
+                                {isLargeTeam ? (
+                                    <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-300">
+                                        {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} />))}
                                     </div>
-                                ))}
+                                ) : (
+                                    <> {subordinates.length > 1 && <div className="absolute top-0 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/2)] -translate-y-px"></div>}
+                                        <div className="flex gap-4 sm:gap-6 pt-0">
+                                            {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} /> </div>))}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </>
                     )}
                 </div>
-            </>
-        )}
-    </div>
-);
+            );
+        };
 
         const ThemePanel = ({ onClose, currentTheme, setAppTheme, currentShape, setAppShape }) => {
             return (
@@ -380,7 +368,7 @@
                 </div>
             );
         };
-      const LoginScreen = ({ onLogin, driveUrl, apiCall }) => {
+const LoginScreen = ({ onLogin, driveUrl, apiCall }) => {
     const [creds, setCreds] = React.useState({ username: '', password: '' });
     const [loading, setLoading] = React.useState(false);
 
@@ -429,7 +417,6 @@
         </div>
     );
 };
-
         const App = () => {
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
