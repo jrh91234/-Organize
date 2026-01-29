@@ -65,7 +65,7 @@
 
         // --- UTILS ---
         
-        // Image URL Transformer (Direct CDN)
+        // Image URL Transformer
         const formatDriveUrl = (url) => {
             if (!url) return "https://via.placeholder.com/100?text=No+Img";
             if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
@@ -81,7 +81,6 @@
             return url;
         };
 
-        // [MODIFIED] Compress Image to 512KB
         const compressImage = (file, targetSizeKB = 512) => {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -92,7 +91,7 @@
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
                         let width = img.width, height = img.height;
-                        const MAX = 1600; // Allow slightly larger dimension
+                        const MAX = 1600;
                         if (width > MAX || height > MAX) {
                             if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; }
                         }
@@ -173,7 +172,6 @@
 
         // --- COMPONENTS ---
         
-        // [RESTORED] Admin Panel Component
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall }) => {
             const [users, setUsers] = useState([]); const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' }); const [editingUsername, setEditingUsername] = useState(null); const [loading, setLoading] = useState(false);
             useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = JSON.parse(localStorage.getItem('users')) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
@@ -629,7 +627,6 @@
                     if (!target) return prev;
 
                     // 1. หาหัวหน้าของคนที่จะถูกลบ (Grandparent ID)
-                    // ถ้าไม่มีหัวหน้า (เป็น Root) ค่าจะเป็น "" หรือ null
                     const grandParentId = target.reportsTo;
 
                     // 2. หาว่าใครเป็นลูกน้องของคนนี้บ้าง แล้วจับย้ายไปหา Grandparent
@@ -706,12 +703,21 @@
 
             const stagingEmployees = employees.filter(e => e.reportsTo === 'STAGING');
             
-            // [FIXED] Orphan Logic: If boss is missing, treat as root
-            const allEmployeeIds = new Set(employees.map(e => e.id));
+            // [FIXED] Orphan Logic & Staging Parent Logic
             const rootEmployees = employees.filter(e => {
-                if (e.reportsTo === 'STAGING') return false;
-                // Is Root OR Is Orphan (Boss doesn't exist)
-                return !e.reportsTo || !allEmployeeIds.has(e.reportsTo);
+                if (e.reportsTo === 'STAGING') return false; // ตัวเองอยู่ใน Staging ไม่แสดงใน Chart
+                
+                if (!e.reportsTo) return true; // ไม่มีหัวหน้า = Root
+
+                const boss = employees.find(b => b.id === e.reportsTo);
+                
+                // 1. หัวหน้าหายสาบสูญ = Root
+                if (!boss) return true;
+
+                // 2. หัวหน้าหนีไปอยู่ Staging = ลูกน้องต้องขึ้นมาเป็น Root แทน (ไม่หายตามไป)
+                if (boss.reportsTo === 'STAGING') return true;
+
+                return false; // มีหัวหน้าที่ยังอยู่ใน Chart ปกติ
             });
 
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
