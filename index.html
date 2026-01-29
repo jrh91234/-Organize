@@ -19,11 +19,11 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn { display: none !important; }
+            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn, .batch-actions, .annotation-controls { display: none !important; }
             main { padding: 0; margin: 0; width: 100%; overflow: visible !important; }
             aside { display: none !important; }
             .org-chart-container { transform: none !important; margin: 0 !important; border: none !important; shadow: none !important; }
-            .draggable-logo { border: none !important; resize: none !important; }
+            .draggable-element { border: none !important; resize: none !important; box-shadow: none !important; }
             .reorder-controls { display: none !important; }
         }
 
@@ -35,41 +35,29 @@
         .draggable-source { cursor: grab; }
         .draggable-source:active { cursor: grabbing; }
         
-        .ruler-tick { position: absolute; background-color: #94a3b8; }
-        .ruler-label { position: absolute; font-size: 8px; color: #64748b; pointer-events: none; }
-        
         .zoom-controls { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 40; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; }
         .undo-controls { position: fixed; bottom: 80px; right: 20px; z-index: 40; display: flex; flex-direction: column; gap: 8px; }
+        .batch-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 10px 20px; border-radius: 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 50; display: flex; gap: 12px; align-items: center; border: 1px solid #e2e8f0; animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        
         .spinner { animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         
-        .sidebar-toggle-btn {
-            position: absolute; top: 50%; transform: translateY(-50%);
-            width: 24px; height: 40px;
-            background: white; border: 1px solid #e5e7eb;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; z-index: 50; box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            color: #4b5563;
-        }
+        .sidebar-toggle-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 24px; height: 40px; background: white; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 50; box-shadow: 2px 0 5px rgba(0,0,0,0.1); color: #4b5563; }
         
         .debug-console { position: fixed; bottom: 0; left: 0; right: 0; height: 150px; background: #1e293b; color: #33ff33; font-family: monospace; font-size: 11px; z-index: 100; display: flex; flex-direction: column; border-top: 2px solid #334155; }
         .debug-content { flex: 1; overflow-y: auto; padding: 10px; }
         
-        /* Reorder Arrows */
-        .reorder-controls {
-            position: absolute; top: 50%; transform: translateY(-50%);
-            display: flex; gap: 2px; z-index: 30; opacity: 0; transition: opacity 0.2s;
-        }
+        .reorder-controls { position: absolute; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; z-index: 30; opacity: 0; transition: opacity 0.2s; }
         .group:hover .reorder-controls { opacity: 1; }
-        .reorder-btn {
-            background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 20px; height: 20px;
-            display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
+        .reorder-btn { background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .reorder-btn:hover { background: #f1f5f9; color: #2563eb; }
+
+        /* Annotation Connector Line */
+        .connector-line { position: absolute; pointer-events: none; z-index: 5; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen overflow-hidden">
@@ -84,11 +72,7 @@
             if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
                 let id = null;
                 const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/);
-                if (idMatch1) id = idMatch1[1];
-                else {
-                    const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                    if (idMatch2) id = idMatch2[1];
-                }
+                if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; }
                 if (id) return `https://lh3.googleusercontent.com/d/${id}`;
             }
             return url;
@@ -99,43 +83,32 @@
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
                 reader.onload = (event) => {
-                    const img = new Image();
-                    img.src = event.target.result;
+                    const img = new Image(); img.src = event.target.result;
                     img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width, height = img.height;
-                        const MAX = 1600;
-                        if (width > MAX || height > MAX) {
-                            if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; }
-                        }
-                        canvas.width = width; canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
+                        const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600;
+                        if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } }
+                        canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
                         let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality);
-                        while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) {
-                            quality -= 0.1;
-                            dataUrl = canvas.toDataURL('image/jpeg', quality);
-                        }
+                        while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); }
                         resolve(dataUrl);
-                    };
-                    img.onerror = reject;
-                };
-                reader.onerror = reject;
+                    }; img.onerror = reject;
+                }; reader.onerror = reject;
             });
         };
 
         const exportToExcel = (employees) => {
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
-            csvContent += "ID,Name,Position,Type,Status,ReportsTo,Order\n";
-            employees.forEach(e => {
-                csvContent += `"${e.id}","${e.name}","${e.position}","${e.type}","${e.status}","${e.reportsTo}","${e.order||0}"\n`;
-            });
-            const link = document.createElement("a");
-            link.setAttribute("href", encodeURI(csvContent));
-            link.setAttribute("download", "employees_export.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFFID,Name,Position,Type,Status,ReportsTo,Order\n";
+            employees.forEach(e => { csvContent += `"${e.id}","${e.name}","${e.position}","${e.type}","${e.status}","${e.reportsTo}","${e.order||0}"\n`; });
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "employees_export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        };
+
+        const getDefaultChildPosition = (parentPos) => {
+            const p = (parentPos || "").toLowerCase();
+            if(p.includes('manager')) return 'Supervisor';
+            if(p.includes('supervisor')) return 'Engineer';
+            if(p.includes('engineer')) return 'Leader';
+            if(p.includes('leader')) return 'Operator';
+            return 'Operator';
         };
 
         // --- ICONS ---
@@ -174,7 +147,9 @@
             Chart: (p)=><IconBase {...p}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></IconBase>,
             Image: (p)=><IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconBase>,
             Briefcase: (p)=><IconBase {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>,
-            CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>
+            CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>,
+            Type: (p)=><IconBase {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>,
+            Link: (p)=><IconBase {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
@@ -184,6 +159,7 @@
                 secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50",
                 danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100",
                 success: "bg-green-600 text-white hover:bg-green-700",
+                warning: "bg-orange-500 text-white hover:bg-orange-600",
             };
             return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>;
         };
@@ -212,18 +188,44 @@
         const DraggableLogo = ({ logo, setLogo, isLocked }) => {
             if (!logo.url) return null;
             const handleMouseDown = (e) => {
-                if (isLocked) return;
-                e.preventDefault();
-                const startX = e.clientX - logo.x;
-                const startY = e.clientY - logo.y;
+                if (isLocked) return; e.preventDefault(); const startX = e.clientX - logo.x; const startY = e.clientY - logo.y;
                 const onMouseMove = (moveEvent) => { setLogo(prev => ({ ...prev, x: moveEvent.clientX - startX, y: moveEvent.clientY - startY })); };
                 const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
                 document.addEventListener("mousemove", onMouseMove); document.addEventListener("mouseup", onMouseUp);
             };
             return (
-                <div className={`absolute z-30 group draggable-logo ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''}`} style={{ left: logo.x, top: logo.y, width: logo.width || 150 }} onMouseDown={handleMouseDown}>
+                <div className={`absolute z-30 group draggable-element ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''}`} style={{ left: logo.x, top: logo.y, width: logo.width || 150 }} onMouseDown={handleMouseDown}>
                     <img src={logo.url} className="w-full h-auto object-contain pointer-events-none" />
                     {!isLocked && <button onClick={() => setLogo({ url: null, x: 50, y: 50 })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Icons.X size={12}/></button>}
+                </div>
+            );
+        };
+
+        const DraggableAnnotation = ({ ann, onUpdate, onDelete, isLocked, onLinkStart }) => {
+            const handleMouseDown = (e) => {
+                if (isLocked) return; e.stopPropagation();
+                const startX = e.clientX - ann.x; const startY = e.clientY - ann.y;
+                const onMouseMove = (moveEvent) => { onUpdate(ann.id, { x: moveEvent.clientX - startX, y: moveEvent.clientY - startY }); };
+                const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
+                document.addEventListener("mousemove", onMouseMove); document.addEventListener("mouseup", onMouseUp);
+            };
+            return (
+                <div className={`absolute z-30 draggable-element group p-3 rounded shadow-md border min-w-[150px] ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-300' : ''}`} style={{ left: ann.x, top: ann.y, backgroundColor: ann.bg || '#ffffff', color: ann.color || '#000' }} onMouseDown={handleMouseDown}>
+                    {!isLocked ? (
+                        <textarea value={ann.text} onChange={(e)=>onUpdate(ann.id, {text: e.target.value})} className="w-full bg-transparent outline-none resize-none overflow-hidden text-center" style={{fontSize: '14px'}} placeholder="Type here..."/>
+                    ) : ( <div className="text-center whitespace-pre-wrap">{ann.text}</div> )}
+                    {!isLocked && (
+                        <div className="absolute -top-3 -right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e)=>{e.stopPropagation(); onLinkStart(ann.id);}} className="bg-blue-500 text-white p-1 rounded-full shadow" title="Link to Node"><Icons.Link size={10}/></button>
+                            <button onClick={(e)=>{e.stopPropagation(); onDelete(ann.id);}} className="bg-red-500 text-white p-1 rounded-full shadow"><Icons.X size={10}/></button>
+                        </div>
+                    )}
+                    {!isLocked && (
+                        <div className="absolute -bottom-8 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 bg-white/90 p-1 rounded shadow text-xs">
+                            <input type="color" value={ann.bg||'#ffffff'} onChange={(e)=>onUpdate(ann.id, {bg: e.target.value})} title="Background" className="w-4 h-4"/>
+                            <input type="color" value={ann.color||'#000000'} onChange={(e)=>onUpdate(ann.id, {color: e.target.value})} title="Text Color" className="w-4 h-4"/>
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -243,13 +245,8 @@
 
         const SummaryDashboard = ({ employees, onClose }) => {
             const stats = useMemo(() => {
-                const total = employees.length;
-                const byType = { Permanent: 0, Subcontract: 0 };
-                const byPosition = {};
-                employees.forEach(e => {
-                    if (e.type === 'Permanent') byType.Permanent++; else byType.Subcontract++;
-                    byPosition[e.position] = (byPosition[e.position] || 0) + 1;
-                });
+                const total = employees.length; const byType = { Permanent: 0, Subcontract: 0 }; const byPosition = {};
+                employees.forEach(e => { if (e.type === 'Permanent') byType.Permanent++; else byType.Subcontract++; byPosition[e.position] = (byPosition[e.position] || 0) + 1; });
                 return { total, byType, byPosition };
             }, [employees]);
             return (
@@ -268,9 +265,7 @@
         };
 
         const Ruler = ({ orientation = 'horizontal', length = 2000 }) => {
-            const pxPerMm = 3.7795;
-            const ticks = [];
-            for (let i = 0; i <= length / pxPerMm; i += 10) ticks.push(<div key={i} className="ruler-tick" style={orientation==='horizontal'?{left:`${i*pxPerMm}px`,height:'6px',width:'1px',bottom:0}:{top:`${i*pxPerMm}px`,width:'6px',height:'1px',right:0}}><span className="ruler-label" style={orientation==='horizontal'?{left:'2px',bottom:'8px'}:{top:'2px',right:'8px'}}>{i}</span></div>);
+            const pxPerMm = 3.7795; const ticks = []; for (let i = 0; i <= length / pxPerMm; i += 10) ticks.push(<div key={i} className="ruler-tick" style={orientation==='horizontal'?{left:`${i*pxPerMm}px`,height:'6px',width:'1px',bottom:0}:{top:`${i*pxPerMm}px`,width:'6px',height:'1px',right:0}}><span className="ruler-label" style={orientation==='horizontal'?{left:'2px',bottom:'8px'}:{top:'2px',right:'8px'}}>{i}</span></div>);
             return <div className={`absolute bg-gray-50 border-gray-300 z-10 opacity-80 pointer-events-none ${orientation==='horizontal'?'h-8 border-b w-full top-0 left-8':'w-8 border-r h-full left-0 top-8'}`}>{ticks}</div>;
         };
 
@@ -284,64 +279,34 @@
             return (
                 <div draggable={!isLocked && !isViewOnly} onDragStart={(e) => !isLocked && !isViewOnly && onDragStart && onDragStart(e, employee.id)} 
                     className={`relative flex flex-col items-center p-3 border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${isLocked||isViewOnly?'cursor-default':'draggable-source'}`} 
-                    onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || isLocked) onClick(employee); }}>
+                    onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || isLocked) onClick(employee); }}
+                    id={`node-${employee.id}`}
+                >
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
                     {selectionMode && <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected?'bg-purple-600 border-purple-600':'border-gray-300 bg-white'}`}>{isSelected && <Icons.Check size={12} className="text-white"/>}</div>}
-                    
-                    {/* [NEW] Reorder Buttons */}
-                    {!isLocked && !isStaging && !selectionMode && !isViewOnly && (
-                        <>
-                            <div className="reorder-controls" style={{left: '-10px'}}>
-                                <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={10}/></button>
-                            </div>
-                            <div className="reorder-controls" style={{right: '-10px'}}>
-                                <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={10}/></button>
-                            </div>
-                        </>
-                    )}
-
-                    <div className="relative">
-                        <img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/100?text=No+Img"}} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/>
-                        <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div>
-                    </div>
+                    {!isLocked && !isStaging && !selectionMode && !isViewOnly && (<><div className="reorder-controls" style={{left: '-10px'}}><button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={10}/></button></div><div className="reorder-controls" style={{right: '-10px'}}><button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={10}/></button></div></>)}
+                    <div className="relative"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://via.placeholder.com/100?text=No+Img"}} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/><div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
                     <div className="mt-2 text-center w-full" style={textColorStyle}><p className="text-[10px] sm:text-xs font-bold opacity-60">{employee.id}</p><h3 className="text-xs sm:text-sm font-bold leading-tight truncate w-full">{employee.name}</h3><p className="text-[10px] sm:text-xs opacity-70 truncate w-full">{employee.position}</p>{isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5">({employee.company})</p>}</div>
                     {isStaging && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
         };
 
-        const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder }) => {
+        const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
-            
-            // Get subordinates and sort by 'order' key
-            const subordinates = allEmployees
-                .filter(e => e.reportsTo === employee.id)
-                .sort((a, b) => (a.order || 0) - (b.order || 0));
-
-            let cardColor = "bg-white border-gray-300";
-            if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
-            
+            const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => (a.order || 0) - (b.order || 0));
+            let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
             const isLargeTeam = subordinates.length > 8; 
-
-            const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); 
-                const rawData = e.dataTransfer.getData("empIds");
-                const droppedIds = rawData ? JSON.parse(rawData) : [];
-                if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id);
-            };
+            const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
             
             return (
                 <div className="flex flex-col items-center">
                     {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
                     <div onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && !isLocked && !isViewOnly && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
                         {moveTargetId && !isLocked && !isViewOnly && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
-                        <EmployeeCard employee={employee} onClick={onEdit} 
-                            onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} 
-                            className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} 
-                            selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection}
-                            onReorder={onReorder}
-                        />
-                        {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddSubordinate(employee.id);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
+                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
+                        {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
                     {subordinates.length > 0 && (
                         <>
@@ -349,20 +314,12 @@
                             <div className="flex relative">
                                 {isLargeTeam ? (
                                     <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50/50 rounded-xl border border-dashed border-gray-300">
-                                        {subordinates.map((sub) => (
-                                            <EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} />
-                                        ))}
+                                        {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} />))}
                                     </div>
                                 ) : (
-                                    <>
-                                        {subordinates.length > 1 && <div className="absolute top-0 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/2)] -translate-y-px"></div>}
+                                    <> {subordinates.length > 1 && <div className="absolute top-0 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/2)] -translate-y-px"></div>}
                                         <div className="flex gap-4 sm:gap-6 pt-0">
-                                            {subordinates.map((sub, i) => (
-                                                <div key={sub.id} className="relative flex flex-col items-center">
-                                                    {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>}
-                                                    <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} />
-                                                </div>
-                                            ))}
+                                            {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} /> </div>))}
                                         </div>
                                     </>
                                 )}
@@ -377,7 +334,7 @@
             return (
                 <div className="fixed top-16 right-4 bg-white p-4 rounded-xl shadow-xl border w-64 z-[60] animate-in slide-in-from-top-2">
                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold">Appearance</h3><button onClick={onClose}><Icons.X size={16}/></button></div>
-                    <div className="mb-4"><label className="text-xs text-gray-500 block mb-2">Theme (Auto Hierarchy)</label><div className="grid grid-cols-4 gap-2">{Object.entries(THEMES).map(([key, t]) => (<button key={key} onClick={()=>setAppTheme(key)} className={`w-10 h-10 rounded-lg ${t.lv0} shadow-sm border-2 ${currentTheme===key?'border-gray-800 scale-110 ring-2 ring-offset-1':'border-transparent'}`} title={t.name}></button>))}</div></div>
+                    <div className="mb-4"><label className="text-xs text-gray-500 block mb-2">Theme</label><div className="grid grid-cols-4 gap-2">{Object.entries(THEMES).map(([key, t]) => (<button key={key} onClick={()=>setAppTheme(key)} className={`w-10 h-10 rounded-lg ${t.lv0} shadow-sm border-2 ${currentTheme===key?'border-gray-800 scale-110 ring-2 ring-offset-1':'border-transparent'}`} title={t.name}></button>))}</div></div>
                     <div><label className="text-xs text-gray-500 block mb-2">Global Shape</label><div className="flex flex-wrap gap-2">{Object.entries(SHAPES).map(([key, s]) => (<button key={key} onClick={()=>setAppShape(s)} className={`px-3 py-1 bg-gray-100 border text-xs ${s.cls} ${currentShape.name===s.name?'bg-blue-100 border-blue-500 text-blue-700':''}`}>{s.name}</button>))}</div></div>
                 </div>
             );
@@ -389,27 +346,10 @@
         const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl, onAddPosition, onDeletePosition }) => {
             const [formData, setFormData] = useState({ id: '', name: '', position: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937' });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info'); const [isManagePosOpen, setIsManagePosOpen] = useState(false); const fileInputRef = useRef(null); const isEditMode = employee && !employee.isNew; const canEditStructure = role === 'admin' || role === 'supervisor';
-            useEffect(() => { if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', ...employee }); else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: positions[0] || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937' }); }, [employee]);
+            useEffect(() => { if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', ...employee }); else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937' }); }, [employee]);
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const payload = { file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }; const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); alert("อัปโหลดสำเร็จ"); } else throw new Error("Upload failed"); } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); alert("บันทึกรูปลงเครื่องสำเร็จ"); } } catch (err) { alert("Error: " + err.message); } finally { setIsUploading(false); } };
-            
-            // [NEW] Auto-Move (Operator Logic) at Form Submit
-            const handleSubmit = (e) => { 
-                e.preventDefault(); 
-                let finalData = { ...formData };
-                // Logic: If I am Operator AND my Boss is Operator -> Move me to Boss's Boss
-                if (finalData.position.toLowerCase().includes('operator') && finalData.reportsTo) {
-                    const boss = supervisors.find(s => s.id === finalData.reportsTo);
-                    if (boss && boss.position.toLowerCase().includes('operator')) {
-                        if (boss.reportsTo && boss.reportsTo !== 'STAGING') {
-                            alert(`[Auto-Move] ตำแหน่ง Operator ไม่สามารถขึ้นตรงกับ Operator ได้\nระบบจะย้าย ${finalData.name} ไปขึ้นตรงกับหัวหน้าของ ${boss.name} แทน`);
-                            finalData.reportsTo = boss.reportsTo;
-                        }
-                    }
-                }
-                onSave(finalData); 
-            };
-
+            const handleSubmit = (e) => { e.preventDefault(); let finalData = { ...formData }; if (finalData.position.toLowerCase().includes('operator') && finalData.reportsTo) { const boss = supervisors.find(s => s.id === finalData.reportsTo); if (boss && boss.position.toLowerCase().includes('operator')) { if (boss.reportsTo && boss.reportsTo !== 'STAGING') { alert(`[Auto-Move] ย้าย Operator ไปหาหัวหน้าของ ${boss.name}`); finalData.reportsTo = boss.reportsTo; } } } onSave(finalData); };
             return (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -425,23 +365,47 @@
             );
         };
 
+        // --- BATCH EDIT MODAL ---
+        const BatchEditModal = ({ selectedCount, onClose, onSave }) => {
+            const [field, setField] = useState('position');
+            const [value, setValue] = useState('');
+            return (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80]">
+                    <div className="bg-white rounded-xl p-6 w-80">
+                        <h3 className="font-bold mb-4">Batch Edit ({selectedCount})</h3>
+                        <select className="w-full border p-2 rounded mb-2" value={field} onChange={e=>setField(e.target.value)}>
+                            <option value="position">Change Position</option>
+                            <option value="status">Change Status</option>
+                        </select>
+                        <input className="w-full border p-2 rounded mb-4" value={value} onChange={e=>setValue(e.target.value)} placeholder="New Value..."/>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                            <Button onClick={()=>onSave(field, value)}>Apply</Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
         const App = () => {
-            const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 }, { id: '63009', name: 'Phakphum Y.', position: 'Leader Shift A', reportsTo: '68040', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
+            const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser')));
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
+            const [annotations, setAnnotations] = useState(() => JSON.parse(localStorage.getItem('orgAnnotations')) || []);
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
             const [logo, setLogo] = useState({ url: null, x: 50, y: 50 });
             const [selectionMode, setSelectionMode] = useState(false);
             const [selectedIds, setSelectedIds] = useState([]);
-            
-            // [NEW] Undo History State
             const [history, setHistory] = useState([]);
             const [historyIndex, setHistoryIndex] = useState(-1);
+            const [headerColor, setHeaderColor] = useState('#1f2937'); // Default gray-800
+            const [linkStartId, setLinkStartId] = useState(null); // Annotation Link
 
-            const [isModalOpen, setIsModalOpen] = useState(false); const [editingEmployee, setEditingEmployee] = useState(null); const [viewMode, setViewMode] = useState('chart'); const [isThemePanelOpen, setIsThemePanelOpen] = useState(false); const [isSummaryOpen, setIsSummaryOpen] = useState(false); const [showRulers, setShowRulers] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [sidebarWidth, setSidebarWidth] = useState(256); const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false); const [editingEmployee, setEditingEmployee] = useState(null); const [viewMode, setViewMode] = useState('chart'); const [isThemePanelOpen, setIsThemePanelOpen] = useState(false); const [isSummaryOpen, setIsSummaryOpen] = useState(false); const [showRulers, setShowRulers] = useState(false); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const [sidebarWidth, setSidebarWidth] = useState(256); const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false); const [isBatchEditOpen, setIsBatchEditOpen] = useState(false);
             const [zoom, setZoom] = useState(1); const [appTheme, setAppTheme] = useState('blue'); const [appShape, setAppShape] = useState(SHAPES.rounded); const [cloudStatus, setCloudStatus] = useState('offline'); const [debugLogs, setDebugLogs] = useState([]); const [showDebug, setShowDebug] = useState(false); const [moveSource, setMoveSource] = useState(null); const [deptName, setDeptName] = useState("ASSEMBLY DEPT"); 
             const sidebarRef = useRef(null); const isResizing = useRef(false); const logoInputRef = useRef(null);
 
@@ -451,139 +415,42 @@
 
             useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]);
 
-            // [NEW] Undo/Redo Logic Wrapper
-            const pushToHistory = (newData) => {
-                const newHistory = history.slice(0, historyIndex + 1);
-                newHistory.push(newData);
-                if (newHistory.length > 5) newHistory.shift(); // Limit 5 steps
-                setHistory(newHistory);
-                setHistoryIndex(newHistory.length - 1);
-            };
+            const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
+            const updateEmployeesWithHistory = (newState) => { pushToHistory(employees); setEmployees(newState); localStorage.setItem('orgData', JSON.stringify(newState)); };
+            const handleUndo = () => { if (historyIndex >= 0) { const prevState = history[historyIndex]; setEmployees(prevState); localStorage.setItem('orgData', JSON.stringify(prevState)); setHistoryIndex(prev => prev - 1); if(driveUrl) appApiCall(driveUrl, 'saveData', { orgData: prevState }); } };
 
-            const updateEmployeesWithHistory = (newState) => {
-                pushToHistory(employees); // Save old state
-                setEmployees(newState);
-                localStorage.setItem('orgData', JSON.stringify(newState));
-            };
+            const handleSave = (data) => { let newData; setEmployees(prev => { const exists = prev.find(e => e.id === data.id); newData = exists ? prev.map(e => e.id === data.id ? data : e) : [...prev, data]; return newData; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud([data], []); setIsModalOpen(false); setEditingEmployee(null); };
+            const handleDelete = (id) => { let newData, subordinatesUpdates = []; setEmployees(prev => { const target = prev.find(e => e.id === id); if (!target) return prev; const grandParentId = target.reportsTo; subordinatesUpdates = prev.filter(e => e.reportsTo === id).map(e => ({ ...e, reportsTo: grandParentId })); newData = prev.filter(e => e.id !== id).map(e => { const updatedSub = subordinatesUpdates.find(sub => sub.id === e.id); return updatedSub ? updatedSub : e; }); return newData; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud(subordinatesUpdates, [id]); setIsModalOpen(false); };
+            const handleReorder = (id, direction) => { setEmployees(prev => { const target = prev.find(e => e.id === id); if(!target) return prev; const siblings = prev.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0)); const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return prev; const newIndex = currentIndex + direction; if (newIndex < 0 || newIndex >= siblings.length) return prev; const siblingToSwap = siblings[newIndex]; const targetOrder = target.order || 0; const siblingOrder = siblingToSwap.order || 0; const newEmp = prev.map(e => { if (e.id === target.id) return { ...e, order: siblingOrder }; if (e.id === siblingToSwap.id) return { ...e, order: targetOrder }; return e; }); if (targetOrder === siblingOrder) { return prev.map(e => { if(e.reportsTo === target.reportsTo) { if(e.id === target.id) return {...e, order: newIndex}; if(e.id === siblingToSwap.id) return {...e, order: currentIndex}; const idx = siblings.findIndex(s=>s.id === e.id); return {...e, order: idx}; } return e; }); } pushToHistory(prev); localStorage.setItem('orgData', JSON.stringify(newEmp)); const update1 = newEmp.find(e => e.id === target.id); const update2 = newEmp.find(e => e.id === siblingToSwap.id); syncUpdatesToCloud([update1, update2], []); return newEmp; }); };
+            
+            // --- Batch & Selection Logic ---
+            const handleBatchDelete = () => { if(!confirm(`Delete ${selectedIds.length} items?`)) return; let newData = employees.filter(e => !selectedIds.includes(e.id)); updateEmployeesWithHistory(newData); syncUpdatesToCloud([], selectedIds); setSelectedIds([]); setSelectionMode(false); };
+            const handleBatchEditSave = (field, value) => { let updates = []; let newData = employees.map(e => { if(selectedIds.includes(e.id)) { const u = {...e, [field]: value}; updates.push(u); return u; } return e; }); updateEmployeesWithHistory(newData); syncUpdatesToCloud(updates, []); setIsBatchEditOpen(false); setSelectedIds([]); setSelectionMode(false); };
+            const handleBatchAdd = () => { const count = parseInt(prompt("How many cards?", "5")); if(!count) return; let newCards = []; for(let i=0; i<count; i++) { newCards.push({ id: Math.floor(Math.random()*100000).toString(), name: 'New Employee', position: 'Operator', reportsTo: 'STAGING', status: 'Active', type: 'Subcontract' }); } let newData = [...employees, ...newCards]; updateEmployeesWithHistory(newData); syncUpdatesToCloud(newCards, []); };
 
-            const handleUndo = () => {
-                if (historyIndex >= 0) {
-                    const prevState = history[historyIndex];
-                    setEmployees(prevState);
-                    localStorage.setItem('orgData', JSON.stringify(prevState));
-                    setHistoryIndex(prev => prev - 1);
-                    // Cloud sync for undo might be tricky, usually we trigger a full save or diff
-                    if(driveUrl) appApiCall(driveUrl, 'saveData', { orgData: prevState });
-                }
-            };
+            // --- Annotation Logic ---
+            const handleAddAnnotation = () => { setAnnotations(prev => [...prev, { id: Date.now().toString(), x: 100, y: 100, text: 'New Text', bg: '#ffffff', color: '#000000', linkTo: null }]); };
+            const handleUpdateAnnotation = (id, updates) => { setAnnotations(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a)); };
+            const handleDeleteAnnotation = (id) => { setAnnotations(prev => prev.filter(a => a.id !== id)); };
+            const handleAnnotationLink = (nodeId) => { if(linkStartId) { handleUpdateAnnotation(linkStartId, { linkTo: nodeId }); setLinkStartId(null); } };
 
-            const handleSave = (data) => {
-                let newData;
-                setEmployees(prev => {
-                    const exists = prev.find(e => e.id === data.id);
-                    newData = exists ? prev.map(e => e.id === data.id ? data : e) : [...prev, data];
-                    return newData;
-                });
-                updateEmployeesWithHistory(newData);
-                syncUpdatesToCloud([data], []);
-                setIsModalOpen(false); setEditingEmployee(null);
-            };
-
-            const handleDelete = (id) => {
-                let newData, subordinatesUpdates = [];
-                setEmployees(prev => {
-                    const target = prev.find(e => e.id === id);
-                    if (!target) return prev;
-                    const grandParentId = target.reportsTo;
-                    subordinatesUpdates = prev.filter(e => e.reportsTo === id).map(e => ({ ...e, reportsTo: grandParentId }));
-                    newData = prev.filter(e => e.id !== id).map(e => { const updatedSub = subordinatesUpdates.find(sub => sub.id === e.id); return updatedSub ? updatedSub : e; });
-                    return newData;
-                });
-                updateEmployeesWithHistory(newData);
-                syncUpdatesToCloud(subordinatesUpdates, [id]);
-                setIsModalOpen(false);
-            };
-
-            // [NEW] Reorder Handler
-            const handleReorder = (id, direction) => {
-                setEmployees(prev => {
-                    const target = prev.find(e => e.id === id);
-                    if(!target) return prev;
-                    
-                    // Find siblings
-                    const siblings = prev.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0));
-                    const currentIndex = siblings.findIndex(e => e.id === id);
-                    if (currentIndex === -1) return prev;
-
-                    const newIndex = currentIndex + direction;
-                    if (newIndex < 0 || newIndex >= siblings.length) return prev; // Out of bounds
-
-                    // Swap order values
-                    const siblingToSwap = siblings[newIndex];
-                    const targetOrder = target.order || 0;
-                    const siblingOrder = siblingToSwap.order || 0;
-
-                    // Update local state
-                    const newEmp = prev.map(e => {
-                        if (e.id === target.id) return { ...e, order: siblingOrder }; // Swap!
-                        if (e.id === siblingToSwap.id) return { ...e, order: targetOrder }; // Swap!
-                        return e;
-                    });
-                    
-                    // Note: Ideally we should use real indices, but swapping existing 'order' values is safer for quick implementation
-                    // If orders are same/null, we need to initialize them
-                    if (targetOrder === siblingOrder) {
-                         return prev.map(e => {
-                             if(e.reportsTo === target.reportsTo) {
-                                 if(e.id === target.id) return {...e, order: newIndex};
-                                 if(e.id === siblingToSwap.id) return {...e, order: currentIndex};
-                                 // others
-                                 const idx = siblings.findIndex(s=>s.id === e.id);
-                                 return {...e, order: idx};
-                             }
-                             return e;
-                         });
-                    }
-
-                    // Save history & Sync
-                    pushToHistory(prev);
-                    localStorage.setItem('orgData', JSON.stringify(newEmp));
-                    
-                    // Sync swapped items to cloud
-                    const update1 = newEmp.find(e => e.id === target.id);
-                    const update2 = newEmp.find(e => e.id === siblingToSwap.id);
-                    syncUpdatesToCloud([update1, update2], []);
-
-                    return newEmp;
-                });
-            };
-
-            const handleAddPosition = (newPos) => { setPositions(prev => { const newArr = [...prev, newPos]; localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; }); };
-            const handleDeletePosition = (pos) => { setPositions(prev => { const newArr = prev.filter(p => p !== pos); localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; }); };
-            const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onload = (ev) => { setLogo(prev => ({ ...prev, url: ev.target.result })); }; reader.readAsDataURL(file); } };
-
-            const handleDropOnChart = (draggedIds, targetId) => {
-                if(currentUser.role !== 'admin' && currentUser.role !== 'supervisor') return;
-                const idsToMove = Array.isArray(draggedIds) ? draggedIds : [draggedIds];
-                let newData;
-                const updates = [];
-                setEmployees(prev => {
-                    newData = prev.map(e => {
-                        if(idsToMove.includes(e.id)) {
-                            const updated = { ...e, reportsTo: targetId };
-                            updates.push(updated);
-                            return updated;
-                        }
-                        return e;
-                    });
-                    return newData;
-                });
-                updateEmployeesWithHistory(newData);
-                if (updates.length > 0) syncUpdatesToCloud(updates, []);
-                setSelectedIds([]);
+            const handleAddChild = (parent) => {
+                const defaultPos = getDefaultChildPosition(parent.position);
+                setEditingEmployee({ isNew: true, reportsTo: parent.id, position: defaultPos });
+                setIsModalOpen(true);
             };
 
             const toggleSelection = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
+            
+            const handleDropOnChart = (draggedIds, targetId) => {
+                if(linkStartId) { handleAnnotationLink(targetId); return; } // Handle annotation link drop
+                if(currentUser.role !== 'admin' && currentUser.role !== 'supervisor') return;
+                const idsToMove = Array.isArray(draggedIds) ? draggedIds : [draggedIds];
+                let newData, updates = [];
+                setEmployees(prev => { newData = prev.map(e => { if(idsToMove.includes(e.id)) { const updated = { ...e, reportsTo: targetId }; updates.push(updated); return updated; } return e; }); return newData; });
+                updateEmployeesWithHistory(newData); if (updates.length > 0) syncUpdatesToCloud(updates, []); setSelectedIds([]);
+            };
+
             const resize = useCallback((e) => { if (isResizing.current) { const w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
@@ -595,22 +462,30 @@
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
             const currentThemeConf = THEMES[appTheme];
 
+            // Render Connectors
+            const connectors = annotations.filter(a => a.linkTo).map(ann => {
+                const targetNode = document.getElementById(`node-${ann.linkTo}`);
+                if(!targetNode) return null;
+                const rect = targetNode.getBoundingClientRect();
+                const container = document.getElementById('org-chart-full-view').getBoundingClientRect();
+                // Simple calculation relative to container
+                const x1 = ann.x + 75; const y1 = ann.y + 20; // Center of annotation box
+                const x2 = (rect.left - container.left) + (rect.width/2);
+                const y2 = (rect.top - container.top) + (rect.height/2);
+                return <line key={ann.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="red" strokeWidth="2" strokeDasharray="5,5" className="connector-line"/>;
+            });
+
             return (
                 <div className="flex flex-col h-full bg-gray-50">
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 shrink-0 h-14 flex items-center px-4 justify-between">
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button>
-                            <div className="bg-red-600 p-1 rounded text-white font-bold">HR</div>
-                            <span className={`text-xs flex items-center ${cloudStatus==='online'?'text-green-600':cloudStatus==='error'?'text-red-500':'text-gray-400'}`}>{cloudStatus==='online'?<><Icons.Cloud size={14} className="mr-1"/>Online</>:cloudStatus==='syncing'?<><Icons.Loader size={14} className="mr-1"/>Syncing</>:<><Icons.Alert size={14} className="mr-1"/>Offline</>}</span>
-                        </div>
+                        <div className="flex items-center gap-2"><button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button><div className="bg-red-600 p-1 rounded text-white font-bold">HR</div><span className={`text-xs flex items-center ${cloudStatus==='online'?'text-green-600':cloudStatus==='error'?'text-red-500':'text-gray-400'}`}>{cloudStatus==='online'?<><Icons.Cloud size={14} className="mr-1"/>Online</>:cloudStatus==='syncing'?<><Icons.Loader size={14} className="mr-1"/>Syncing</>:<><Icons.Alert size={14} className="mr-1"/>Offline</>}</span></div>
                         <div className="flex items-center gap-1 sm:gap-2">
                             <button onClick={()=>setViewMode('chart')} className={`p-1.5 rounded ${viewMode==='chart'?'bg-blue-50 text-blue-600':''}`}><Icons.Grid/></button>
                             <button onClick={()=>setViewMode('list')} className={`p-1.5 rounded ${viewMode==='list'?'bg-blue-50 text-blue-600':''}`}><Icons.List/></button>
-                            
-                            {!isLocked && (<button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} className={`p-1.5 rounded border flex items-center gap-1 transition-all ${selectionMode?'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-200':'text-gray-600 hover:bg-gray-100'}`} title="Multi-Select Mode"><Icons.CheckSquare size={18}/>{selectionMode && <span className="text-xs font-bold px-1">{selectedIds.length}</span>}</button>)}
-
+                            {!isLocked && (<><button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} className={`p-1.5 rounded border flex items-center gap-1 transition-all ${selectionMode?'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-200':'text-gray-600 hover:bg-gray-100'}`} title="Multi-Select"><Icons.CheckSquare size={18}/>{selectionMode && <span className="text-xs font-bold px-1">{selectedIds.length}</span>}</button>
+                            <button onClick={handleAddAnnotation} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded border" title="Add Text"><Icons.Type size={18}/></button>
+                            <button onClick={handleBatchAdd} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded border" title="Bulk Add"><Icons.Users size={18}/></button></>)}
                             <div className={`p-1.5 rounded-full border flex items-center justify-center ${isLocked?'bg-gray-50 text-gray-500':'bg-green-50 text-green-600'}`} title={isLocked?"View Only":"Edit Mode"}>{isLocked?<Icons.Lock size={16}/>:<Icons.Unlock size={16}/>}</div>
-                            <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full hidden sm:block ${showRulers?'bg-blue-100 text-blue-600':'hover:bg-gray-100'}`}><Icons.Ruler size={20}/></button>
                             {!isLocked && <button onClick={()=>setIsThemePanelOpen(!isThemePanelOpen)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full" title="Theme"><Icons.Paint size={20}/></button>}
                             {!isLocked && <div className="logo-controls"><button onClick={()=>logoInputRef.current.click()} className="p-2 text-purple-600 hover:bg-purple-50 rounded-full" title="Upload Logo"><Icons.Image size={20}/></button><input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload}/></div>}
                             <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full" title="Summary Dashboard"><Icons.Chart size={20}/></button>
@@ -622,6 +497,7 @@
                     </nav>
 
                     {moveSource && <div className="bg-blue-600 text-white p-2 text-center text-sm sticky top-14 z-50 shadow-md animate-bounce">กำลังย้าย: <b>{moveSource.name}</b> <span className="text-xs opacity-80 cursor-pointer ml-4 underline" onClick={()=>setMoveSource(null)}>ยกเลิก</span></div>}
+                    {linkStartId && <div className="bg-yellow-500 text-white p-2 text-center text-sm sticky top-14 z-50 shadow-md animate-pulse">Select a node to link annotation... <span className="cursor-pointer underline ml-2" onClick={()=>setLinkStartId(null)}>Cancel</span></div>}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -641,9 +517,16 @@
                             {viewMode === 'chart' ? (
                                 <div className={`min-h-full flex flex-col items-center origin-top-left transition-transform duration-100 ${showRulers ? 'mt-8 ml-8' : ''}`} style={{ transform: `scale(${zoom})`, transformOrigin: '0 0', width: 'fit-content', minWidth: '100%' }}>
                                     <DraggableLogo logo={logo} setLogo={setLogo} isLocked={isLocked} />
+                                    {annotations.map(ann => <DraggableAnnotation key={ann.id} ann={ann} onUpdate={handleUpdateAnnotation} onDelete={handleDeleteAnnotation} isLocked={isLocked} onLinkStart={setLinkStartId} />)}
+                                    <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0" style={{overflow:'visible'}}>{connectors}</svg>
+
                                     <div id="org-chart-full-view" className="bg-white p-8 rounded-2xl border shadow-xl inline-block min-w-max org-chart-container relative">
-                                        <div className="text-left mb-6 border-b-2 border-gray-200 pb-2 pl-2"><input value={deptName} onChange={(e)=>setDeptName(e.target.value)} className={`text-3xl font-bold uppercase outline-none bg-transparent text-gray-800`} disabled={isLocked}/><p className="text-gray-400 text-sm mt-1">Updated: {new Date().toLocaleDateString('th-TH')}</p></div>
-                                        <div className="flex gap-16 justify-center">{rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={employees} onEdit={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDelete={handleDelete} onAddSubordinate={(id)=>{setEditingEmployee({isNew:true,reportsTo:id});setIsModalOpen(true);}} onDrop={handleDropOnChart} onMoveSelect={(tid)=>{if(moveSource&&moveSource.id!==tid){handleDropOnChart(moveSource.id,tid);setMoveSource(null);}}} moveTargetId={moveSource?.id} isLocked={isLocked} themeConf={currentThemeConf} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} />)}</div>
+                                        <div className="text-left mb-6 border-b-2 border-gray-200 pb-2 pl-2">
+                                            <input value={deptName} onChange={(e)=>setDeptName(e.target.value)} className="text-3xl font-bold uppercase outline-none bg-transparent" style={{color: headerColor}} disabled={isLocked}/>
+                                            {!isLocked && <input type="color" value={headerColor} onChange={(e)=>setHeaderColor(e.target.value)} className="ml-2 w-6 h-6 border-none cursor-pointer" title="Header Color"/>}
+                                            <p className="text-gray-400 text-sm mt-1">Updated: {new Date().toLocaleString('th-TH')}</p>
+                                        </div>
+                                        <div className="flex gap-16 justify-center">{rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={employees} onEdit={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDelete={handleDelete} onAddSubordinate={(id)=>{setEditingEmployee({isNew:true,reportsTo:id});setIsModalOpen(true);}} onDrop={handleDropOnChart} onMoveSelect={(tid)=>{if(moveSource&&moveSource.id!==tid){handleDropOnChart(moveSource.id,tid);setMoveSource(null);}}} moveTargetId={moveSource?.id} isLocked={isLocked} themeConf={currentThemeConf} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} onAddChild={handleAddChild} />)}</div>
                                     </div>
                                     <div className="h-20"></div>
                                 </div>
@@ -655,14 +538,12 @@
                             {viewMode === 'chart' && (
                                 <>
                                     <div className="zoom-controls"><Icons.ZoomOut onClick={()=>setZoom(z=>Math.max(0.3,z-0.1))}/><span className="text-xs font-mono w-8 text-right">{Math.round(zoom*100)}%</span><Icons.ZoomIn onClick={()=>setZoom(z=>Math.min(1.5,z+0.1))}/></div>
-                                    
-                                    {/* [NEW] Undo Button */}
-                                    {!isLocked && historyIndex >= 0 && (
-                                        <div className="undo-controls">
-                                            <button onClick={handleUndo} className="bg-white text-gray-700 p-3 rounded-full shadow-lg border hover:bg-gray-50 flex items-center gap-2 group undo-btn" title="Undo Last Action">
-                                                <Icons.RotateCcw size={20}/>
-                                                <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap text-sm font-bold">Undo</span>
-                                            </button>
+                                    {!isLocked && historyIndex >= 0 && ( <div className="undo-controls"><button onClick={handleUndo} className="bg-white text-gray-700 p-3 rounded-full shadow-lg border hover:bg-gray-50 flex items-center gap-2 group undo-btn" title="Undo Last Action"><Icons.RotateCcw size={20}/></button></div> )}
+                                    {selectionMode && selectedIds.length > 0 && (
+                                        <div className="batch-actions">
+                                            <span className="text-sm font-bold text-gray-600">{selectedIds.length} Selected</span>
+                                            <button onClick={()=>setIsBatchEditOpen(true)} className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200" title="Edit All"><Icons.Edit/></button>
+                                            <button onClick={handleBatchDelete} className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200" title="Delete All"><Icons.Trash2/></button>
                                         </div>
                                     )}
                                 </>
@@ -675,6 +556,7 @@
                     {isThemePanelOpen && <ThemePanel onClose={() => setIsThemePanelOpen(false)} currentTheme={appTheme} setAppTheme={setAppTheme} currentShape={appShape} setAppShape={setAppShape} />}
                     {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} />}
                     {isAdminPanelOpen && <AdminPanel onClose={() => setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} />}
+                    {isBatchEditOpen && <BatchEditModal selectedCount={selectedIds.length} onClose={()=>setIsBatchEditOpen(false)} onSave={handleBatchEditSave} />}
                 </div>
             );
         };
