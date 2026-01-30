@@ -388,7 +388,7 @@
             );
         };
 
-        // [OPTIMIZED] EmployeeCard - Memoized + [NEW] Up/Down Arrow + [NEW] Start Date
+        // [OPTIMIZED] EmployeeCard - Memoized + [NEW] Smart Up/Down + Start Date
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder }) => {
             const isSub = employee.type === 'Subcontract';
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ?
@@ -413,11 +413,21 @@
                     {!isLocked && !isStaging && !selectionMode && !isViewOnly && (
                         <>
                             <div className="reorder-controls" style={{left: '-10px'}}>
-                                <button className="reorder-btn" title="Move Up/Left" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowUp size={8}/></button>
+                                <button className="reorder-btn" title="Move Up/Row Above" onClick={(e)=>{
+                                    e.stopPropagation(); 
+                                    // [NEW] Calculate grid columns on click to allow vertical jump
+                                    const cols = window.innerWidth >= 768 ? 4 : (window.innerWidth >= 640 ? 3 : 2);
+                                    onReorder(employee.id, -cols); 
+                                }}><Icons.ArrowUp size={8}/></button>
                                 <button className="reorder-btn" title="Move Left" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button>
                             </div>
                             <div className="reorder-controls" style={{right: '-10px'}}>
-                                <button className="reorder-btn" title="Move Down/Right" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowDown size={8}/></button>
+                                <button className="reorder-btn" title="Move Down/Row Below" onClick={(e)=>{
+                                    e.stopPropagation(); 
+                                    // [NEW] Calculate grid columns on click to allow vertical jump
+                                    const cols = window.innerWidth >= 768 ? 4 : (window.innerWidth >= 640 ? 3 : 2);
+                                    onReorder(employee.id, cols);
+                                }}><Icons.ArrowDown size={8}/></button>
                                 <button className="reorder-btn" title="Move Right" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={8}/></button>
                             </div>
                         </>
@@ -672,13 +682,13 @@
                 setIsModalOpen(false);
             }, [employees, updateStateFull]);
 
-            const handleReorder = useCallback((id, direction) => {
+            const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id);
                 if(!target) return;
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0));
                 const currentIndex = siblings.findIndex(e => e.id === id);
                 if (currentIndex === -1) return;
-                const newIndex = currentIndex + direction;
+                const newIndex = currentIndex + offset;
                 if (newIndex < 0 || newIndex >= siblings.length) return;
                 const siblingToSwap = siblings[newIndex];
                 const targetOrder = target.order || 0;
