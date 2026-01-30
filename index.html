@@ -19,7 +19,7 @@
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn, .batch-actions, .ruler-container { display: none !important; }
+            nav, .no-print, .add-btn, .zoom-controls, .login-screen, .sidebar-resizer, .debug-console, .sidebar-toggle-btn, .logo-controls, .undo-btn, .batch-actions, .ruler-container, .mobile-menu-btn, .mobile-menu { display: none !important; }
             main { padding: 0; margin: 0; width: 100%; overflow: visible !important; }
             aside { display: none !important; }
             .org-chart-container { transform: none !important; margin: 0 !important; border: none !important; shadow: none !important; }
@@ -59,12 +59,16 @@
 
         .connector-line { position: absolute; pointer-events: none; z-index: 5; }
         
-        /* [MODIFIED] Ruler Styles - Reverted to Absolute (Fixed at origin) */
-        .ruler-container { position: absolute; z-index: 5; opacity: 0.5; pointer-events: none; }
-        .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #cbd5e1; width: 100%; display: flex; align-items: flex-end; }
-        .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; align-items: flex-end; }
+        /* Ruler Styles - Absolute Position (Fixed to Chart Container) */
+        .ruler-container { position: absolute; z-index: 5; opacity: 0.6; pointer-events: none; }
+        .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #94a3b8; width: 100%; display: flex; align-items: flex-end; background-color: rgba(255,255,255,0.1); }
+        .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #94a3b8; display: flex; flex-direction: column; align-items: flex-end; background-color: rgba(255,255,255,0.1); }
         .paper-marker { position: absolute; font-size: 9px; color: #ef4444; font-weight: bold; pointer-events: none; display: flex; align-items: center; justify-content: center; z-index: 15; opacity: 0.8; background: rgba(255,255,255,0.8); padding: 0 2px; border-radius: 2px; }
         .paper-line { position: absolute; background-color: #ef4444; pointer-events: none; z-index: 14; opacity: 0.4; border-left: 1px dashed #ef4444; border-top: 1px dashed #ef4444; }
+
+        /* Mobile Menu */
+        .mobile-menu { position: absolute; top: 100%; left: 0; right: 0; background: white; border-bottom: 1px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 50; padding: 1rem; animation: slideDown 0.2s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 h-screen overflow-hidden">
@@ -74,6 +78,21 @@
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         
         // --- UTILS ---
+        // Helper to safely parse JSON from localStorage to prevent White Screen
+        const safeJsonParse = (key, fallback) => {
+            try {
+                const item = localStorage.getItem(key);
+                if (!item) return fallback;
+                const parsed = JSON.parse(item);
+                if (!parsed) return fallback;
+                return parsed;
+            } catch (e) {
+                console.error(`Error parsing ${key}, resetting to default.`, e);
+                localStorage.removeItem(key);
+                return fallback;
+            }
+        };
+
         const formatDriveUrl = (url) => {
             if (!url) return "https://via.placeholder.com/100?text=No+Img";
             if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
@@ -180,7 +199,7 @@
             const [users, setUsers] = useState([]);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' }); const [editingUsername, setEditingUsername] = useState(null);
             const [loading, setLoading] = useState(false);
-            useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = JSON.parse(localStorage.getItem('users')) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
+            useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = safeJsonParse('users') || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
             const saveUserAction = async () => { if (!newUser.username || !newUser.password) return alert("กรุณากรอก User/Pass"); setLoading(true); let updatedUsers;
             if (editingUsername) updatedUsers = users.map(u => u.username === editingUsername ? newUser : u);
             else { if (users.some(u => u.username === newUser.username)) { setLoading(false); return alert('ชื่อซ้ำ'); } updatedUsers = [...users, newUser]; } setUsers(updatedUsers);
@@ -311,22 +330,72 @@
                 </div>
             );
         };
+        // [UPDATED] Summary Dashboard: Added Team Leader & Position Chart
         const SummaryDashboard = ({ employees, onClose }) => {
             const stats = useMemo(() => {
-                const total = employees.length; const byType = { Permanent: 0, Subcontract: 0 }; const byPosition = {};
-                employees.forEach(e => { if (e.type === 'Permanent') byType.Permanent++; else byType.Subcontract++; byPosition[e.position] = (byPosition[e.position] || 0) + 1; });
-                return { total, byType, byPosition };
+                const total = employees.length; 
+                const byType = { Permanent: 0, Subcontract: 0 }; 
+                const byPosition = {};
+                const byTeam = {};
+
+                employees.forEach(e => { 
+                    if (e.type === 'Permanent') byType.Permanent++; else byType.Subcontract++; 
+                    byPosition[e.position] = (byPosition[e.position] || 0) + 1; 
+                    
+                    if (e.reportsTo && e.reportsTo !== 'STAGING') {
+                        const boss = employees.find(b => b.id === e.reportsTo);
+                        const bossName = boss ? boss.name : 'Unknown';
+                        byTeam[bossName] = (byTeam[bossName] || 0) + 1;
+                    }
+                });
+                return { total, byType, byPosition, byTeam };
             }, [employees]);
+
             return (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] animate-in fade-in">
-                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-4xl max-h-[85vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-6 border-b pb-2"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><Icons.Chart className="mr-2"/> Summary Dashboard</h2><button onClick={onClose}><Icons.X/></button></div>
+                        
+                        {/* Overall Stats */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                             <div className="bg-blue-50 p-4 rounded-xl text-center border border-blue-100"><h3 className="text-gray-500 text-sm font-medium">Total Employees</h3><p className="text-3xl font-bold text-blue-700">{stats.total}</p></div>
                             <div className="bg-green-50 p-4 rounded-xl text-center border border-green-100"><h3 className="text-gray-500 text-sm font-medium">Permanent</h3><p className="text-3xl font-bold text-green-700">{stats.byType.Permanent}</p></div>
                             <div className="bg-orange-50 p-4 rounded-xl text-center border border-orange-100"><h3 className="text-gray-500 text-sm font-medium">Subcontract</h3><p className="text-3xl font-bold text-orange-700">{stats.byType.Subcontract}</p></div>
                         </div>
-                        <div><h3 className="font-bold text-gray-700 mb-4">By Position</h3><div className="space-y-3">{Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (<div key={pos} className="flex items-center"><div className="w-1/3 text-sm font-medium text-gray-600 truncate pr-2">{pos}</div><div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden"><div className="bg-blue-500 h-full rounded-full" style={{width: `${(count/stats.total)*100}%`}}></div></div><div className="w-10 text-right text-sm font-bold text-gray-800">{count}</div></div>))}</div></div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Position Breakdown */}
+                            <div>
+                                <h3 className="font-bold text-gray-700 mb-4 border-b pb-1">Position / Sub-dept</h3>
+                                <div className="space-y-3">
+                                    {Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (
+                                        <div key={pos} className="flex items-center">
+                                            <div className="w-1/3 text-xs font-medium text-gray-600 truncate pr-2" title={pos}>{pos}</div>
+                                            <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                                                <div className="bg-indigo-500 h-full rounded-full" style={{width: `${(count/stats.total)*100}%`}}></div>
+                                            </div>
+                                            <div className="w-8 text-right text-xs font-bold text-gray-800">{count}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Team Leader Breakdown */}
+                            <div>
+                                <h3 className="font-bold text-gray-700 mb-4 border-b pb-1">Team Breakdown (By Leader)</h3>
+                                <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                    {Object.entries(stats.byTeam).sort((a,b)=>b[1]-a[1]).map(([boss, count]) => (
+                                        <div key={boss} className="flex items-center">
+                                            <div className="w-1/3 text-xs font-medium text-gray-600 truncate pr-2">{boss}</div>
+                                            <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+                                                <div className="bg-teal-500 h-full rounded-full" style={{width: `${(count/stats.total)*100}%`}}></div>
+                                            </div>
+                                            <div className="w-8 text-right text-xs font-bold text-gray-800">{count}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -347,7 +416,7 @@
             );
         };
 
-        // [MODIFIED] Sticky Ruler: uses CSS sticky to stay at edges
+        // [MODIFIED] Ruler: Absolute position (Static)
         const Ruler = ({ orientation = 'horizontal', length = 3000 }) => {
             const pxPerMm = 3.7795;
             const paperSizes = [
@@ -379,7 +448,6 @@
             });
 
             return (
-                // [FIX] Reverted to absolute for static positioning as requested
                 <div className={`ruler-container ${orientation==='horizontal'?'ruler-h':'ruler-v'}`} style={{position: 'absolute'}}>
                     <div className="relative w-full h-full">
                         {ticks}
@@ -444,18 +512,18 @@
             );
         });
 
-        // [OPTIMIZED] EmployeeNode - Memoized + Fixed Layout Logic + [NEW] Sorting
+        // [OPTIMIZED] EmployeeNode - Memoized + Fixed Layout Logic + [NEW] Sorting (Permanent First)
         const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
             
-            // [MODIFIED] Sorting Logic: Permanent (Type 0) comes before Subcontract (Type 1), then sort by Order
+            // [MODIFIED] Sorting Logic: Permanent (Type 'Permanent') comes before 'Subcontract', then sort by Order
             const subordinates = allEmployees
                 .filter(e => e.reportsTo === employee.id)
                 .sort((a, b) => {
                     const isSubA = a.type === 'Subcontract' ? 1 : 0;
                     const isSubB = b.type === 'Subcontract' ? 1 : 0;
-                    if (isSubA !== isSubB) return isSubA - isSubB; // Sort by type first
+                    if (isSubA !== isSubB) return isSubA - isSubB; // Sort by type first (Perm=0, Sub=1)
                     return (a.order || 0) - (b.order || 0); // Then sort by order
                 });
 
@@ -547,7 +615,7 @@
                         <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ข้อมูลทั่วไป</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ปรับแต่งการ์ด</button></div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto grow">
                             {tab === 'info' ?
-                            (<> <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={!canEditStructure && isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div><div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>{formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}<div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" 
+                            (<> <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div><div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>{formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}<div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" 
                             value={formData.name} onChange={handleChange} className="w-full border p-2 rounded" required/></div>
                             {/* [NEW] Start Date Input */}
                             <div><label className="text-xs text-gray-500">วันที่เริ่มงาน</label><input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full border p-2 rounded"/></div>
@@ -563,7 +631,7 @@
                             className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData(p=>({...p, customShape: k}))} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div><div><label className="text-xs text-gray-500 mb-2 block">สีตัวอักษร</label><div className="flex items-center gap-2"><input type="color" value={formData.textColor ||
                             '#1f2937'} onChange={(e)=>setFormData(p=>({...p, textColor: e.target.value}))} className="h-10 w-20"/><span className="text-xs text-gray-500">เลือกสี</span></div></div></div>)}
                         </form>
-                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>ลบ</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>ยืนยัน</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>ไม่</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>ยกเลิก</Button><Button variant="primary" onClick={handleSubmit} icon={Icons.Check}>บันทึก</Button></div>}</div>
+                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>ลบ</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>ยืนยัน</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>ไม่</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel} disabled={isUploading}>ยกเลิก</Button><Button variant="primary" onClick={handleSubmit} icon={Icons.Check} disabled={isUploading}>{isUploading ? 'Uploading...' : 'บันทึก'}</Button></div>}</div>
                     </div>
                     {isManagePosOpen && <ManagePositionsModal positions={positions} onAdd={onAddPosition} onDelete={onDeletePosition} onClose={()=>setIsManagePosOpen(false)} />}
                 </div>
@@ -620,10 +688,27 @@
         const App = () => {
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
-            const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser')));
-            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
-            const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
-            const [annotations, setAnnotations] = useState(() => JSON.parse(localStorage.getItem('orgAnnotations')) || []);
+            const [currentUser, setCurrentUser] = useState(() => safeJsonParse('currentUser', null));
+            
+            // [FIX] Initialize employees with auto-cleanup for duplicates
+            const [employees, setEmployees] = useState(() => {
+                const raw = safeJsonParse('orgData', null);
+                if (!raw) return initialData;
+                // Remove duplicates by ID immediately on load
+                const unique = [];
+                const map = new Map();
+                for (const item of raw) {
+                    if(!item.id) continue;
+                    if(!map.has(item.id)) {
+                        map.set(item.id, true);
+                        unique.push(item);
+                    }
+                }
+                return unique.length > 0 ? unique : initialData;
+            });
+
+            const [positions, setPositions] = useState(() => safeJsonParse('orgPositions', initialPositions));
+            const [annotations, setAnnotations] = useState(() => safeJsonParse('orgAnnotations', []));
             const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('lastUpdated') || new Date().toLocaleString('th-TH'));
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
@@ -635,6 +720,7 @@
             const [headerColor, setHeaderColor] = useState('#1f2937'); 
             const [linkStartId, setLinkStartId] = useState(null); 
             const [searchTerm, setSearchTerm] = useState('');
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // [NEW] Mobile Menu State
 
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingEmployee, setEditingEmployee] = useState(null); const [viewMode, setViewMode] = useState('chart'); const [isThemePanelOpen, setIsThemePanelOpen] = useState(false); const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -678,9 +764,10 @@
             const handleSave = useCallback((data) => {
                 let updates = [data];
                 let newData = employees;
-                const exists = employees.find(e => e.id === data.id);
+                // [FIX] Strict String comparison to prevent duplicate cards
+                const exists = employees.find(e => String(e.id) === String(data.id));
                 newData = exists ?
-                employees.map(e => e.id === data.id ? data : e) : [...employees, data];
+                employees.map(e => String(e.id) === String(data.id) ? data : e) : [...employees, data];
                 updateStateFull(newData, updates, []);
                 setIsModalOpen(false); setEditingEmployee(null);
             }, [employees, updateStateFull]);
@@ -793,7 +880,8 @@
 
             // --- [FIX] กรอง ID ว่างออกเพื่อป้องกัน Freeze และ Ghost Nodes ---
             const validEmployees = useMemo(() => {
-                return employees.filter(e => e.id && String(e.id).trim() !== "");
+                if(!Array.isArray(employees)) return []; // Safety check
+                return employees.filter(e => e && e.id && String(e.id).trim() !== "");
             }, [employees]);
 
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
@@ -804,6 +892,8 @@
                 const boss = validEmployees.find(b => b.id === e.reportsTo);
                 if (!boss) return true; // Boss deleted -> Orphan -> Show as root
                 if (boss.reportsTo === 'STAGING') return true; // Boss in staging -> Show as root
+                // [FIX] Loop Detection: if I am my own boss, break it
+                if (boss.id === e.id) return true;
                 return false; 
             }).filter(e => searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase()));
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
@@ -820,15 +910,29 @@
                 return <line key={ann.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="red" strokeWidth="2" strokeDasharray="5,5" className="connector-line"/>;
             });
 
+            // [FIX] Helper function to parse JSON safely
+            const safeJsonParse = (key, fallback) => {
+                try {
+                    const item = localStorage.getItem(key);
+                    return item ? JSON.parse(item) : fallback;
+                } catch (e) {
+                    console.error(`Error parsing ${key}`, e);
+                    localStorage.removeItem(key);
+                    return fallback;
+                }
+            };
+
             return (
                 <div className="flex flex-col h-full bg-gray-50">
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 shrink-0 h-14 flex items-center px-4 justify-between">
-                        <div className="flex items-center gap-2"><button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button><div className="bg-red-600 p-1 rounded text-white font-bold">HR</div><span 
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2"><Icons.Menu/></button>
+                            <div className="bg-red-600 p-1 rounded text-white font-bold">HR</div><span 
                         className={`text-xs flex items-center ${cloudStatus==='online'?'text-green-600':cloudStatus==='error'?'text-red-500':'text-gray-400'}`}>{cloudStatus==='online'?<><Icons.Cloud size={14} className="mr-1"/>Online</>:cloudStatus==='syncing'?<><Icons.Loader size={14} className="mr-1"/>Syncing</>:<><Icons.Alert size={14} className="mr-1"/>Offline</>}</span></div>
-                        <div className="flex items-center gap-1 sm:gap-2">
-                            {/* [NEW] Search Bar */}
-                            <div className="hidden sm:flex 
-                            items-center bg-gray-100 rounded-full px-2 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
+                        
+                        {/* Desktop Menu */}
+                        <div className="hidden md:flex items-center gap-1 sm:gap-2">
+                            <div className="flex items-center bg-gray-100 rounded-full px-2 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
                             
                             <button onClick={()=>setViewMode('chart')} className={`p-1.5 rounded ${viewMode==='chart'?'bg-blue-50 text-blue-600':''}`}><Icons.Grid/></button>
                             <button onClick={()=>setViewMode('list')} className={`p-1.5 rounded ${viewMode==='list'?'bg-blue-50 text-blue-600':''}`}><Icons.List/></button>
@@ -840,7 +944,6 @@
                             {!isLocked && <button onClick={()=>setIsThemePanelOpen(!isThemePanelOpen)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full" title="Theme & Layout"><Icons.Paint size={20}/></button>}
                             {!isLocked && <div className="logo-controls"><button onClick={()=>logoInputRef.current.click()} className="p-2 text-purple-600 hover:bg-purple-50 rounded-full" title="Upload Logo"><Icons.Image size={20}/></button><input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload}/></div>}
                             <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full" title="Summary Dashboard"><Icons.Chart size={20}/></button>
-                            {/* [MODIFIED] Added Rulers Toggle */}
                             <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full ${showRulers ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`} title="Show Rulers"><Icons.RulerIcon size={20}/></button>
                             <button onClick={()=>exportToExcel(employees)} className="p-2 text-green-600 hover:bg-green-50 rounded-full" title="Export CSV"><Icons.FileSpreadsheet size={20}/></button>
                             {!isLocked && <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' });
@@ -848,6 +951,26 @@
                             {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><Icons.Settings size={20}/></button>}
                             <button onClick={()=>{localStorage.removeItem('currentUser');setCurrentUser(null);}} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Icons.LogOut size={20}/></button>
                         </div>
+
+                        {/* Mobile Menu Dropdown */}
+                        {mobileMenuOpen && (
+                            <div className="mobile-menu md:hidden flex flex-col gap-3">
+                                <div className="flex items-center bg-gray-100 rounded-full px-2 py-2 mb-2"><Icons.Search size={16} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-sm ml-2 w-full outline-none"/></div>
+                                <div className="grid grid-cols-4 gap-2">
+                                    <button onClick={()=>{setViewMode('chart');setMobileMenuOpen(false);}} className={`p-2 rounded flex flex-col items-center justify-center border ${viewMode==='chart'?'bg-blue-50 border-blue-200 text-blue-600':''}`}><Icons.Grid/><span className="text-[10px] mt-1">Chart</span></button>
+                                    <button onClick={()=>{setViewMode('list');setMobileMenuOpen(false);}} className={`p-2 rounded flex flex-col items-center justify-center border ${viewMode==='list'?'bg-blue-50 border-blue-200 text-blue-600':''}`}><Icons.List/><span className="text-[10px] mt-1">List</span></button>
+                                    <button onClick={()=>setIsSummaryOpen(true)} className="p-2 rounded flex flex-col items-center justify-center border text-blue-600 bg-blue-50"><Icons.Chart/><span className="text-[10px] mt-1">Stats</span></button>
+                                    {!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); setMobileMenuOpen(false); }} className="p-2 rounded flex flex-col items-center justify-center bg-blue-600 text-white"><Icons.Plus/><span className="text-[10px] mt-1">Add</span></button>}
+                                </div>
+                                <div className="border-t pt-2 grid grid-cols-4 gap-2">
+                                    <button onClick={()=>exportToExcel(employees)} className="p-2 text-green-600 hover:bg-green-50 rounded flex flex-col items-center"><Icons.FileSpreadsheet/><span className="text-[10px]">Excel</span></button>
+                                    {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode);}} className={`p-2 rounded flex flex-col items-center ${selectionMode?'bg-purple-100 text-purple-600':''}`}><Icons.CheckSquare/><span className="text-[10px]">Select</span></button>}
+                                    {!isLocked && <button onClick={()=>setIsThemePanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded flex flex-col items-center"><Icons.Paint/><span className="text-[10px]">Theme</span></button>}
+                                    {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded flex flex-col items-center"><Icons.Settings/><span className="text-[10px]">Admin</span></button>}
+                                </div>
+                                <button onClick={()=>{localStorage.removeItem('currentUser');setCurrentUser(null);}} className="w-full bg-red-100 text-red-600 p-2 rounded flex items-center justify-center font-bold mt-2"><Icons.LogOut className="mr-2"/> Logout</button>
+                            </div>
+                        )}
                     </nav>
 
                     {moveSource && <div className="bg-blue-600 text-white p-2 text-center text-sm sticky top-14 z-50 shadow-md animate-bounce">กำลังย้าย: <b>{moveSource.name}</b> <span className="text-xs opacity-80 cursor-pointer ml-4 underline" onClick={()=>setMoveSource(null)}>ยกเลิก</span></div>}
