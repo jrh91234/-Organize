@@ -169,9 +169,12 @@
             );
         });
 
-     // [FIXED] EmployeeForm: เพิ่มการป้องกัน Error ข้อมูลว่าง (Defensive Coding)
+    // [FIXED V2] EmployeeForm: แก้ไขตัวแปร role ที่หายไป และเพิ่มความปลอดภัยสูงสุด
         const EmployeeForm = ({ employee, supervisors, positions, depts, onSave, onCancel, onDelete, currentUser, driveUrl }) => {
-            // ตั้งค่าเริ่มต้นให้ปลอดภัย
+            // Default constants in case props are missing
+            const safePositions = positions || [];
+            const safeDepts = depts || [];
+            
             const [formData, setFormData] = useState({ 
                 id: '', name: '', position: '', dept: '', reportsTo: '', image: null, 
                 status: 'Active', type: 'Permanent', company: '', customColor: '', 
@@ -182,10 +185,9 @@
             const [tab, setTab] = useState('info');
             const fileInputRef = useRef(null); 
             
-            // เช็คว่าเป็นโหมดแก้ไขหรือไม่ (ถ้า employee เป็น null ให้ถือว่าเป็น New)
             const isEditMode = employee && !employee.isNew;
             
-            // Permission Check (เพิ่มการเช็ค currentUser ว่ามีอยู่จริงหรือไม่)
+            // Permission Check
             const hasPermission = useMemo(() => {
                 if (!currentUser) return false;
                 return !isEditMode || canEditEmployee(currentUser, employee);
@@ -195,21 +197,20 @@
                 if (isEditMode && employee) {
                     setFormData({ 
                         type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', 
-                        ...employee // โหลดข้อมูลเดิม
+                        ...employee 
                     }); 
                 } else { 
-                    // โหมดสร้างใหม่
                     setFormData({ 
                         id: Math.floor(60000 + Math.random() * 9000).toString(), 
                         name: '', 
                         position: employee?.position || '', 
-                        dept: employee?.dept || (depts[0] || ''), 
+                        dept: employee?.dept || (safeDepts[0] || ''), 
                         reportsTo: employee?.reportsTo || '', 
                         image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', 
                         textColor: '#1f2937', startDate: '', phone: '', showPhone: true 
                     }); 
                 }
-            }, [employee]); // run เมื่อ employee เปลี่ยน
+            }, [employee]);
 
             const handleImageUpload = async (e) => { 
                 const file = e.target.files[0]; if (!file) return; 
@@ -226,19 +227,16 @@
                 } catch (err) { alert(err.message); } finally { setIsUploading(false); } 
             };
 
-            // [FIX CRITICAL BUG] Reports To Filter
-            // สาเหตุจอขาว: ถ้า s.position เป็น null/undefined สั่ง .toLowerCase() จะพัง
             const filteredSupervisors = useMemo(() => {
                 if (!supervisors) return [];
                 return supervisors.filter(s => {
-                    if (!s || s.id === formData.id) return false; // ป้องกันตัวเอง และ null
-                    if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) return false; // กรองแผนก
+                    if (!s || s.id === formData.id) return false;
+                    if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) return false;
                     
-                    // ป้องกัน Error ตรงนี้: ใช้ (s.position || "") เพื่อกันค่าว่าง
                     const lowerPos = (s.position || "").toLowerCase(); 
                     const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder');
                     
-                    if (formData.reportsTo === s.id) return true; // ถ้าเลือกอยู่แล้วให้แสดงได้
+                    if (formData.reportsTo === s.id) return true;
                     return !isInvalidBoss;
                 });
             }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
@@ -257,9 +255,9 @@
                         <form className="p-6 space-y-4 overflow-y-auto grow">
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" disabled={isEditMode}/></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{depts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" disabled={isEditMode}/></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
-                            <div><label className="text-xs text-gray-500 flex justify-between">Position <span className="text-[10px] text-blue-500 cursor-pointer" onClick={()=>{const custom = prompt("Enter custom position:"); if(custom) setFormData({...formData, position: custom});}}>+ Custom</span></label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{positions.map(p=><option key={p} value={p}>{p}</option>)}{!positions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
+                            <div><label className="text-xs text-gray-500 flex justify-between">Position <span className="text-[10px] text-blue-500 cursor-pointer" onClick={()=>{const custom = prompt("Enter custom position:"); if(custom) setFormData({...formData, position: custom});}}>+ Custom</span></label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">Reports To</label><select value={formData.reportsTo} onChange={e=>setFormData({...formData, reportsTo: e.target.value})} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">-- Waiting Area --</option><option value="">-- Top Management --</option>{filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position})</option>)}</select></div><div><label className="text-xs text-gray-500">Type</label><select value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})} className="w-full border p-2 rounded"><option value="Permanent">Permanent</option><option value="Subcontract">Subcontract</option></select></div></div>
                             </>) : (<div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100"><div className="col-span-2"><label className="text-xs text-gray-500 flex items-center justify-between">Phone Number <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={formData.showPhone} onChange={e=>setFormData({...formData, showPhone: e.target.checked})}/><span className="text-[10px]">Show on card</span></label></label><input type="tel" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="0xx-xxx-xxxx"/></div><div><label className="text-xs text-gray-500">Start Date</label><input type="date" value={formData.startDate} onChange={e=>setFormData({...formData, startDate: e.target.value})} className="w-full border p-2 rounded text-sm"/></div><div className="flex flex-col justify-end"><div className="text-xs text-gray-500 mb-1">Tenure</div><div className="bg-white border px-2 py-2 rounded text-sm font-bold text-green-700 h-[38px] flex items-center">{tenureText || '-'}</div></div></div>
@@ -268,7 +266,8 @@
                                 <div><label className="text-xs text-gray-500">Employee Status</label><select value={formData.status} onChange={e=>setFormData({...formData, status: e.target.value})} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Resigned">Resigned</option></select></div>
                             </div>)}
                         </form>
-                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
+                        {/* แก้ไขจุดนี้ครับ: เปลี่ยนจาก role เป็น currentUser?.role */}
+                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && currentUser?.role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
                     </div>
                 </div>
             );
