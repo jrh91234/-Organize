@@ -3,26 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System (Recovery Mode)</title>
+    <title>HR Organize System (Final Recovery)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
-        .spinner { animation: spin 1s linear infinite; } @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* CSS เดิม */
+        body { font-family: 'Sarabun', sans-serif; touch-action: manipulation; background-color: #f9fafb; }
         .draggable-source { cursor: grab; } .draggable-source:active { cursor: grabbing; }
         .zoom-controls { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 40; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; }
         .undo-controls { position: fixed; bottom: 80px; right: 20px; z-index: 40; display: flex; flex-direction: column; gap: 8px; }
         .batch-actions { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 10px 20px; border-radius: 50px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 50; display: flex; gap: 12px; align-items: center; border: 1px solid #e2e8f0; animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; } .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         .sidebar-toggle-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 24px; height: 40px; background: white; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 50; box-shadow: 2px 0 5px rgba(0,0,0,0.1); color: #4b5563; }
         .reorder-controls { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; z-index: 30; opacity: 0; transition: opacity 0.2s; } .group:hover .reorder-controls { opacity: 1; }
         .reorder-btn { background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-size: 8px; } .reorder-btn:hover { background: #f1f5f9; color: #2563eb; transform: scale(1.1); }
+        .paper-marker { position: absolute; font-size: 9px; color: #ef4444; font-weight: bold; pointer-events: none; display: flex; align-items: center; justify-content: center; z-index: 15; opacity: 0.8; background: rgba(255,255,255,0.8); padding: 0 2px; border-radius: 2px; }
+        .paper-line { position: absolute; background-color: #ef4444; pointer-events: none; z-index: 14; opacity: 0.4; border-left: 1px dashed #ef4444; border-top: 1px dashed #ef4444; }
         @media print { nav, .zoom-controls, .undo-controls, .batch-actions, .sidebar-resizer, .sidebar-toggle-btn, aside { display: none !important; } }
     </style>
 </head>
@@ -32,21 +33,18 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-        // --- ERROR BOUNDARY (ตัวกันจอขาว) ---
+        // --- ERROR BOUNDARY ---
         class ErrorBoundary extends React.Component {
-            constructor(props) { super(props); this.state = { hasError: false, error: null }; }
-            static getDerivedStateFromError(error) { return { hasError: true, error }; }
-            componentDidCatch(error, errorInfo) { console.error("Uncaught error:", error, errorInfo); localStorage.clear(); /* Auto-fix: Clear storage on crash */ }
+            constructor(props) { super(props); this.state = { hasError: false }; }
+            static getDerivedStateFromError(error) { return { hasError: true }; }
+            componentDidCatch(error, errorInfo) { console.error(error, errorInfo); }
             render() {
                 if (this.state.hasError) {
-                    return (
-                        <div className="h-screen flex flex-col items-center justify-center bg-red-50 p-4 text-center">
-                            <h1 className="text-2xl font-bold text-red-600 mb-2">ระบบเกิดข้อผิดพลาด (System Error)</h1>
-                            <p className="text-gray-600 mb-4">ข้อมูลเก่าในเครื่องอาจขัดแย้งกับระบบใหม่</p>
-                            <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="bg-red-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg hover:bg-red-700">ล้างข้อมูลและรีสตาร์ท (Reset System)</button>
-                            <pre className="mt-4 p-2 bg-gray-100 rounded text-xs text-left overflow-auto max-w-lg">{this.state.error.toString()}</pre>
-                        </div>
-                    );
+                    return <div className="h-screen flex items-center justify-center flex-col gap-4 text-center p-4">
+                        <h1 className="text-2xl font-bold text-red-600">เกิดข้อผิดพลาด (System Error)</h1>
+                        <p className="text-gray-500">ระบบจะทำการรีเซ็ตข้อมูลเพื่อกู้คืนการทำงาน</p>
+                        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700">ล้างข้อมูลและเริ่มใหม่ (Factory Reset)</button>
+                    </div>;
                 }
                 return this.props.children;
             }
@@ -61,7 +59,9 @@
         const IconBase = ({ children, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
         const Icons = { Camera: (p)=><IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>, Plus: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>, Trash2: (p)=><IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>, X: (p)=><IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>, Check: (p)=><IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>, Settings: (p)=><IconBase {...p}><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>, Move: (p)=><IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>, Menu: (p)=><IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>, Grid: (p)=><IconBase {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>, List: (p)=><IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>, ChevronLeft: (p)=><IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>, ChevronRight: (p)=><IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>, ArrowUp: (p)=><IconBase {...p}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconBase>, ArrowDown: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></IconBase>, ArrowLeft: (p)=><IconBase {...p}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconBase>, ArrowRight: (p)=><IconBase {...p}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></IconBase>, RotateCcw: (p)=><IconBase {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></IconBase>, RulerIcon: (p)=><IconBase {...p}><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><line x1="14.5" y1="3.2" x2="18.8" y2="7.5"/><line x1="12.5" y1="5.2" x2="16.8" y2="9.5"/><line x1="10.5" y1="7.2" x2="14.8" y2="11.5"/><line x1="8.5" y1="9.2" x2="12.8" y2="13.5"/><line x1="6.5" y1="11.2" x2="10.8" y2="15.5"/><line x1="4.5" y1="13.2" x2="8.8" y2="17.5"/></IconBase>, Edit: (p)=><IconBase {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></IconBase>, ZoomIn: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>, ZoomOut: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>, LogOut: (p)=><IconBase {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></IconBase>, Cloud: (p)=><IconBase {...p}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></IconBase>, Loader: (p)=><IconBase {...p} className={`spinner ${p.className}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></IconBase>, FileSpreadsheet: (p)=><IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconBase>, Chart: (p)=><IconBase {...p}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></IconBase>, CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>, Home: (p)=><IconBase {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></IconBase>, Briefcase: (p)=><IconBase {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase> };
 
+        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled }) => { const base = "flex items-center justify-center px-3 py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm whitespace-nowrap"; const variants = { primary: "bg-blue-600 text-white hover:bg-blue-700", secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", success: "bg-green-600 text-white hover:bg-green-700", warning: "bg-orange-500 text-white hover:bg-orange-600", }; return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; };
         const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
+        const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
         // --- COMPONENTS ---
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts }) => { 
@@ -151,39 +151,51 @@
         };
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' }); const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true); try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } }; return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> </div> ); };
         
+        // [FIX] Improved Landing Page - Handles empty data
         const LandingPage = ({ departments, user, onSelectDept }) => {
-            const availableDepts = user.dept === 'ALL' ? departments : [user.dept];
+            const hasDepts = departments && departments.length > 0;
+            const availableDepts = user.dept === 'ALL' ? (hasDepts ? departments : ["ASSEMBLY", "QC", "HR"]) : [user.dept];
+            
             return (
                 <div className="h-screen flex items-center justify-center bg-gray-50 px-4">
                     <div className="w-full max-w-4xl">
                         <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">เลือกแผนกเพื่อเข้าใช้งาน</h1>
                         <p className="text-center text-gray-500 mb-8">สวัสดี, {user.name} ({user.role})</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                            {availableDepts.map(dept => (
-                                <button key={dept} onClick={() => onSelectDept(dept)} className="bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-100 flex flex-col items-center group hover:border-blue-500">
-                                    <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors"><Icons.Briefcase size={32}/></div>
-                                    <h3 className="text-xl font-bold text-gray-800">{dept}</h3>
-                                    <p className="text-sm text-gray-400 mt-2">Click to enter</p>
-                                </button>
-                            ))}
-                        </div>
+                        {availableDepts.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                {availableDepts.map(dept => (
+                                    <button key={dept} onClick={() => onSelectDept(dept)} className="bg-white p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-100 flex flex-col items-center group hover:border-blue-500">
+                                        <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors"><Icons.Briefcase size={32}/></div>
+                                        <h3 className="text-xl font-bold text-gray-800">{dept || "Unknown Dept"}</h3>
+                                        <p className="text-sm text-gray-400 mt-2">Click to enter</p>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center text-gray-400">ไม่พบข้อมูลแผนก กรุณาติดต่อ Admin</div>
+                        )}
+                        <button onClick={()=>{localStorage.clear(); window.location.reload();}} className="mt-12 block mx-auto text-red-400 text-sm hover:underline">รีเซ็ตระบบ (หากค้าง)</button>
                     </div>
                 </div>
             );
         };
 
         const App = () => {
-            // [FIX] Auto-Repair User Data: If user exists but lacks 'dept', wipe it to force re-login
+            // [FIX] Auto-Repair User Data
             const [currentUser, setCurrentUser] = useState(() => {
                 try {
                     const u = JSON.parse(localStorage.getItem('currentUser'));
-                    if (u && !u.dept) { localStorage.clear(); return null; } // Auto-fix
+                    if (u && !u.dept) { localStorage.clear(); return null; } 
                     return u;
                 } catch { localStorage.clear(); return null; }
             });
+            // [FIX] Auto-Repair Departments: Ensure default values exist if empty
+            const [departments, setDepartments] = useState(() => {
+                const stored = JSON.parse(localStorage.getItem('orgDepartments'));
+                return (stored && stored.length > 0) ? stored : ["ASSEMBLY", "QC", "HR"];
+            });
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || []);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]);
-            const [departments, setDepartments] = useState(() => JSON.parse(localStorage.getItem('orgDepartments')) || ["ASSEMBLY", "QC", "HR"]);
             const [currentDept, setCurrentDept] = useState(null);
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             const [viewMode, setViewMode] = useState('chart'); 
