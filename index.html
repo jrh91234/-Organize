@@ -599,7 +599,8 @@
             try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error');
             } catch (e) { setCloudStatus('error'); } };
 
-            useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]);
+            useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl, currentUser]); // [FIX] Added currentUser dependency to auto-fetch on login
+            
             // Utility to update state + history + timestamp + sync
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => {
                 pushToHistory(employees);
