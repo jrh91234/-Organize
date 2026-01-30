@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR Multi-Dept Organize System (Full Option V2)</title>
+    <title>HR Multi-Dept Organize System (Fixed V3)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -39,11 +39,8 @@
         const formatDriveUrl = (url) => { if (!url) return "https://via.placeholder.com/100?text=No+Img"; if (url.includes('drive.google.com') || url.includes('docs.google.com')) { let id = null; const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/); if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; } if (id) return `https://lh3.googleusercontent.com/d/$$${id}`; } return url; };
         const compressImage = (file, targetSizeKB = 512) => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600; if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality); while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); } resolve(dataUrl); }; img.onerror = reject; }; reader.onerror = reject; }); };
         const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date)) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
-        
-        // [Logic] คำนวนอายุงาน
         const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start)) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return "New"; return `${years} ปี ${months} ด.`; };
 
-        // [New Logic] Permission Helpers
         const getPositionRank = (position) => {
             const p = (position || "").toLowerCase();
             if (p.includes('manager')) return 5;
@@ -224,7 +221,7 @@
             return ( <div className={`ruler-container ${orientation==='horizontal'?'ruler-h':'ruler-v'}`} style={{position: 'absolute'}}> <div className="relative w-full h-full"> {ticks} {markers} </div> </div> ); };
         const ThemePanel = ({ onClose, currentTheme, setAppTheme, currentShape, setAppShape, layoutThreshold, setLayoutThreshold }) => { return ( <div className="fixed top-16 right-4 bg-white p-4 rounded-xl shadow-xl border w-64 z-[60] animate-in slide-in-from-top-2"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold">Appearance</h3><button onClick={onClose}><Icons.X size={16}/></button></div> <div className="mb-4"><label className="text-xs text-gray-500 block mb-2">Theme</label><div className="grid grid-cols-4 gap-2">{Object.entries(THEMES).map(([key, t]) => (<button key={key} onClick={()=>setAppTheme(key)} className={`w-10 h-10 rounded-lg ${t.lv0} shadow-sm border-2 ${currentTheme===key?'border-gray-800 scale-110 ring-2 ring-offset-1':'border-transparent'}`} title={t.name}></button>))}</div></div> <div className="mb-4"><label className="text-xs text-gray-500 block mb-2">Global Shape</label><div className="flex flex-wrap gap-2">{Object.entries(SHAPES).map(([key, s]) => (<button key={key} onClick={()=>setAppShape(s)} className={`px-3 py-1 bg-gray-100 border text-xs ${s.cls} ${currentShape.name===s.name?'bg-blue-100 border-blue-500 text-blue-700':''}`}>{s.name}</button>))}</div></div> <div> <label className="text-xs text-gray-500 block mb-2">Layout Threshold (Max Rows)</label> <div className="flex items-center gap-2"> <input type="number" min="1" max="20" value={layoutThreshold} onChange={(e)=>setLayoutThreshold(Number(e.target.value))} className="border p-2 rounded text-sm w-full" /> <span className="text-xs text-gray-400">nodes</span> </div> <p className="text-[10px] text-gray-400 mt-1">If subordinates > {layoutThreshold}, switch to Grid.</p> </div> </div> ); };
         
-        // [UPDATED] SummaryDashboard Fix
+        // [FIXED] SummaryDashboard: ป้องกัน Error เมื่อข้อมูลไม่ครบ
         const SummaryDashboard = ({ employees, onClose, departments }) => { 
             const [activeTab, setActiveTab] = useState('Overview');
             const getStats = (filterDept) => {
@@ -235,8 +232,18 @@
                 let totalYears = 0; let countTenure = 0;
                 targetEmps.forEach(e => {
                     if (e.type === 'Permanent') byType.Permanent++; else byType.Subcontract++;
-                    byPosition[e.position] = (byPosition[e.position] || 0) + 1;
-                    if(e.startDate) { const start = new Date(e.startDate); const now = new Date(); const diffTime = Math.abs(now - start); const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365); totalYears += diffYears; countTenure++; }
+                    const pos = e.position || "Unknown"; // ป้องกัน Null
+                    byPosition[pos] = (byPosition[pos] || 0) + 1;
+                    if(e.startDate) { 
+                        const start = new Date(e.startDate); 
+                        if (!isNaN(start)) { // ตรวจสอบวันที่ถูกต้อง
+                            const now = new Date(); 
+                            const diffTime = Math.abs(now - start); 
+                            const diffYears = diffTime / (1000 * 60 * 60 * 24 * 365); 
+                            totalYears += diffYears; 
+                            countTenure++; 
+                        }
+                    }
                 });
                 const avgTenure = countTenure > 0 ? (totalYears / countTenure).toFixed(1) : 0;
                 return { total, byType, byPosition, avgTenure };
@@ -305,7 +312,52 @@
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { pushToHistory(employees); setEmployees(newState); if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes); }, [employees, driveUrl, history, historyIndex]);
-            const handleReorder = useCallback((id, offset) => { const target = employees.find(e => e.id === id); if (!target) return; const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => (a.order || 0) - (b.order || 0)); const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return; let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return; const siblingToSwap = siblings[newIndex]; const targetOrder = target.order || 0; const siblingOrder = siblingToSwap.order || 0; const updates = [ { ...target, order: siblingOrder }, { ...siblingToSwap, order: targetOrder } ]; const newData = employees.map(e => { const up = updates.find(u => u.id === e.id); return up ? up : e; }); updateStateFull(newData, updates, []); }, [employees, updateStateFull]);
+            
+            // [FIXED] Handle Reorder: Logic ใหม่ จัดเรียง index ให้ถูกต้อง 100%
+            const handleReorder = useCallback((id, offset) => {
+                const target = employees.find(e => e.id === id);
+                if (!target) return;
+                
+                // 1. ดึงกลุ่มเพื่อนร่วมงาน (Siblings) และเรียงตามลำดับปัจจุบันให้แน่นอนก่อน
+                const siblings = employees
+                    .filter(e => e.reportsTo === target.reportsTo)
+                    .sort((a, b) => {
+                        const orderA = a.order || 0;
+                        const orderB = b.order || 0;
+                        if (orderA !== orderB) return orderA - orderB;
+                        // ถ้า Order เท่ากัน (เช่นเป็น 0 หมด) ให้เรียงตาม ID หรือชื่อ เพื่อให้ลำดับเสถียร
+                        return (a.id || "").localeCompare(b.id || "");
+                    });
+
+                const currentIndex = siblings.findIndex(e => e.id === id);
+                if (currentIndex === -1) return;
+
+                // 2. คำนวณตำแหน่งใหม่
+                let newIndex = currentIndex + offset;
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex >= siblings.length) newIndex = siblings.length - 1;
+                if (newIndex === currentIndex) return;
+
+                // 3. ย้ายตำแหน่งใน Array ชั่วคราว
+                const itemToMove = siblings[currentIndex];
+                siblings.splice(currentIndex, 1); // เอาออก
+                siblings.splice(newIndex, 0, itemToMove); // แทรกที่ใหม่
+
+                // 4. แจก Order ใหม่ให้ทุกคนในกลุ่ม (1, 2, 3...) เพื่อจำลำดับ
+                const updates = siblings.map((sib, index) => ({
+                    ...sib,
+                    order: index + 1 // Assign strict order
+                }));
+
+                // 5. บันทึกกลับลง State ใหญ่
+                const newData = employees.map(e => {
+                    const updatedSibling = updates.find(u => u.id === e.id);
+                    return updatedSibling ? updatedSibling : e;
+                });
+
+                updateStateFull(newData, updates, []);
+            }, [employees, updateStateFull]);
+
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
@@ -313,14 +365,12 @@
             const handleDelete = useCallback((id) => { const newData = employees.filter(e => e.id !== id); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, updateStateFull]);
             const handleTransferToDept = (targetDept) => { if(selectedIds.length === 0) return; const updates = []; const newData = employees.map(e => { if (selectedIds.includes(e.id)) { const u = { ...e, dept: targetDept, reportsTo: 'STAGING' }; updates.push(u); return u; } return e; }); updateStateFull(newData, updates, []); setSelectedIds([]); setSelectionMode(false); alert(`Moved ${updates.length} employees to ${targetDept} (Waiting Area)`); };
 
-            // [New] Sorting Logic
             const requestSort = (key) => {
                 let direction = 'ascending';
                 if (sortConfig.key === key && sortConfig.direction === 'ascending') { direction = 'descending'; }
                 setSortConfig({ key, direction });
             };
 
-            // [New] CSV Export Logic
             const exportCSV = () => {
                 const headers = ["ID", "Name", "Department", "Position", "Type", "Status", "Phone", "Start Date", "Company"];
                 const csvRows = [headers.join(",")];
@@ -347,12 +397,9 @@
             const rootEmployees = filteredAll.filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; });
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
 
-            // [New] Processed Employees for List View (Search & Sort)
             const processedEmployees = useMemo(() => {
                 let data = [...validEmployees];
-                // Filter by Dept
                 if (currentDept !== 'ALL') data = data.filter(e => e.dept === currentDept);
-                // Filter by Search (Improved)
                 if (searchTerm) {
                     const lower = searchTerm.toLowerCase();
                     data = data.filter(e => 
@@ -363,7 +410,6 @@
                         (e.company || "").toLowerCase().includes(lower)
                     );
                 }
-                // Sort
                 if (sortConfig.key) {
                     data.sort((a, b) => {
                         let aVal = a[sortConfig.key] || "";
