@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System (Fixed Dashboard & White Screen)</title>
+    <title>HR System (Safe Mode V5)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -40,6 +40,17 @@
         const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
         const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start.getTime())) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return "New"; return `${years} ปี ${months} ด.`; };
 
+        // [New] Safe Local Storage Loader (ป้องกันจอขาว)
+        const safeLocalLoad = (key, fallback) => {
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : fallback;
+            } catch (e) {
+                console.warn(`Error loading ${key}, using fallback.`, e);
+                return fallback;
+            }
+        };
+
         const getPositionRank = (position) => {
             const p = (position || "").toLowerCase();
             if (p.includes('manager')) return 5;
@@ -63,11 +74,10 @@
             return myRank > targetRank;
         };
 
-        // Icons Component
         const IconBase = ({ children, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
         const Icons = { 
             Camera: (p)=><IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>, Plus: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>, Trash2: (p)=><IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>, 
-            X: (p)=><IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>, Check: (p)=><IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>, Settings: (p)=><IconBase {...p}><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>, 
+            X: (p)=><IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>, Check: (p)=><IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>, Settings: (p)=><IconBase {...p}><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>, 
             Move: (p)=><IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>, Menu: (p)=><IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>, 
             Grid: (p)=><IconBase {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>, List: (p)=><IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>, 
             ChevronLeft: (p)=><IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>, ChevronRight: (p)=><IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>, 
@@ -97,7 +107,7 @@
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' }); 
             const [editingUsername, setEditingUsername] = useState(null);
             const [loading, setLoading] = useState(false); 
-            useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = JSON.parse(localStorage.getItem('users')) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
+            useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = safeLocalLoad('users', []) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
             const saveUserAction = async () => { if (!newUser.username || !newUser.password) return alert("กรุณากรอก User/Pass"); setLoading(true); let updatedUsers;
             if (editingUsername) updatedUsers = users.map(u => u.username === editingUsername ? newUser : u);
             else { if (users.some(u => u.username === newUser.username)) { setLoading(false); return alert('ชื่อซ้ำ'); } updatedUsers = [...users, newUser]; } setUsers(updatedUsers);
@@ -290,7 +300,8 @@
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' });
             const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true);
             try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } };
-            return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> </div> );
+            // เพิ่มปุ่ม Reset Data มุมขวาล่าง
+            return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4 relative"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> <button onClick={()=>{if(confirm('ล้างข้อมูลทั้งหมดในเครื่องเพื่อแก้ปัญหา?')) { localStorage.clear(); location.reload(); }}} className="absolute bottom-4 right-4 text-xs text-gray-500 hover:text-white underline">Reset Data (Emergency)</button> </div> );
         };
 
         // [New] Loading Overlay Component
@@ -302,10 +313,12 @@
         );
 
         const App = () => {
-            const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser')));
-            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || []);
-            const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]);
-            const [departments, setDepartments] = useState(() => JSON.parse(localStorage.getItem('orgDepartments')) || ["ASSEMBLY", "QC", "HR"]);
+            // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
+            const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
+            const [employees, setEmployees] = useState(() => safeLocalLoad('orgData', []));
+            const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
+            const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR"]));
+            
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
@@ -348,8 +361,10 @@
             // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
             useEffect(() => { 
                 if (currentUser) {
+                    setIsDataReady(false); // เริ่มต้นโหลด
+                    
                     // 1. โหลดจาก Local Storage ก่อน (ถ้ามี)
-                    const localData = JSON.parse(localStorage.getItem('orgData'));
+                    const localData = safeLocalLoad('orgData', null);
                     if (localData && Array.isArray(localData)) {
                         setEmployees(localData);
                         setIsDataReady(true); // ข้อมูล Local พร้อมแล้ว แสดงผลได้เลย
@@ -364,7 +379,7 @@
                                 if (res.data.orgDepartments) setDepartments(res.data.orgDepartments); 
                                 setCloudStatus('online'); 
                             }
-                            setIsDataReady(true); // ข้อมูล Cloud มาแล้ว (หรือพังก็ถือว่าจบกระบวนการ)
+                            setIsDataReady(true); // ข้อมูล Cloud มาแล้ว
                         }).catch(() => {
                             setIsDataReady(true); // ถึง Error ก็ต้องปล่อยให้ทำงานต่อด้วยข้อมูลเก่า
                         });
@@ -426,7 +441,7 @@
             // Main Render Logic
             if (!currentUser) return <LoginScreen onLogin={(u)=>{setCurrentUser(u); localStorage.setItem('currentUser', JSON.stringify(u));}} driveUrl={driveUrl} apiCall={appApiCall} />;
             
-            // [FIXED] ถ้าข้อมูลยังไม่พร้อม ให้แสดงหน้า Loading แทน
+            // [FIXED] ถ้าข้อมูลยังไม่พร้อม ให้แสดงหน้า Loading แทน (ป้องกันการ Crash)
             if (!isDataReady) return <LoadingScreen />;
 
             const validEmployees = employees.filter(e => e.id);
