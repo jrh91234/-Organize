@@ -169,33 +169,79 @@
             );
         });
 
-        // [UPDATED] EmployeeForm with Permissions, ReportsTo Filter, Custom Position
+     // [FIXED] EmployeeForm: เพิ่มการป้องกัน Error ข้อมูลว่าง (Defensive Coding)
         const EmployeeForm = ({ employee, supervisors, positions, depts, onSave, onCancel, onDelete, currentUser, driveUrl }) => {
-            const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
-            const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info');
-            const fileInputRef = useRef(null); const isEditMode = employee && !employee.isNew;
+            // ตั้งค่าเริ่มต้นให้ปลอดภัย
+            const [formData, setFormData] = useState({ 
+                id: '', name: '', position: '', dept: '', reportsTo: '', image: null, 
+                status: 'Active', type: 'Permanent', company: '', customColor: '', 
+                textColor: '#1f2937', startDate: '', phone: '', showPhone: true 
+            });
+            const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); 
+            const [isUploading, setIsUploading] = useState(false); 
+            const [tab, setTab] = useState('info');
+            const fileInputRef = useRef(null); 
             
-            // Permission Check
-            const hasPermission = !isEditMode || canEditEmployee(currentUser, employee);
+            // เช็คว่าเป็นโหมดแก้ไขหรือไม่ (ถ้า employee เป็น null ให้ถือว่าเป็น New)
+            const isEditMode = employee && !employee.isNew;
+            
+            // Permission Check (เพิ่มการเช็ค currentUser ว่ามีอยู่จริงหรือไม่)
+            const hasPermission = useMemo(() => {
+                if (!currentUser) return false;
+                return !isEditMode || canEditEmployee(currentUser, employee);
+            }, [currentUser, isEditMode, employee]);
 
             useEffect(() => { 
-                if (isEditMode) setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); 
-                else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', dept: employee?.dept || (depts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); 
-            }, [employee]);
+                if (isEditMode && employee) {
+                    setFormData({ 
+                        type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', 
+                        ...employee // โหลดข้อมูลเดิม
+                    }); 
+                } else { 
+                    // โหมดสร้างใหม่
+                    setFormData({ 
+                        id: Math.floor(60000 + Math.random() * 9000).toString(), 
+                        name: '', 
+                        position: employee?.position || '', 
+                        dept: employee?.dept || (depts[0] || ''), 
+                        reportsTo: employee?.reportsTo || '', 
+                        image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', 
+                        textColor: '#1f2937', startDate: '', phone: '', showPhone: true 
+                    }); 
+                }
+            }, [employee]); // run เมื่อ employee เปลี่ยน
 
-            const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
+            const handleImageUpload = async (e) => { 
+                const file = e.target.files[0]; if (!file) return; 
+                try { 
+                    setIsUploading(true); 
+                    const compressedBase64 = await compressImage(file, 512); 
+                    if (driveUrl) { 
+                        const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); 
+                        const result = await res.json(); 
+                        if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } 
+                    } else { 
+                        setFormData(prev => ({ ...prev, image: compressedBase64 })); 
+                    } 
+                } catch (err) { alert(err.message); } finally { setIsUploading(false); } 
+            };
 
-            // Reports To Filter
+            // [FIX CRITICAL BUG] Reports To Filter
+            // สาเหตุจอขาว: ถ้า s.position เป็น null/undefined สั่ง .toLowerCase() จะพัง
             const filteredSupervisors = useMemo(() => {
+                if (!supervisors) return [];
                 return supervisors.filter(s => {
-                    if (s.id === formData.id) return false;
-                    if (currentUser.dept !== 'ALL' && s.dept !== formData.dept) return false;
-                    const lowerPos = s.position.toLowerCase();
+                    if (!s || s.id === formData.id) return false; // ป้องกันตัวเอง และ null
+                    if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) return false; // กรองแผนก
+                    
+                    // ป้องกัน Error ตรงนี้: ใช้ (s.position || "") เพื่อกันค่าว่าง
+                    const lowerPos = (s.position || "").toLowerCase(); 
                     const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder');
-                    if (formData.reportsTo === s.id) return true;
+                    
+                    if (formData.reportsTo === s.id) return true; // ถ้าเลือกอยู่แล้วให้แสดงได้
                     return !isInvalidBoss;
                 });
-            }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser.dept]);
+            }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
 
             const tenureText = useMemo(() => calculateTenure(formData.startDate), [formData.startDate]);
 
