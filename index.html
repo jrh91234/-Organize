@@ -91,7 +91,6 @@
             if (isNaN(date)) return dateString;
             return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
         };
-        // [NEW] Calculate Tenure
         const calculateTenure = (dateString) => {
             if (!dateString) return "-";
             const start = new Date(dateString);
@@ -105,7 +104,6 @@
             }
             return `${years} ปี ${months} เดือน`;
         };
-
         const exportToExcel = (employees) => {
             let csvContent = "data:text/csv;charset=utf-8,\uFEFFID,Name,Position,Type,Status,ReportsTo,StartDate,Phone,Order\n";
             employees.forEach(e => { csvContent += `"${e.id}","${e.name}","${e.position}","${e.type}","${e.status}","${e.reportsTo}","${e.startDate||''}","${e.phone||''}","${e.order||0}"\n`; });
@@ -175,7 +173,6 @@
             return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>;
         };
 
-        // --- COMPONENTS ---
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall }) => {
             const [users, setUsers] = useState([]);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' }); const [editingUsername, setEditingUsername] = useState(null);
@@ -284,6 +281,8 @@
 
         const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm }) => {
             const [isDragOver, setIsDragOver] = useState(false);
+            const [isDragOverGroup, setIsDragOverGroup] = useState(false); // [NEW] Track drag over group area
+
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
@@ -292,7 +291,22 @@
             if (isMatch) cardColor += " ring-4 ring-yellow-400 shadow-xl scale-105 z-20";
 
             const isLargeTeam = subordinates.length > (layoutThreshold || 4);
+
             const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
+            
+            // [NEW] Handler for dropping onto the grid/group container
+            const handleDropOnGroup = (e) => {
+                if (isLocked || isViewOnly) return;
+                e.preventDefault();
+                e.stopPropagation(); // Stop bubbling to avoid double drop
+                setIsDragOverGroup(false);
+                const rawData = e.dataTransfer.getData("empIds");
+                const droppedIds = rawData ? JSON.parse(rawData) : [];
+                if (droppedIds.length > 0 && !droppedIds.includes(employee.id)) {
+                    onDrop(droppedIds, employee.id); // Assign reportsTo = Current Leader
+                }
+            };
+
             return (
                 <div className="flex flex-col items-center">
                     {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
@@ -301,7 +315,37 @@
                         <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
                         {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
-                    {subordinates.length > 0 && ( <> <div className="h-4 sm:h-6 w-px bg-gray-300"></div> <div className="flex relative"> {isLargeTeam ? ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start bg-gray-50/50 rounded-xl border border-dashed border-gray-300"> {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/>))} </div> ) : ( <> <div className="flex gap-4 sm:gap-6 pt-0"> {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/> </div>))} </div> </> )} </div> </> )}
+                    {subordinates.length > 0 && ( <> 
+                        <div className="h-4 sm:h-6 w-px bg-gray-300"></div> 
+                        <div className="flex relative"> 
+                            {isLargeTeam ? ( 
+                                <div 
+                                    className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`}
+                                    onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}}
+                                    onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}}
+                                    onDrop={handleDropOnGroup}
+                                > 
+                                    {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/>))} 
+                                    {/* [NEW] Add Member Button in Grid */}
+                                    {!isLocked && !isViewOnly && (
+                                        <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group">
+                                            <div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div>
+                                            <span className="text-xs font-bold">Add Member</span>
+                                        </button>
+                                    )}
+                                </div> 
+                            ) : ( 
+                                <div 
+                                    className={`flex gap-4 sm:gap-6 pt-0 p-4 rounded-xl transition-colors ${isDragOverGroup ? 'bg-blue-50/50 ring-2 ring-blue-200' : ''}`}
+                                    onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}}
+                                    onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}}
+                                    onDrop={handleDropOnGroup}
+                                > 
+                                    {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/> </div>))} 
+                                </div> 
+                            )} 
+                        </div> 
+                    </> )}
                 </div>
             );
         });
@@ -314,20 +358,16 @@
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
         
         const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl, onAddPosition, onDeletePosition }) => {
-            // [MODIFIED] Added 'phone' to initial state
             const [formData, setFormData] = useState({ id: '', name: '', position: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '' });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info'); const [isManagePosOpen, setIsManagePosOpen] = useState(false);
             const fileInputRef = useRef(null); const isEditMode = employee && !employee.isNew; const canEditStructure = role === 'admin' || role === 'supervisor';
-            
             useEffect(() => { 
                 if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '', ...employee }); 
                 else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '' }); 
             }, [employee]);
-            
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const payload = { file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }; const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); alert("อัปโหลดสำเร็จ"); } else throw new Error("Upload failed"); } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); alert("บันทึกรูปลงเครื่องสำเร็จ"); } } catch (err) { alert("Error: " + err.message); } finally { setIsUploading(false); } };
             const handleSubmit = (e) => { e.preventDefault(); let finalData = { ...formData }; onSave(finalData); };
-            
             const filteredSupervisors = useMemo(() => {
                 return supervisors.filter(s => {
                     if (s.id === formData.id) return false;
@@ -348,14 +388,11 @@
                             <div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>
                             {formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}
                             <div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" value={formData.name} onChange={handleChange} className="w-full border p-2 rounded" required/></div>
-                            
-                            {/* [MODIFIED] Added Phone & Tenure display */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div><label className="text-xs text-gray-500">วันที่เริ่มงาน</label><input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full border p-2 rounded"/></div>
                                 <div><label className="text-xs text-gray-500">เบอร์โทรศัพท์ (ซ่อน)</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="08x-xxx-xxxx" className="w-full border p-2 rounded"/></div>
                             </div>
                             {formData.startDate && <div className="text-xs text-green-600 bg-green-50 p-2 rounded border border-green-100 text-center">อายุงาน: <b>{calculateTenure(formData.startDate)}</b></div>}
-
                             <div>
                                 <label className="text-xs text-gray-500 flex justify-between">ตำแหน่ง 
                                     <div className="flex gap-2">
@@ -419,10 +456,8 @@
             const handleLogin = (user) => {
                 localStorage.setItem('currentUser', JSON.stringify(user));
                 setCurrentUser(user);
-                // [FIXED] Force Fetch immediately logic is now handled in useEffect listening to currentUser changes
             };
             
-            // [FIXED] Auto-Fetch Data when User logs in (fixes refresh issue)
             useEffect(() => { 
                 if (driveUrl && currentUser) { 
                     setCloudStatus('syncing'); 
@@ -434,7 +469,7 @@
                         } else setCloudStatus('error'); 
                     }).catch(() => setCloudStatus('error')); 
                 } 
-            }, [driveUrl, currentUser]); // Runs when currentUser is set
+            }, [driveUrl, currentUser]); 
 
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { pushToHistory(employees); setEmployees(newState); const time = new Date().toLocaleString('th-TH'); setLastUpdated(time); localStorage.setItem('orgData', JSON.stringify(newState)); localStorage.setItem('lastUpdated', time); if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes); }, [employees, history, historyIndex, driveUrl]);
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
@@ -459,7 +494,6 @@
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
             
-            // [NEW] CSV Import Logic
             const handleCSVImport = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -468,11 +502,10 @@
                     const text = event.target.result;
                     const lines = text.split('\n');
                     const newEmployees = [];
-                    // Assume simple CSV: ID, Name, Position, ReportsTo, StartDate
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i].trim();
                         if (line) {
-                            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim()); // Remove quotes
+                            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
                             if (cols.length >= 2) {
                                 newEmployees.push({
                                     id: cols[0] || Math.floor(Math.random()*100000).toString(),
@@ -480,7 +513,7 @@
                                     position: cols[2] || 'Operator',
                                     reportsTo: cols[3] || 'STAGING',
                                     startDate: cols[4] || '',
-                                    phone: cols[5] || '', // Added Phone Import
+                                    phone: cols[5] || '',
                                     status: 'Active',
                                     type: 'Permanent',
                                     image: null
@@ -523,7 +556,6 @@
                             <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full" title="Summary Dashboard"><Icons.Chart size={20}/></button>
                             <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full ${showRulers ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`} title="Show Rulers"><Icons.RulerIcon size={20}/></button>
                             
-                            {/* [NEW] Import/Export Controls */}
                             <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
                                 {!isLocked && <button onClick={()=>csvInputRef.current.click()} className="p-1.5 text-gray-600 hover:bg-white rounded shadow-sm" title="Import CSV"><Icons.Upload size={16}/></button>}
                                 <button onClick={()=>exportToExcel(employees)} className="p-1.5 text-green-600 hover:bg-white rounded shadow-sm" title="Export CSV"><Icons.FileSpreadsheet size={16}/></button>
