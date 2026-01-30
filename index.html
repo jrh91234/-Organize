@@ -121,7 +121,7 @@
             Users: (p)=><IconBase {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
             X: (p)=><IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>,
             Check: (p)=><IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>,
-            Settings: (p)=><IconBase {...p}><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></IconBase>,
+            Settings: (p)=><IconBase {...p}><path d="M12.22 2h-.44a2 2 0 0 1-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>,
             Move: (p)=><IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>,
             Menu: (p)=><IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>,
             List: (p)=><IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>,
@@ -193,34 +193,93 @@
             );
         };
 
+        // [OPTIMIZED] DraggableLogo - Direct DOM manipulation for performance
         const DraggableLogo = ({ logo, setLogo, isLocked }) => {
+            const elementRef = useRef(null);
+            
             if (!logo.url) return null;
+
             const handleMouseDown = (e) => {
                 if (isLocked) return;
-                e.preventDefault(); const startX = e.clientX - logo.x; const startY = e.clientY - logo.y;
-                const onMouseMove = (moveEvent) => { setLogo(prev => ({ ...prev, x: moveEvent.clientX - startX, y: moveEvent.clientY - startY })); };
-                const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
-                document.addEventListener("mousemove", onMouseMove); document.addEventListener("mouseup", onMouseUp);
+                e.preventDefault();
+                const element = elementRef.current;
+                const startX = e.clientX - logo.x;
+                const startY = e.clientY - logo.y;
+
+                const onMouseMove = (moveEvent) => {
+                    const newX = moveEvent.clientX - startX;
+                    const newY = moveEvent.clientY - startY;
+                    // Direct DOM update (no re-render)
+                    if (element) {
+                        element.style.left = `${newX}px`;
+                        element.style.top = `${newY}px`;
+                    }
+                };
+
+                const onMouseUp = (upEvent) => {
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                    const finalX = upEvent.clientX - startX;
+                    const finalY = upEvent.clientY - startY;
+                    setLogo(prev => ({ ...prev, x: finalX, y: finalY }));
+                };
+
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
             };
+
             return (
-                <div className={`absolute z-30 group draggable-element ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''}`} style={{ left: logo.x, top: logo.y, width: logo.width || 150 }} onMouseDown={handleMouseDown}>
+                <div 
+                    ref={elementRef}
+                    className={`absolute z-30 group draggable-element ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-400' : ''}`} 
+                    style={{ left: logo.x, top: logo.y, width: logo.width || 150 }} 
+                    onMouseDown={handleMouseDown}
+                >
                     <img src={logo.url} className="w-full h-auto object-contain pointer-events-none" />
                     {!isLocked && <button onClick={() => setLogo({ url: null, x: 50, y: 50 })} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"><Icons.X size={12}/></button>}
                 </div>
             );
         };
 
+        // [OPTIMIZED] DraggableAnnotation - Direct DOM manipulation
         const DraggableAnnotation = ({ ann, onUpdate, onDelete, isLocked, onLinkStart }) => {
+            const elementRef = useRef(null);
+
             const handleMouseDown = (e) => {
                 if (isLocked) return;
                 e.stopPropagation();
-                const startX = e.clientX - ann.x; const startY = e.clientY - ann.y;
-                const onMouseMove = (moveEvent) => { onUpdate(ann.id, { x: moveEvent.clientX - startX, y: moveEvent.clientY - startY }); };
-                const onMouseUp = () => { document.removeEventListener("mousemove", onMouseMove); document.removeEventListener("mouseup", onMouseUp); };
-                document.addEventListener("mousemove", onMouseMove); document.addEventListener("mouseup", onMouseUp);
+                const element = elementRef.current;
+                const startX = e.clientX - ann.x;
+                const startY = e.clientY - ann.y;
+
+                const onMouseMove = (moveEvent) => {
+                    const newX = moveEvent.clientX - startX;
+                    const newY = moveEvent.clientY - startY;
+                    if (element) {
+                        element.style.left = `${newX}px`;
+                        element.style.top = `${newY}px`;
+                    }
+                };
+
+                const onMouseUp = (upEvent) => {
+                    document.removeEventListener("mousemove", onMouseMove);
+                    document.removeEventListener("mouseup", onMouseUp);
+                    const finalX = upEvent.clientX - startX;
+                    const finalY = upEvent.clientY - startY;
+                    onUpdate(ann.id, { x: finalX, y: finalY });
+                };
+
+                document.addEventListener("mousemove", onMouseMove);
+                document.addEventListener("mouseup", onMouseUp);
             };
+
             return (
-                <div className={`absolute z-30 draggable-element group p-3 rounded shadow-md border min-w-[150px] ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-300' : ''}`} style={{ left: ann.x, top: ann.y, backgroundColor: ann.bg || '#ffffff', color: ann.color || '#000' }} onMouseDown={handleMouseDown}>
+                <div 
+                    ref={elementRef}
+                    className={`absolute z-30 draggable-element group p-3 rounded shadow-md border min-w-[150px] ${!isLocked ? 'cursor-move hover:ring-2 hover:ring-blue-300' : ''}`} 
+                    style={{ left: ann.x, top: ann.y, backgroundColor: ann.bg || '#ffffff', color: ann.color || '#000' }} 
+                    onMouseDown={handleMouseDown}
+                >
                     {!isLocked ? ( <textarea value={ann.text} onChange={(e)=>onUpdate(ann.id, {text: e.target.value})} className="w-full bg-transparent outline-none resize-none overflow-hidden text-center" style={{fontSize: '14px'}} placeholder="Type here..."/> ) : ( <div className="text-center whitespace-pre-wrap">{ann.text}</div> )}
                     {!isLocked && (<div className="absolute -top-3 -right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e)=>{e.stopPropagation(); onLinkStart(ann.id);}} className="bg-blue-500 text-white p-1 rounded-full shadow" title="Link to Node"><Icons.Link size={10}/></button><button onClick={(e)=>{e.stopPropagation();
                     onDelete(ann.id);}} className="bg-red-500 text-white p-1 rounded-full shadow"><Icons.X size={10}/></button></div>)}
@@ -318,7 +377,8 @@
             );
         };
 
-        const EmployeeCard = ({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder }) => {
+        // [OPTIMIZED] EmployeeCard - Memoized
+        const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder }) => {
             const isSub = employee.type === 'Subcontract';
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ?
             'bg-orange-500' : 'bg-blue-600';
@@ -347,10 +407,10 @@
                     {isStaging && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
-        };
+        });
 
-        // [MODIFIED] Added 'layoutThreshold' to props and removed buggy horizontal line
-        const EmployeeNode = ({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold }) => {
+        // [OPTIMIZED] EmployeeNode - Memoized + Fixed Layout Logic
+        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -392,7 +452,7 @@
                     )}
                 </div>
             );
-        };
+        });
 
         const ThemePanel = ({ onClose, currentTheme, setAppTheme, currentShape, setAppShape, layoutThreshold, setLayoutThreshold }) => {
             return (
@@ -541,7 +601,7 @@
 
             useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]);
             // Utility to update state + history + timestamp + sync
-            const updateStateFull = (newState, updates = [], deletes = []) => {
+            const updateStateFull = useCallback((newState, updates = [], deletes = []) => {
                 pushToHistory(employees);
                 setEmployees(newState);
                 const time = new Date().toLocaleString('th-TH');
@@ -549,13 +609,15 @@
                 localStorage.setItem('orgData', JSON.stringify(newState));
                 localStorage.setItem('lastUpdated', time);
                 if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes);
-            };
+            }, [employees, history, historyIndex, driveUrl]); // Dependencies
 
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift();
             setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex >= 0) { const prevState = history[historyIndex];
             setEmployees(prevState); localStorage.setItem('orgData', JSON.stringify(prevState)); setHistoryIndex(prev => prev - 1); if(driveUrl) appApiCall(driveUrl, 'saveData', { orgData: prevState }); } };
-            const handleSave = (data) => {
+            
+            // useCallback for handlers passed to children to prevent re-renders
+            const handleSave = useCallback((data) => {
                 let updates = [data];
                 let newData = employees;
                 const exists = employees.find(e => e.id === data.id);
@@ -563,8 +625,9 @@
                 employees.map(e => e.id === data.id ? data : e) : [...employees, data];
                 updateStateFull(newData, updates, []);
                 setIsModalOpen(false); setEditingEmployee(null);
-            };
-            const handleDelete = (id) => {
+            }, [employees, updateStateFull]);
+
+            const handleDelete = useCallback((id) => {
                 const target = employees.find(e => e.id === id);
                 if (!target) return;
                 const grandParentId = target.reportsTo;
@@ -578,9 +641,9 @@
                     });
                 updateStateFull(newData, subUpdates, [id]);
                 setIsModalOpen(false);
-            };
+            }, [employees, updateStateFull]);
 
-            const handleReorder = (id, direction) => {
+            const handleReorder = useCallback((id, direction) => {
                 const target = employees.find(e => e.id === id);
                 if(!target) return;
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a,b) => (a.order||0) - (b.order||0));
@@ -613,7 +676,8 @@
                 const u1 = newData.find(e => e.id === target.id);
                 const u2 = newData.find(e => e.id === siblingToSwap.id);
                 updateStateFull(newData, [u1, u2], []);
-            };
+            }, [employees, updateStateFull]);
+
             const handleBatchDelete = () => { if(!confirm(`Delete ${selectedIds.length} items?`)) return; const newData = employees.filter(e => !selectedIds.includes(e.id)); updateStateFull(newData, [], selectedIds); setSelectedIds([]);
             setSelectionMode(false); };
             const handleBatchEditSave = (field, value) => { let updates = [];
@@ -629,18 +693,21 @@
             const handleDeleteAnnotation = (id) => { setAnnotations(prev => { const n = prev.filter(a => a.id !== id); localStorage.setItem('orgAnnotations', JSON.stringify(n)); return n; });
             };
             const handleAnnotationLink = (nodeId) => { if(linkStartId) { handleUpdateAnnotation(linkStartId, { linkTo: nodeId }); setLinkStartId(null); } };
-            const handleAddChild = (parent) => {
+            
+            const handleAddChild = useCallback((parent) => {
                 const defaultPos = getDefaultChildPosition(parent.position);
                 setEditingEmployee({ isNew: true, reportsTo: parent.id, position: defaultPos });
                 setIsModalOpen(true);
-            };
+            }, []);
+
             const handleAddPosition = (newPos) => { setPositions(prev => { const newArr = [...prev, newPos]; localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; });
             };
             const handleDeletePosition = (pos) => { setPositions(prev => { const newArr = prev.filter(p => p !== pos); localStorage.setItem('orgPositions', JSON.stringify(newArr)); if (driveUrl) appApiCall(driveUrl, 'saveData', { orgPositions: newArr }); return newArr; });
             };
             const handleLogoUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader();
             reader.onload = (ev) => { setLogo(prev => ({ ...prev, url: ev.target.result })); }; reader.readAsDataURL(file); } };
-            const handleDropOnChart = (draggedIds, targetId) => {
+            
+            const handleDropOnChart = useCallback((draggedIds, targetId) => {
                 if(linkStartId) { handleAnnotationLink(targetId);
                 return; } 
                 if(currentUser.role !== 'admin' && currentUser.role !== 'supervisor') return;
@@ -656,10 +723,11 @@
                 });
                 updateStateFull(newData, updates, []);
                 setSelectedIds([]);
-            };
+            }, [employees, linkStartId, currentUser, updateStateFull]);
 
-            const toggleSelection = (id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-            };
+            const toggleSelection = useCallback((id) => { setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+            }, []);
+            
             const resize = useCallback((e) => { if (isResizing.current) { const w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
