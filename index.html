@@ -59,10 +59,10 @@
 
         .connector-line { position: absolute; pointer-events: none; z-index: 5; }
         
-        /* Ruler Styles - Absolute Position (Fixed to Chart Container) */
-        .ruler-container { position: absolute; z-index: 5; opacity: 0.6; pointer-events: none; }
-        .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #94a3b8; width: 100%; display: flex; align-items: flex-end; background-color: rgba(255,255,255,0.1); }
-        .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #94a3b8; display: flex; flex-direction: column; align-items: flex-end; background-color: rgba(255,255,255,0.1); }
+        /* [MODIFIED] Ruler Styles - Reverted to Absolute (Fixed at origin) */
+        .ruler-container { position: absolute; z-index: 5; opacity: 0.5; pointer-events: none; }
+        .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #cbd5e1; width: 100%; display: flex; align-items: flex-end; }
+        .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; align-items: flex-end; }
         .paper-marker { position: absolute; font-size: 9px; color: #ef4444; font-weight: bold; pointer-events: none; display: flex; align-items: center; justify-content: center; z-index: 15; opacity: 0.8; background: rgba(255,255,255,0.8); padding: 0 2px; border-radius: 2px; }
         .paper-line { position: absolute; background-color: #ef4444; pointer-events: none; z-index: 14; opacity: 0.4; border-left: 1px dashed #ef4444; border-top: 1px dashed #ef4444; }
     </style>
@@ -347,7 +347,7 @@
             );
         };
 
-        // [MODIFIED] Ruler: Absolute position (Static)
+        // [MODIFIED] Sticky Ruler: uses CSS sticky to stay at edges
         const Ruler = ({ orientation = 'horizontal', length = 3000 }) => {
             const pxPerMm = 3.7795;
             const paperSizes = [
@@ -379,7 +379,8 @@
             });
 
             return (
-                <div className={`ruler-container ${orientation==='horizontal'?'ruler-h':'ruler-v'}`}>
+                // [FIX] Reverted to absolute for static positioning as requested
+                <div className={`ruler-container ${orientation==='horizontal'?'ruler-h':'ruler-v'}`} style={{position: 'absolute'}}>
                     <div className="relative w-full h-full">
                         {ticks}
                         {markers}
@@ -443,18 +444,18 @@
             );
         });
 
-        // [OPTIMIZED] EmployeeNode - Memoized + Fixed Layout Logic + [NEW] Sorting (Permanent First)
+        // [OPTIMIZED] EmployeeNode - Memoized + Fixed Layout Logic + [NEW] Sorting
         const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
             
-            // [MODIFIED] Sorting Logic: Permanent (Type 'Permanent') comes before 'Subcontract', then sort by Order
+            // [MODIFIED] Sorting Logic: Permanent (Type 0) comes before Subcontract (Type 1), then sort by Order
             const subordinates = allEmployees
                 .filter(e => e.reportsTo === employee.id)
                 .sort((a, b) => {
                     const isSubA = a.type === 'Subcontract' ? 1 : 0;
                     const isSubB = b.type === 'Subcontract' ? 1 : 0;
-                    if (isSubA !== isSubB) return isSubA - isSubB; // Sort by type first (Perm=0, Sub=1)
+                    if (isSubA !== isSubB) return isSubA - isSubB; // Sort by type first
                     return (a.order || 0) - (b.order || 0); // Then sort by order
                 });
 
@@ -546,7 +547,7 @@
                         <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ข้อมูลทั่วไป</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ปรับแต่งการ์ด</button></div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto grow">
                             {tab === 'info' ?
-                            (<> <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div><div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>{formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}<div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" 
+                            (<> <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={!canEditStructure && isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div><div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>{formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}<div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" 
                             value={formData.name} onChange={handleChange} className="w-full border p-2 rounded" required/></div>
                             {/* [NEW] Start Date Input */}
                             <div><label className="text-xs text-gray-500">วันที่เริ่มงาน</label><input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full border p-2 rounded"/></div>
@@ -562,7 +563,7 @@
                             className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData(p=>({...p, customShape: k}))} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div><div><label className="text-xs text-gray-500 mb-2 block">สีตัวอักษร</label><div className="flex items-center gap-2"><input type="color" value={formData.textColor ||
                             '#1f2937'} onChange={(e)=>setFormData(p=>({...p, textColor: e.target.value}))} className="h-10 w-20"/><span className="text-xs text-gray-500">เลือกสี</span></div></div></div>)}
                         </form>
-                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>ลบ</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>ยืนยัน</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>ไม่</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel} disabled={isUploading}>ยกเลิก</Button><Button variant="primary" onClick={handleSubmit} icon={Icons.Check} disabled={isUploading}>{isUploading ? 'Uploading...' : 'บันทึก'}</Button></div>}</div>
+                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>ลบ</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>ยืนยัน</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>ไม่</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>ยกเลิก</Button><Button variant="primary" onClick={handleSubmit} icon={Icons.Check}>บันทึก</Button></div>}</div>
                     </div>
                     {isManagePosOpen && <ManagePositionsModal positions={positions} onAdd={onAddPosition} onDelete={onDeletePosition} onClose={()=>setIsManagePosOpen(false)} />}
                 </div>
@@ -620,24 +621,7 @@
             const initialData = [ { id: '68040', name: 'Detbodin K.', position: 'Assembly Supervisor', reportsTo: '', status: 'Active', image: null, type: 'Permanent', order: 0 } ];
             const initialPositions = ["Department Manager", "Supervisor", "Engineer", "Leader", "Assembly Operator", "Clerk"];
             const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser')));
-            
-            // [FIX] Initialize employees with auto-cleanup for duplicates
-            const [employees, setEmployees] = useState(() => {
-                const raw = JSON.parse(localStorage.getItem('orgData'));
-                if (!raw) return initialData;
-                // Remove duplicates by ID immediately on load
-                const unique = [];
-                const map = new Map();
-                for (const item of raw) {
-                    if(!item.id) continue;
-                    if(!map.has(item.id)) {
-                        map.set(item.id, true);
-                        unique.push(item);
-                    }
-                }
-                return unique.length > 0 ? unique : initialData;
-            });
-
+            const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || initialData);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || initialPositions);
             const [annotations, setAnnotations] = useState(() => JSON.parse(localStorage.getItem('orgAnnotations')) || []);
             const [lastUpdated, setLastUpdated] = useState(() => localStorage.getItem('lastUpdated') || new Date().toLocaleString('th-TH'));
@@ -694,10 +678,9 @@
             const handleSave = useCallback((data) => {
                 let updates = [data];
                 let newData = employees;
-                // [FIX] Strict String comparison to prevent duplicate cards
-                const exists = employees.find(e => String(e.id) === String(data.id));
+                const exists = employees.find(e => e.id === data.id);
                 newData = exists ?
-                employees.map(e => String(e.id) === String(data.id) ? data : e) : [...employees, data];
+                employees.map(e => e.id === data.id ? data : e) : [...employees, data];
                 updateStateFull(newData, updates, []);
                 setIsModalOpen(false); setEditingEmployee(null);
             }, [employees, updateStateFull]);
@@ -821,8 +804,6 @@
                 const boss = validEmployees.find(b => b.id === e.reportsTo);
                 if (!boss) return true; // Boss deleted -> Orphan -> Show as root
                 if (boss.reportsTo === 'STAGING') return true; // Boss in staging -> Show as root
-                // [FIX] Loop Detection: if I am my own boss, break it
-                if (boss.id === e.id) return true;
                 return false; 
             }).filter(e => searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase()));
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
