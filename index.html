@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR Organize System (Final Recovery)</title>
+    <title>HR System (Deep Clean)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Sarabun', sans-serif; touch-action: manipulation; background-color: #f9fafb; }
+        body { font-family: 'Sarabun', sans-serif; touch-action: manipulation; background-color: #f3f4f6; }
         .draggable-source { cursor: grab; } .draggable-source:active { cursor: grabbing; }
         .zoom-controls { position: fixed; bottom: 20px; right: 20px; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 40; display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; }
         .undo-controls { position: fixed; bottom: 80px; right: 20px; z-index: 40; display: flex; flex-direction: column; gap: 8px; }
@@ -42,8 +42,7 @@
                 if (this.state.hasError) {
                     return <div className="h-screen flex items-center justify-center flex-col gap-4 text-center p-4">
                         <h1 className="text-2xl font-bold text-red-600">เกิดข้อผิดพลาด (System Error)</h1>
-                        <p className="text-gray-500">ระบบจะทำการรีเซ็ตข้อมูลเพื่อกู้คืนการทำงาน</p>
-                        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700">ล้างข้อมูลและเริ่มใหม่ (Factory Reset)</button>
+                        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="bg-red-600 text-white px-4 py-2 rounded shadow hover:bg-red-700">ล้างข้อมูลและเริ่มใหม่ (Hard Reset)</button>
                     </div>;
                 }
                 return this.props.children;
@@ -189,10 +188,16 @@
                     return u;
                 } catch { localStorage.clear(); return null; }
             });
-            // [FIX] Auto-Repair Departments: Ensure default values exist if empty
+            // [FIX] Auto-Repair Departments: FILTER OUT EMPTY STRINGS
             const [departments, setDepartments] = useState(() => {
-                const stored = JSON.parse(localStorage.getItem('orgDepartments'));
-                return (stored && stored.length > 0) ? stored : ["ASSEMBLY", "QC", "HR"];
+                try {
+                    let stored = JSON.parse(localStorage.getItem('orgDepartments'));
+                    if (Array.isArray(stored)) {
+                        stored = stored.filter(d => d && typeof d === 'string' && d.trim() !== ""); // [KEY FIX]
+                        if (stored.length > 0) return stored;
+                    }
+                    return ["ASSEMBLY", "QC", "HR"];
+                } catch { return ["ASSEMBLY", "QC", "HR"]; }
             });
             const [employees, setEmployees] = useState(() => JSON.parse(localStorage.getItem('orgData')) || []);
             const [positions, setPositions] = useState(() => JSON.parse(localStorage.getItem('orgPositions')) || ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]);
