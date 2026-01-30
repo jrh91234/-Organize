@@ -9,12 +9,11 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Sarabun', sans-serif; touch-action: manipulation; }
+        /* CSS เดิม */
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -40,13 +39,12 @@
         .sidebar-resizer { width: 5px; cursor: col-resize; background-color: transparent; position: absolute; right: 0; top: 0; bottom: 0; z-index: 50; }
         .sidebar-resizer:hover, .sidebar-resizer.resizing { background-color: #3b82f6; }
         .sidebar-toggle-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 24px; height: 40px; background: white; border: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 50; box-shadow: 2px 0 5px rgba(0,0,0,0.1); color: #4b5563; }
-        .debug-console { position: fixed; bottom: 0; left: 0; right: 0; height: 150px; background: #1e293b; color: #33ff33; font-family: monospace; font-size: 11px; z-index: 100; display: flex; flex-direction: column; border-top: 2px solid #334155; }
-        .debug-content { flex: 1; overflow-y: auto; padding: 10px; }
         .reorder-controls { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; z-index: 30; opacity: 0; transition: opacity 0.2s; }
         .group:hover .reorder-controls { opacity: 1; }
         .reorder-btn { background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-size: 8px; }
         .reorder-btn:hover { background: #f1f5f9; color: #2563eb; transform: scale(1.1); }
         .connector-line { position: absolute; pointer-events: none; z-index: 5; }
+        /* Ruler Styles */
         .ruler-container { position: absolute; z-index: 5; opacity: 0.5; pointer-events: none; }
         .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #cbd5e1; width: 100%; display: flex; align-items: flex-end; }
         .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; align-items: flex-end; }
@@ -268,11 +266,16 @@
             );
         });
 
-        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold }) => {
+        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onAddSubordinate, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             if (!employee) return null;
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
+            
+            // [MODIFIED] Highlight Logic
+            const isMatch = searchTerm && employee.name.toLowerCase().includes(searchTerm.toLowerCase());
+            if (isMatch) cardColor += " ring-4 ring-yellow-400 shadow-xl scale-105 z-20";
+
             const isLargeTeam = subordinates.length > (layoutThreshold || 4);
             const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
             return (
@@ -283,7 +286,7 @@
                         <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
                         {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
-                    {subordinates.length > 0 && ( <> <div className="h-4 sm:h-6 w-px bg-gray-300"></div> <div className="flex relative"> {isLargeTeam ? ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start bg-gray-50/50 rounded-xl border border-dashed border-gray-300"> {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold}/>))} </div> ) : ( <> <div className="flex gap-4 sm:gap-6 pt-0"> {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} /> </div>))} </div> </> )} </div> </> )}
+                    {subordinates.length > 0 && ( <> <div className="h-4 sm:h-6 w-px bg-gray-300"></div> <div className="flex relative"> {isLargeTeam ? ( <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start bg-gray-50/50 rounded-xl border border-dashed border-gray-300"> {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/>))} </div> ) : ( <> <div className="flex gap-4 sm:gap-6 pt-0"> {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDelete={onDelete} onAddSubordinate={onAddSubordinate} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/> </div>))} </div> </> )} </div> </> )}
                 </div>
             );
         });
@@ -295,7 +298,6 @@
         const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
         
-        // [MODIFIED] EmployeeForm - Added Logic to Filter Operator
         const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl, onAddPosition, onDeletePosition }) => {
             const [formData, setFormData] = useState({ id: '', name: '', position: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '' });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info'); const [isManagePosOpen, setIsManagePosOpen] = useState(false);
@@ -305,12 +307,11 @@
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const payload = { file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }; const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); alert("อัปโหลดสำเร็จ"); } else throw new Error("Upload failed"); } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); alert("บันทึกรูปลงเครื่องสำเร็จ"); } } catch (err) { alert("Error: " + err.message); } finally { setIsUploading(false); } };
             const handleSubmit = (e) => { e.preventDefault(); let finalData = { ...formData }; onSave(finalData); };
             
-            // [NEW] Filter: Don't show users ending with "Operator" in the reportsTo list
             const filteredSupervisors = useMemo(() => {
                 return supervisors.filter(s => {
-                    if (s.id === formData.id) return false; // Can't report to self
+                    if (s.id === formData.id) return false;
                     const pos = (s.position || "").toLowerCase();
-                    return !pos.endsWith('operator'); // Filter out Operators
+                    return !pos.endsWith('operator');
                 });
             }, [supervisors, formData.id]);
 
@@ -333,7 +334,6 @@
                             </div>
                             <div><label className="text-xs text-gray-500">หัวหน้างาน (Filter Operator)</label>
                             <select name="reportsTo" value={formData.reportsTo} onChange={handleChange} disabled={!canEditStructure && isEditMode} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">-- รอจัดสายงาน --</option><option value="">-- สูงสุด --</option>
-                            {/* [MODIFIED] Use the filtered list */}
                             {filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position})</option>)}</select></div> </>) : (<div className="space-y-6"><div className="p-4 bg-yellow-50 rounded-lg text-xs text-yellow-800 border border-yellow-200">การตั้งค่าในหน้านี้จะทับค่า Default ของธีมหลัก</div><div><label className="text-xs text-gray-500 mb-2 block">เลือกสีการ์ด</label><div className="grid grid-cols-5 gap-2"><button type="button" onClick={()=>setFormData(p=>({...p, customColor: ''}))} className={`h-8 rounded-lg border bg-white text-xs ${formData.customColor===''?'ring-2 ring-blue-500':''}`}>None</button>{Object.entries(THEMES).map(([k,t]) => (<button type="button" key={k} onClick={()=>setFormData(p=>({...p, customColor: k}))} className={`h-8 rounded-lg ${t.lv0} ${formData.customColor===k?'ring-2 ring-blue-500':''}`}></button>))}</div></div><div><label className="text-xs text-gray-500 mb-2 block">เลือกรูปร่าง</label><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setFormData(p=>({...p, customShape: ''}))} className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData(p=>({...p, customShape: k}))} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div><div><label className="text-xs text-gray-500 mb-2 block">สีตัวอักษร</label><div className="flex items-center gap-2"><input type="color" value={formData.textColor || '#1f2937'} onChange={(e)=>setFormData(p=>({...p, textColor: e.target.value}))} className="h-10 w-20"/><span className="text-xs text-gray-500">เลือกสี</span></div></div></div>)}
                         </form>
                         <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>ลบ</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>ยืนยัน</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>ไม่</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>ยกเลิก</Button><Button variant="primary" onClick={handleSubmit} icon={Icons.Check}>บันทึก</Button></div>}</div>
@@ -376,14 +376,30 @@
             const sidebarRef = useRef(null); const isResizing = useRef(false);
             const logoInputRef = useRef(null);
             const [layoutThreshold, setLayoutThreshold] = useState(4);
-            
-            // [NEW] Mobile Menu State
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
             const addLog = (msg, data, type='info') => setDebugLogs(prev => [...prev.slice(-49), { time: new Date().toLocaleTimeString(), msg, data, type }]);
             const appApiCall = async (url, action, payload) => { try { const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action, ...payload }) }); const json = await res.json(); addLog(`API: ${action}`, json); return json; } catch (e) { addLog(`Error: ${action}`, e.toString(), 'error'); throw e; } };
             const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
-            useEffect(() => { if (driveUrl) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl, currentUser]);
+            
+            // [MODIFIED] Login Function: Sets user AND Forces Fetch immediately
+            const handleLogin = (user) => {
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                setCurrentUser(user);
+                if (driveUrl) {
+                    setCloudStatus('syncing');
+                    appApiCall(driveUrl, 'getData').then(res => {
+                        if (res?.status === 'success' && res.data) {
+                            if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); }
+                            if (res.data.orgPositions) setPositions(res.data.orgPositions);
+                            setCloudStatus('online');
+                        } else setCloudStatus('error');
+                    }).catch(() => setCloudStatus('error'));
+                }
+            };
+            
+            useEffect(() => { if (driveUrl && currentUser) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]); // Removed currentUser from dependancy to prevent double fetch, handled in handleLogin
+
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { pushToHistory(employees); setEmployees(newState); const time = new Date().toLocaleString('th-TH'); setLastUpdated(time); localStorage.setItem('orgData', JSON.stringify(newState)); localStorage.setItem('lastUpdated', time); if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes); }, [employees, history, historyIndex, driveUrl]);
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex >= 0) { const prevState = history[historyIndex]; setEmployees(prevState); localStorage.setItem('orgData', JSON.stringify(prevState)); setHistoryIndex(prev => prev - 1); if(driveUrl) appApiCall(driveUrl, 'saveData', { orgData: prevState }); } };
@@ -407,11 +423,15 @@
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
             
-            if (!currentUser) return <LoginScreen onLogin={(u)=>{localStorage.setItem('currentUser',JSON.stringify(u));setCurrentUser(u);}} driveUrl={driveUrl} apiCall={appApiCall} />;
+            if (!currentUser) return <LoginScreen onLogin={handleLogin} driveUrl={driveUrl} apiCall={appApiCall} />;
 
             const validEmployees = useMemo(() => employees.filter(e => e.id && String(e.id).trim() !== ""), [employees]);
+            // [MODIFIED] Search Logic: Filter WAITING LIST (Staging) based on Search
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
-            const rootEmployees = validEmployees.filter(e => { if (e.reportsTo === 'STAGING') return false; if (!e.reportsTo) return true; const boss = validEmployees.find(b => b.id === e.reportsTo); if (!boss) return true; if (boss.reportsTo === 'STAGING') return true; return false; }).filter(e => searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            
+            // [MODIFIED] Search Logic: Show ALL roots in Chart (don't filter roots), but Highlight Matches
+            const rootEmployees = validEmployees.filter(e => { if (e.reportsTo === 'STAGING') return false; if (!e.reportsTo) return true; const boss = validEmployees.find(b => b.id === e.reportsTo); if (!boss) return true; if (boss.reportsTo === 'STAGING') return true; return false; });
+            
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
             const currentThemeConf = THEMES[appTheme];
             const connectors = annotations.filter(a => a.linkTo).map(ann => { const targetNode = document.getElementById(`node-${ann.linkTo}`); if(!targetNode) return null; const rect = targetNode.getBoundingClientRect(); const container = document.getElementById('org-chart-full-view').getBoundingClientRect(); const x1 = ann.x + 75; const y1 = ann.y + 20; const x2 = (rect.left - container.left) + (rect.width/2); const y2 = (rect.top - container.top) + (rect.height/2); return <line key={ann.id} x1={x1} y1={y1} x2={x2} y2={y2} stroke="red" strokeWidth="2" strokeDasharray="5,5" className="connector-line"/>; });
@@ -421,7 +441,6 @@
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 shrink-0 h-14 flex items-center px-4 justify-between">
                         <div className="flex items-center gap-2"><button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="md:hidden p-2"><Icons.Menu/></button><div className="bg-red-600 p-1 rounded text-white font-bold">HR</div><span className={`text-xs flex items-center ${cloudStatus==='online'?'text-green-600':cloudStatus==='error'?'text-red-500':'text-gray-400'}`}>{cloudStatus==='online'?<><Icons.Cloud size={14} className="mr-1"/>Online</>:cloudStatus==='syncing'?<><Icons.Loader size={14} className="mr-1"/>Syncing</>:<><Icons.Alert size={14} className="mr-1"/>Offline</>}</span></div>
                         
-                        {/* [MODIFIED] Desktop Controls */}
                         <div className="hidden lg:flex items-center gap-1 sm:gap-2">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-2 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
                             <button onClick={()=>setViewMode('chart')} className={`p-1.5 rounded ${viewMode==='chart'?'bg-blue-50 text-blue-600':''}`}><Icons.Grid/></button>
@@ -438,11 +457,9 @@
                             <button onClick={()=>{localStorage.removeItem('currentUser');setCurrentUser(null);}} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Icons.LogOut size={20}/></button>
                         </div>
                         
-                        {/* [NEW] Hamburger Button */}
                         <button onClick={()=>setIsMobileMenuOpen(true)} className="lg:hidden p-2 text-gray-600"><Icons.Menu/></button>
                     </nav>
 
-                    {/* [NEW] Mobile Menu Drawer */}
                     {isMobileMenuOpen && (
                         <div className="fixed inset-0 z-[110] lg:hidden">
                             <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div>
@@ -455,7 +472,10 @@
                                     <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button>
                                     <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button>
                                     <hr/>
-                                    {!isLocked && <div className="p-2 space-y-2"><p className="text-xs text-gray-400">Tools</p><button onClick={()=>{setIsThemePanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-2 text-sm w-full"><Icons.Paint size={16}/> ธีม</button><button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-2 text-sm w-full"><Icons.Settings size={16}/> Admin Panel</button></div>}
+                                    <div className="p-2 space-y-2">
+                                        <p className="text-xs text-gray-400">ค้นหาพนักงาน</p>
+                                        <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border p-2 rounded text-sm" placeholder="พิมพ์ชื่อ..."/>
+                                    </div>
                                     <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null); window.location.reload();}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button>
                                 </div>
                             </div>
@@ -469,7 +489,14 @@
                         {viewMode === 'chart' && (
                             <>
                                 <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r transform transition-transform duration-300 pt-20 md:pt-4 ${isSidebarOpen?'translate-x-0':'-translate-x-full'} ${isSidebarCollapsed?'w-0 overflow-hidden':''} md:relative md:translate-x-0`} style={{ width: isSidebarCollapsed?'0px':(window.innerWidth>768?`${sidebarWidth}px`:'16rem') }}>
-                                    <div className="px-4 flex justify-between mb-4"><h2 className="font-bold text-gray-600">WAITING ({stagingEmployees.length})</h2>{!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }}><Icons.Plus size={18} className="text-blue-600"/></button>}</div>
+                                    <div className="px-4 flex justify-between mb-4">
+                                        <h2 className="font-bold text-gray-600">WAITING ({stagingEmployees.length})</h2>
+                                        <div className="flex gap-2">
+                                            {!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }}><Icons.Plus size={18} className="text-blue-600"/></button>}
+                                            {/* [MODIFIED] Mobile Close Sidebar Button */}
+                                            <button onClick={()=>setIsSidebarOpen(false)} className="md:hidden text-gray-400 hover:text-red-500"><Icons.X size={18}/></button>
+                                        </div>
+                                    </div>
                                     <div className="px-4 space-y-3 overflow-y-auto h-[calc(100%-3rem)] pb-20">{stagingEmployees.map(emp => <EmployeeCard key={emp.id} employee={emp} onClick={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDragStart={(e,id)=>{const p = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(p));}} onMoveInit={(e)=>{setMoveSource(e);setIsSidebarOpen(false);}} isStaging={true} isSelected={selectedIds.includes(emp.id)} isLocked={isLocked} selectionMode={selectionMode} toggleSelection={toggleSelection}/>)}</div>
                                     <div className="sidebar-resizer hidden md:block" onMouseDown={()=>isResizing.current=true}></div>
                                     <button className="sidebar-toggle-btn hidden md:flex" style={{right: '-12px', borderRadius: '50%', width: '24px', height: '24px'}} onClick={()=>setIsSidebarCollapsed(true)}><Icons.ChevronLeft size={14}/></button>
@@ -491,13 +518,13 @@
                                             {!isLocked && <input type="color" value={headerColor} onChange={(e)=>setHeaderColor(e.target.value)} className="ml-2 w-6 h-6 border-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity" title="Header Color"/>}
                                             <p className="text-gray-400 text-sm mt-1">Updated: {lastUpdated}</p>
                                         </div>
-                                        <div className="flex gap-16 justify-center">{rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={validEmployees} onEdit={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDelete={handleDelete} onAddSubordinate={(id)=>{setEditingEmployee({isNew:true,reportsTo:id});setIsModalOpen(true);}} onDrop={handleDropOnChart} onMoveSelect={(tid)=>{if(moveSource&&moveSource.id!==tid){handleDropOnChart(moveSource.id,tid);setMoveSource(null);}}} moveTargetId={moveSource?.id} isLocked={isLocked} themeConf={currentThemeConf} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} onAddChild={handleAddChild} layoutThreshold={layoutThreshold}/>)}</div>
+                                        <div className="flex gap-16 justify-center">{rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={validEmployees} onEdit={(e)=>{setEditingEmployee({...e,isNew:false});setIsModalOpen(true);}} onDelete={handleDelete} onAddSubordinate={(id)=>{setEditingEmployee({isNew:true,reportsTo:id});setIsModalOpen(true);}} onDrop={handleDropOnChart} onMoveSelect={(tid)=>{if(moveSource&&moveSource.id!==tid){handleDropOnChart(moveSource.id,tid);setMoveSource(null);}}} moveTargetId={moveSource?.id} isLocked={isLocked} themeConf={currentThemeConf} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={handleReorder} onAddChild={handleAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm}/>)}</div>
                                     </div>
                                     <div className="h-20"></div>
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                                    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Position</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Start Date</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{validEmployees.map(emp => <tr key={emp.id} onClick={()=>{setEditingEmployee({...emp,isNew:false});setIsModalOpen(true);}} className="cursor-pointer hover:bg-gray-50"><td className="px-4 py-3 flex items-center gap-3"><img className="h-8 w-8 rounded-full bg-gray-200" src={emp.image||"https://via.placeholder.com/100"}/><div><div className="text-sm font-medium">{emp.name}</div><div className="text-xs text-gray-500 sm:hidden">{emp.position}</div></div></td><td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{emp.position}</td><td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{formatDate(emp.startDate)}</td></tr>)}</tbody></table>
+                                    <table className="min-w-full divide-y divide-gray-200"><thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Position</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">Start Date</th></tr></thead><tbody className="bg-white divide-y divide-gray-200">{validEmployees.filter(e=>e.name.toLowerCase().includes(searchTerm.toLowerCase())).map(emp => <tr key={emp.id} onClick={()=>{setEditingEmployee({...emp,isNew:false});setIsModalOpen(true);}} className="cursor-pointer hover:bg-gray-50"><td className="px-4 py-3 flex items-center gap-3"><img className="h-8 w-8 rounded-full bg-gray-200" src={emp.image||"https://via.placeholder.com/100"}/><div><div className="text-sm font-medium">{emp.name}</div><div className="text-xs text-gray-500 sm:hidden">{emp.position}</div></div></td><td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{emp.position}</td><td className="px-4 py-3 text-sm text-gray-500 hidden sm:table-cell">{formatDate(emp.startDate)}</td></tr>)}</tbody></table>
                                 </div>
                             )}
                             
