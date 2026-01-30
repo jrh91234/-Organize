@@ -9,11 +9,12 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Sarabun', sans-serif; touch-action: manipulation; }
-        /* CSS เดิม */
         @media print {
             @page { size: landscape; margin: 5mm; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -44,7 +45,6 @@
         .reorder-btn { background: white; border: 1px solid #e2e8f0; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b; box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-size: 8px; }
         .reorder-btn:hover { background: #f1f5f9; color: #2563eb; transform: scale(1.1); }
         .connector-line { position: absolute; pointer-events: none; z-index: 5; }
-        /* Ruler Styles */
         .ruler-container { position: absolute; z-index: 5; opacity: 0.5; pointer-events: none; }
         .ruler-h { top: 0; left: 0; height: 32px; border-bottom: 1px solid #cbd5e1; width: 100%; display: flex; align-items: flex-end; }
         .ruler-v { top: 0; left: 0; width: 32px; height: 100%; border-right: 1px solid #cbd5e1; display: flex; flex-direction: column; align-items: flex-end; }
@@ -91,9 +91,24 @@
             if (isNaN(date)) return dateString;
             return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
         };
+        // [NEW] Calculate Tenure
+        const calculateTenure = (dateString) => {
+            if (!dateString) return "-";
+            const start = new Date(dateString);
+            const now = new Date();
+            if (isNaN(start)) return "-";
+            let years = now.getFullYear() - start.getFullYear();
+            let months = now.getMonth() - start.getMonth();
+            if (months < 0 || (months === 0 && now.getDate() < start.getDate())) {
+                years--;
+                months += 12;
+            }
+            return `${years} ปี ${months} เดือน`;
+        };
+
         const exportToExcel = (employees) => {
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFFID,Name,Position,Type,Status,ReportsTo,StartDate,Order\n";
-            employees.forEach(e => { csvContent += `"${e.id}","${e.name}","${e.position}","${e.type}","${e.status}","${e.reportsTo}","${e.startDate||''}","${e.order||0}"\n`; });
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFFID,Name,Position,Type,Status,ReportsTo,StartDate,Phone,Order\n";
+            employees.forEach(e => { csvContent += `"${e.id}","${e.name}","${e.position}","${e.type}","${e.status}","${e.reportsTo}","${e.startDate||''}","${e.phone||''}","${e.order||0}"\n`; });
             const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", "employees_export.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link);
         };
         const getDefaultChildPosition = (parentPos) => {
@@ -144,7 +159,8 @@
             CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>,
             Type: (p)=><IconBase {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>,
             Link: (p)=><IconBase {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>,
-            Search: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>
+            Search: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>,
+            Upload: (p)=><IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => {
@@ -272,7 +288,6 @@
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
             
-            // [MODIFIED] Highlight Logic
             const isMatch = searchTerm && employee.name.toLowerCase().includes(searchTerm.toLowerCase());
             if (isMatch) cardColor += " ring-4 ring-yellow-400 shadow-xl scale-105 z-20";
 
@@ -299,10 +314,16 @@
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
         
         const EmployeeForm = ({ employee, supervisors, positions, onSave, onCancel, onDelete, role, driveUrl, onAddPosition, onDeletePosition }) => {
-            const [formData, setFormData] = useState({ id: '', name: '', position: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '' });
+            // [MODIFIED] Added 'phone' to initial state
+            const [formData, setFormData] = useState({ id: '', name: '', position: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '' });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info'); const [isManagePosOpen, setIsManagePosOpen] = useState(false);
             const fileInputRef = useRef(null); const isEditMode = employee && !employee.isNew; const canEditStructure = role === 'admin' || role === 'supervisor';
-            useEffect(() => { if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', ...employee }); else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '' }); }, [employee]);
+            
+            useEffect(() => { 
+                if (isEditMode) setFormData({ type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '', ...employee }); 
+                else setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', customShape: '', textColor: '#1f2937', startDate: '', phone: '' }); 
+            }, [employee]);
+            
             const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const payload = { file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }; const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify(payload) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); alert("อัปโหลดสำเร็จ"); } else throw new Error("Upload failed"); } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); alert("บันทึกรูปลงเครื่องสำเร็จ"); } } catch (err) { alert("Error: " + err.message); } finally { setIsUploading(false); } };
             const handleSubmit = (e) => { e.preventDefault(); let finalData = { ...formData }; onSave(finalData); };
@@ -321,8 +342,20 @@
                         <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"><h2 className="text-lg font-bold">{isEditMode ? 'แก้ไขข้อมูล' : 'เพิ่มพนักงาน'}</h2><button onClick={onCancel}><Icons.X/></button></div>
                         <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ข้อมูลทั่วไป</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>ปรับแต่งการ์ด</button></div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto grow">
-                            {tab === 'info' ? (<> <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div><div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={!canEditStructure && isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div><div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>{formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}<div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" value={formData.name} onChange={handleChange} className="w-full border p-2 rounded" required/></div>
-                            <div><label className="text-xs text-gray-500">วันที่เริ่มงาน</label><input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full border p-2 rounded"/></div>
+                            {tab === 'info' ? (<> 
+                            <div className="flex flex-col items-center mb-6"><div className="w-24 h-24 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" className="w-full h-full object-cover"/> : <Icons.Camera size={32} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">รหัส</label><input name="id" value={formData.id} onChange={handleChange} className="w-full border p-2 rounded" disabled={!canEditStructure && isEditMode}/></div><div><label className="text-xs text-gray-500">สถานะ</label><select name="status" value={formData.status} onChange={handleChange} className="w-full border p-2 rounded"><option value="Active">ปกติ</option><option value="Resigned">ลาออก</option></select></div></div>
+                            <div><label className="text-xs text-gray-500">ประเภท</label><div className="flex gap-4"><label><input type="radio" name="type" value="Permanent" checked={formData.type==='Permanent'} onChange={handleChange}/> ประจำ</label><label><input type="radio" name="type" value="Subcontract" checked={formData.type==='Subcontract'} onChange={handleChange}/> Sub</label></div></div>
+                            {formData.type === 'Subcontract' && <input name="company" value={formData.company} onChange={handleChange} placeholder="บริษัทสังกัด..." className="w-full border p-2 rounded bg-orange-50"/>}
+                            <div><label className="text-xs text-gray-500">ชื่อ-สกุล</label><input name="name" value={formData.name} onChange={handleChange} className="w-full border p-2 rounded" required/></div>
+                            
+                            {/* [MODIFIED] Added Phone & Tenure display */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-xs text-gray-500">วันที่เริ่มงาน</label><input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full border p-2 rounded"/></div>
+                                <div><label className="text-xs text-gray-500">เบอร์โทรศัพท์ (ซ่อน)</label><input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="08x-xxx-xxxx" className="w-full border p-2 rounded"/></div>
+                            </div>
+                            {formData.startDate && <div className="text-xs text-green-600 bg-green-50 p-2 rounded border border-green-100 text-center">อายุงาน: <b>{calculateTenure(formData.startDate)}</b></div>}
+
                             <div>
                                 <label className="text-xs text-gray-500 flex justify-between">ตำแหน่ง 
                                     <div className="flex gap-2">
@@ -377,28 +410,31 @@
             const logoInputRef = useRef(null);
             const [layoutThreshold, setLayoutThreshold] = useState(4);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+            const csvInputRef = useRef(null);
 
             const addLog = (msg, data, type='info') => setDebugLogs(prev => [...prev.slice(-49), { time: new Date().toLocaleTimeString(), msg, data, type }]);
             const appApiCall = async (url, action, payload) => { try { const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action, ...payload }) }); const json = await res.json(); addLog(`API: ${action}`, json); return json; } catch (e) { addLog(`Error: ${action}`, e.toString(), 'error'); throw e; } };
             const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
             
-            // [MODIFIED] Login Function: Sets user AND Forces Fetch immediately
             const handleLogin = (user) => {
                 localStorage.setItem('currentUser', JSON.stringify(user));
                 setCurrentUser(user);
-                if (driveUrl) {
-                    setCloudStatus('syncing');
-                    appApiCall(driveUrl, 'getData').then(res => {
-                        if (res?.status === 'success' && res.data) {
-                            if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); }
-                            if (res.data.orgPositions) setPositions(res.data.orgPositions);
-                            setCloudStatus('online');
-                        } else setCloudStatus('error');
-                    }).catch(() => setCloudStatus('error'));
-                }
+                // [FIXED] Force Fetch immediately logic is now handled in useEffect listening to currentUser changes
             };
             
-            useEffect(() => { if (driveUrl && currentUser) { setCloudStatus('syncing'); appApiCall(driveUrl, 'getData').then(res => { if (res?.status === 'success' && res.data) { if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } if (res.data.orgPositions) setPositions(res.data.orgPositions); setCloudStatus('online'); } else setCloudStatus('error'); }).catch(() => setCloudStatus('error')); } }, [driveUrl]); // Removed currentUser from dependancy to prevent double fetch, handled in handleLogin
+            // [FIXED] Auto-Fetch Data when User logs in (fixes refresh issue)
+            useEffect(() => { 
+                if (driveUrl && currentUser) { 
+                    setCloudStatus('syncing'); 
+                    appApiCall(driveUrl, 'getData').then(res => { 
+                        if (res?.status === 'success' && res.data) { 
+                            if (res.data.orgData) { setEmployees(res.data.orgData); localStorage.setItem('orgData', JSON.stringify(res.data.orgData)); } 
+                            if (res.data.orgPositions) setPositions(res.data.orgPositions); 
+                            setCloudStatus('online'); 
+                        } else setCloudStatus('error'); 
+                    }).catch(() => setCloudStatus('error')); 
+                } 
+            }, [driveUrl, currentUser]); // Runs when currentUser is set
 
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { pushToHistory(employees); setEmployees(newState); const time = new Date().toLocaleString('th-TH'); setLastUpdated(time); localStorage.setItem('orgData', JSON.stringify(newState)); localStorage.setItem('lastUpdated', time); if(updates.length > 0 || deletes.length > 0) syncUpdatesToCloud(updates, deletes); }, [employees, history, historyIndex, driveUrl]);
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 5) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
@@ -423,13 +459,48 @@
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
             
+            // [NEW] CSV Import Logic
+            const handleCSVImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const text = event.target.result;
+                    const lines = text.split('\n');
+                    const newEmployees = [];
+                    // Assume simple CSV: ID, Name, Position, ReportsTo, StartDate
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line) {
+                            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim()); // Remove quotes
+                            if (cols.length >= 2) {
+                                newEmployees.push({
+                                    id: cols[0] || Math.floor(Math.random()*100000).toString(),
+                                    name: cols[1],
+                                    position: cols[2] || 'Operator',
+                                    reportsTo: cols[3] || 'STAGING',
+                                    startDate: cols[4] || '',
+                                    phone: cols[5] || '', // Added Phone Import
+                                    status: 'Active',
+                                    type: 'Permanent',
+                                    image: null
+                                });
+                            }
+                        }
+                    }
+                    if (newEmployees.length > 0) {
+                        const merged = [...employees, ...newEmployees];
+                        updateStateFull(merged, newEmployees, []);
+                        alert(`Imported ${newEmployees.length} employees!`);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             if (!currentUser) return <LoginScreen onLogin={handleLogin} driveUrl={driveUrl} apiCall={appApiCall} />;
 
             const validEmployees = useMemo(() => employees.filter(e => e.id && String(e.id).trim() !== ""), [employees]);
-            // [MODIFIED] Search Logic: Filter WAITING LIST (Staging) based on Search
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (searchTerm === '' || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
-            
-            // [MODIFIED] Search Logic: Show ALL roots in Chart (don't filter roots), but Highlight Matches
             const rootEmployees = validEmployees.filter(e => { if (e.reportsTo === 'STAGING') return false; if (!e.reportsTo) return true; const boss = validEmployees.find(b => b.id === e.reportsTo); if (!boss) return true; if (boss.reportsTo === 'STAGING') return true; return false; });
             
             const isLocked = currentUser.role !== 'admin' && currentUser.role !== 'supervisor';
@@ -451,7 +522,14 @@
                             {!isLocked && <div className="logo-controls"><button onClick={()=>logoInputRef.current.click()} className="p-2 text-purple-600 hover:bg-purple-50 rounded-full" title="Upload Logo"><Icons.Image size={20}/></button><input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload}/></div>}
                             <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full" title="Summary Dashboard"><Icons.Chart size={20}/></button>
                             <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full ${showRulers ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'}`} title="Show Rulers"><Icons.RulerIcon size={20}/></button>
-                            <button onClick={()=>exportToExcel(employees)} className="p-2 text-green-600 hover:bg-green-50 rounded-full" title="Export CSV"><Icons.FileSpreadsheet size={20}/></button>
+                            
+                            {/* [NEW] Import/Export Controls */}
+                            <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+                                {!isLocked && <button onClick={()=>csvInputRef.current.click()} className="p-1.5 text-gray-600 hover:bg-white rounded shadow-sm" title="Import CSV"><Icons.Upload size={16}/></button>}
+                                <button onClick={()=>exportToExcel(employees)} className="p-1.5 text-green-600 hover:bg-white rounded shadow-sm" title="Export CSV"><Icons.FileSpreadsheet size={16}/></button>
+                                <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleCSVImport}/>
+                            </div>
+
                             {!isLocked && <Button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }} icon={Icons.Plus} className="hidden sm:flex">เพิ่ม</Button>}
                             {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"><Icons.Settings size={20}/></button>}
                             <button onClick={()=>{localStorage.removeItem('currentUser');setCurrentUser(null);}} className="text-red-500 hover:bg-red-50 p-2 rounded-full"><Icons.LogOut size={20}/></button>
@@ -473,6 +551,11 @@
                                     <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button>
                                     <hr/>
                                     <div className="p-2 space-y-2">
+                                        <p className="text-xs text-gray-400">Import/Export</p>
+                                        <button onClick={()=>{csvInputRef.current.click(); setIsMobileMenuOpen(false);}} className="flex items-center gap-2 text-sm w-full p-2 hover:bg-gray-50 rounded"><Icons.Upload size={16}/> Import CSV</button>
+                                        <button onClick={()=>{exportToExcel(employees); setIsMobileMenuOpen(false);}} className="flex items-center gap-2 text-sm w-full p-2 hover:bg-gray-50 rounded"><Icons.FileSpreadsheet size={16}/> Export Excel</button>
+                                    </div>
+                                    <div className="p-2 space-y-2">
                                         <p className="text-xs text-gray-400">ค้นหาพนักงาน</p>
                                         <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="w-full border p-2 rounded text-sm" placeholder="พิมพ์ชื่อ..."/>
                                     </div>
@@ -493,7 +576,6 @@
                                         <h2 className="font-bold text-gray-600">WAITING ({stagingEmployees.length})</h2>
                                         <div className="flex gap-2">
                                             {!isLocked && <button onClick={() => { setEditingEmployee({ isNew: true, reportsTo: 'STAGING' }); setIsModalOpen(true); }}><Icons.Plus size={18} className="text-blue-600"/></button>}
-                                            {/* [MODIFIED] Mobile Close Sidebar Button */}
                                             <button onClick={()=>setIsSidebarOpen(false)} className="md:hidden text-gray-400 hover:text-red-500"><Icons.X size={18}/></button>
                                         </div>
                                     </div>
