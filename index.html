@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V13 (Smart ID Management)</title>
+    <title>HR System V14 (Full Dashboard & Permissions)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -382,9 +382,10 @@
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Total Employees</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.total}</p></div> 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Permanent</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.byType.Permanent}</p></div> 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-orange-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Subcontract</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.byType.Subcontract}</p></div> 
+                                <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Avg Tenure (Years)</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.avgTenure}</p></div> 
                                 
                                 {/* [V11] New Operational Ratio Card */}
-                                <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 relative group">
+                                <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 relative group md:col-span-2 lg:col-span-4 xl:col-span-1">
                                     <h3 className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Ops. Sub Ratio <Icons.Alert size={10} className="text-gray-400"/></h3>
                                     <p className="text-4xl font-bold text-gray-800 mt-2">{stats.opsRatioText}</p>
                                     <div className="absolute top-full left-0 mt-1 hidden group-hover:block bg-black text-white text-[10px] p-2 rounded w-48 z-10 shadow-lg">
@@ -555,85 +556,59 @@
             
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
-            
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { 
                 pushToHistory(employees); 
+                // [NEW] Add Timestamps
                 const timestamp = new Date().toISOString();
                 const stampedUpdates = updates.map(u => ({ ...u, lastModified: timestamp }));
-                const finalState = newState.map(e => { const up = stampedUpdates.find(u => u.id === e.id); return up ? up : e; });
+                
+                const finalState = newState.map(e => {
+                    const up = stampedUpdates.find(u => u.id === e.id);
+                    return up ? up : e;
+                });
+
                 setEmployees(finalState); 
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
             
-            // [V13 NEW] Save Logic with Validation & Cascading Update
-            const handleSave = useCallback((data) => { 
-                // 1. Validation: ID Required
-                if (!data.id || data.id.trim() === '') {
-                    alert("Error: Employee ID is required!");
-                    return;
-                }
-
-                // 2. Setup Context
-                const isNew = !employees.some(e => e.id === editingEmployee?.id); // Check if we are editing an existing record
-                const originalId = editingEmployee?.id;
-
-                // 3. Validation: Duplicate Check
-                // If ID exists AND it's not the current record we are editing -> Duplicate!
-                const isDuplicate = employees.some(e => e.id === data.id && e.id !== originalId);
-                if (isDuplicate) {
-                    alert("Error: ID " + data.id + " already exists!");
-                    return;
-                }
-
-                let updates = [data];
-                let allEmployeesCopy = [...employees];
-
-                // 4. Cascading Update (If ID Changed)
-                if (!isNew && originalId && originalId !== data.id) {
-                    // Find all subordinates who report to the OLD ID
-                    const subordinates = allEmployeesCopy.filter(e => e.reportsTo === originalId);
-                    
-                    // Update them to report to the NEW ID
-                    subordinates.forEach(sub => {
-                        const updatedSub = { ...sub, reportsTo: data.id };
-                        updates.push(updatedSub); // Add to updates list
-                    });
-                }
-
-                // 5. Merge Data
-                const newData = allEmployeesCopy.map(e => {
-                    // If this is the record being edited (match by OLD ID)
-                    if (e.id === originalId && !isNew) return data;
-                    
-                    // If this is a subordinate that got updated
-                    const subUpdate = updates.find(u => u.id === e.id && u.id !== data.id);
-                    return subUpdate ? subUpdate : e;
-                });
-
-                // If new record, push to array
-                if (isNew) newData.push(data);
-
-                // 6. Commit
-                updateStateFull(newData, updates, []);
-                setIsModalOpen(false); 
-            }, [employees, editingEmployee, updateStateFull]);
-
-            const handleDelete = useCallback((id) => { const newData = employees.filter(e => e.id !== id); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, updateStateFull]);
-            
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
+                // [V8] Logic for Root Node Reordering (Swapping)
                 if (!target.reportsTo || target.reportsTo === 'STAGING') {
-                    const roots = employees.filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept)).sort((a, b) => (a.order || 0) - (b.order || 0));
-                    const currentIndex = roots.findIndex(e => e.id === id); if (currentIndex === -1) return;
-                    let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= roots.length) newIndex = roots.length - 1; if (newIndex === currentIndex) return;
-                    const itemToMove = roots[currentIndex]; roots.splice(currentIndex, 1); roots.splice(newIndex, 0, itemToMove);
+                    // This is a root node (Department Head or Staging)
+                    // Get all root nodes in the current view
+                    const roots = employees
+                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
+                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
+                    const currentIndex = roots.findIndex(e => e.id === id);
+                    if (currentIndex === -1) return;
+
+                    let newIndex = currentIndex + offset;
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex >= roots.length) newIndex = roots.length - 1;
+                    if (newIndex === currentIndex) return;
+
+                    // Swap mechanism
+                    const itemToMove = roots[currentIndex];
+                    roots.splice(currentIndex, 1);
+                    roots.splice(newIndex, 0, itemToMove);
+
+                    // Re-assign order based on new array position
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
-                    const newData = employees.map(e => { const updatedRoot = updates.find(u => u.id === e.id); return updatedRoot ? updatedRoot : e; });
+                    
+                    // Merge updates
+                    const newData = employees.map(e => {
+                        const updatedRoot = updates.find(u => u.id === e.id);
+                        return updatedRoot ? updatedRoot : e;
+                    });
+                    
                     updateStateFull(newData, updates, []);
                     return;
                 }
 
+                // Normal sibling reordering
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
@@ -643,12 +618,13 @@
                 updateStateFull(newData, updates, []);
             }, [employees, updateStateFull, currentDept]);
 
+            // [V8] Grid Column Cycler (+/-)
             const handleGridColChange = useCallback((id, delta) => {
                 const target = employees.find(e => e.id === id);
                 if (!target) return;
                 
-                const current = target.gridCols ? parseInt(target.gridCols) : 0; 
-                let nextVal = current === 0 ? 4 : current; 
+                const current = target.gridCols ? parseInt(target.gridCols) : 0; // 0 or NaN = Auto
+                let nextVal = current === 0 ? 4 : current; // Default starting point if Auto
                 
                 if (current === 0 && delta > 0) nextVal = 2; // From Auto to 2
                 else if (current === 0 && delta < 0) nextVal = 6; // From Auto back to 6? Or stay auto? Let's say Auto -> 6
@@ -656,21 +632,29 @@
                     nextVal += delta;
                 }
 
+                // Limits
                 if (nextVal > 6) nextVal = 0; // Loop back to Auto
                 if (nextVal < 2 && nextVal !== 0) nextVal = 0; // Loop to Auto
 
                 const updatedEmp = { ...target, gridCols: nextVal === 0 ? '' : nextVal.toString() };
                 const newData = employees.map(e => e.id === id ? updatedEmp : e);
+                
+                // Save immediately
                 updateStateFull(newData, [updatedEmp], []);
             }, [employees, updateStateFull]);
 
+            // [V8] Updated Drop Logic for Root Swapping
             const handleDropNode = useCallback((sourceIds, targetId) => {
                 const targetNode = employees.find(e => e.id === targetId);
-                const sourceNode = employees.find(e => e.id === sourceIds[0]); 
+                const sourceNode = employees.find(e => e.id === sourceIds[0]); // Handle first item for logic check
+
+                // Check if dragging a Root onto another Root (Swap)
                 const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
                 const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
 
                 if (isTargetRoot && isSourceRoot && sourceIds.length === 1) {
+                    // Logic to swap roots by re-ordering list
+                    // Similar to handleReorder but by target ID
                     const roots = employees
                         .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
                         .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -680,11 +664,14 @@
 
                     if (sourceIndex === -1 || targetIndex === -1) return;
 
+                    // Move item
                     roots.splice(sourceIndex, 1);
                     roots.splice(targetIndex, 0, sourceNode);
 
+                    // Re-index all
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
                     
+                    // Merge updates
                     const newData = employees.map(e => {
                         const updatedRoot = updates.find(u => u.id === e.id);
                         return updatedRoot ? updatedRoot : e;
@@ -693,6 +680,7 @@
                     updateStateFull(newData, updates, []);
 
                 } else {
+                    // Standard: Reparent
                     const updates = []; 
                     const newData = employees.map(e => { 
                         if(sourceIds.includes(e.id)) { 
@@ -742,6 +730,7 @@
             const validEmployees = employees.filter(e => e.id);
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
             const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept));
+            // [V9 Fix] Sort root nodes by order!
             const rootEmployees = filteredAll
                 .filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; })
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
