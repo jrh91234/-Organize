@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V18 (Full Recovery)</title>
+    <title>HR System V19 (Executive Link)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -54,6 +54,8 @@
 
         const getPositionRank = (position) => {
             const p = (position || "").toLowerCase();
+            // [V19] Added Executive Ranks
+            if (p.includes('ceo') || p.includes('md') || p.includes('gm') || p.includes('president') || p.includes('director')) return 6;
             if (p.includes('manager')) return 5;
             if (p.includes('supervisor') || p.includes('sup')) return 4;
             if (p.includes('engineer') || p.includes('eng')) return 3;
@@ -190,6 +192,10 @@
                     )}
 
                 </div> </div></div> );
+        };
+
+        const ManageDeptsModal = ({ depts, onAdd, onDelete, onClose }) => { const [newD, setNewD] = useState("");
+            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
         };
 
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser }) => {
@@ -640,6 +646,21 @@
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
             
+            // [V15 NEW] Unified Admin Actions
+            const handleAddDept = (dept) => {
+                const newDepts = [...departments, dept];
+                setDepartments(newDepts);
+                localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
+                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+            };
+
+            const handleDeleteDept = (dept) => {
+                const newDepts = departments.filter(d => d !== dept);
+                setDepartments(newDepts);
+                localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
+                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+            };
+
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
