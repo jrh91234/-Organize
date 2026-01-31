@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V22 (Full Complete)</title>
+    <title>HR System V22 (Executive Link Fixed)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -108,7 +108,7 @@
         const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
-        // [V15 NEW] Unified Admin Panel
+        // [V16 NEW] Unified Admin Panel with Dept Selector
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept }) => { 
             const [activeTab, setActiveTab] = useState('users'); 
             const [users, setUsers] = useState([]);
@@ -128,6 +128,8 @@
             localStorage.setItem('users', JSON.stringify(updated)); if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); setLoading(false); };
             
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> 
+                
+                {/* Header with Tabs */}
                 <div className="bg-white border-b">
                     <div className="p-6 pb-4 flex justify-between items-center"><h2 className="text-xl font-bold flex items-center gap-2"><Icons.Settings/> Admin Panel</h2><button onClick={onClose}><Icons.X /></button></div> 
                     <div className="flex px-6 gap-6">
@@ -138,7 +140,7 @@
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50"> 
-                    {/* Tab 1: Users */}
+                    
                     {activeTab === 'users' && (
                     <div>
                         <div className="flex gap-2 mb-4 items-end bg-white p-4 rounded-xl shadow-sm flex-wrap border">
@@ -146,6 +148,7 @@
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Pass</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
                             <div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div>
+                            {/* [V16 Fix] Added Dept Selector */}
                             <div className="w-32"><label className="text-xs text-gray-500">Dept</label><select value={newUser.dept || 'ASSEMBLY'} onChange={e => setNewUser({...newUser, dept: e.target.value})} className="border p-2 rounded text-sm w-full bg-blue-50"><option value="ALL">ALL (Admin)</option>{depts.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
                             <button onClick={saveUserAction} className={`${editingUsername ? 'bg-orange-500' : 'bg-green-600'} text-white p-2 rounded h-[38px] w-[38px] flex justify-center items-center shadow-sm`}>{editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}</button>
                         </div> 
@@ -155,7 +158,7 @@
                         </div>
                     </div>
                     )}
-                    {/* Tab 2: Departments */}
+
                     {activeTab === 'depts' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Grid/> Manage Departments</h3>
@@ -173,7 +176,7 @@
                         </div>
                     </div>
                     )}
-                    {/* Tab 3: System */}
+
                     {activeTab === 'system' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Cloud/> System Connection</h3>
@@ -186,6 +189,7 @@
                             </div>
                         </div>
                     )}
+
                 </div> </div></div> );
         };
 
@@ -320,7 +324,7 @@
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
             useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', dept: employee?.dept || (safeDepts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
-            const filteredSupervisors = useMemo(() => { if (!supervisors) return []; return supervisors.filter(s => { if (!s || s.id === formData.id) return false; if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) return false; const lowerPos = (s.position || "").toLowerCase(); const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder'); if (formData.reportsTo === s.id) return true; return !isInvalidBoss; }); }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
+            const filteredSupervisors = useMemo(() => { if (!supervisors) return []; return supervisors.filter(s => { if (!s || s.id === formData.id) return false; if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) { const targetRank = getPositionRank(s.position); const isExecutive = targetRank >= 6 || s.dept === 'EXECUTIVE' || s.dept === 'MANAGEMENT'; if (!isExecutive) return false; } const lowerPos = (s.position || "").toLowerCase(); const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder'); if (formData.reportsTo === s.id) return true; return !isInvalidBoss; }); }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
             const tenureText = useMemo(() => calculateTenure(formData.startDate), [formData.startDate]);
             if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">Access Denied</h2> <p className="text-gray-500 mt-2">คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
 
@@ -944,6 +948,7 @@
                             {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
+                            {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
                         <div className="hidden lg:flex items-center gap-3">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
