@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V22 (Executive Link Fixed)</title>
+    <title>HR System V23 (Top Management Global)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -103,10 +103,6 @@
             LayoutGrid: (p)=><IconBase {...p}><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></IconBase>,
             Minus: (p)=><IconBase {...p}><line x1="5" y1="12" x2="19" y2="12"/></IconBase>
         };
-
-        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => { const base = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"; const variants = { primary: "bg-blue-600 text-white hover:bg-blue-700", secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", success: "bg-green-600 text-white hover:bg-green-700", warning: "bg-orange-500 text-white hover:bg-orange-600", }; return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; };
-        const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
-        const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
         // [V16 NEW] Unified Admin Panel with Dept Selector
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept }) => { 
@@ -324,7 +320,31 @@
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
             useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', dept: employee?.dept || (safeDepts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
-            const filteredSupervisors = useMemo(() => { if (!supervisors) return []; return supervisors.filter(s => { if (!s || s.id === formData.id) return false; if (currentUser?.dept !== 'ALL' && s.dept !== formData.dept) { const targetRank = getPositionRank(s.position); const isExecutive = targetRank >= 6 || s.dept === 'EXECUTIVE' || s.dept === 'MANAGEMENT'; if (!isExecutive) return false; } const lowerPos = (s.position || "").toLowerCase(); const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder'); if (formData.reportsTo === s.id) return true; return !isInvalidBoss; }); }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
+            const filteredSupervisors = useMemo(() => { 
+                if (!supervisors) return []; 
+                return supervisors.filter(s => { 
+                    // 1. Cannot report to self
+                    if (!s || s.id === formData.id) return false; 
+                    
+                    // 2. Department Visibility Logic
+                    const isSameDept = s.dept === formData.dept;
+                    const isAdmin = currentUser?.dept === 'ALL';
+                    // [V23 NEW] Allow Top Management to be seen by everyone
+                    const isTopManagement = ['EXECUTIVE', 'MANAGEMENT', 'TOP MANAGEMENT'].includes((s.dept || '').toUpperCase());
+
+                    // Filter: Must be (Admin OR Same Dept OR Top Management)
+                    if (!isAdmin && !isSameDept && !isTopManagement) {
+                        return false; 
+                    }
+
+                    // 3. Invalid Boss Logic (Operator/Feeder cannot be boss)
+                    const lowerPos = (s.position || "").toLowerCase(); 
+                    const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder'); 
+                    if (formData.reportsTo === s.id) return true; // Keep existing boss even if invalid
+                    return !isInvalidBoss; 
+                }); 
+            }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
+
             const tenureText = useMemo(() => calculateTenure(formData.startDate), [formData.startDate]);
             if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">Access Denied</h2> <p className="text-gray-500 mt-2">คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
 
@@ -948,7 +968,6 @@
                             {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
-                            {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
                         <div className="hidden lg:flex items-center gap-3">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
