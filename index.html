@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V11 (Operational Ratio Dashboard)</title>
+    <title>HR System V12 (Ghost Dept Fix)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -354,11 +354,15 @@
                 }
             }, [employees, activeTab]);
 
+            // [V12 FIX] Filter out ghost departments
             const deptUpdates = useMemo(() => {
                 const updates = {};
+                // Initialize only valid departments
                 departments.forEach(d => updates[d] = null);
+                
                 (employees || []).forEach(e => {
-                    if (e.dept && e.lastModified) {
+                    // Check if department is valid before updating timestamp
+                    if (e.dept && e.lastModified && updates.hasOwnProperty(e.dept)) {
                         const t = new Date(e.lastModified).getTime();
                         if (!updates[e.dept] || t > updates[e.dept]) {
                             updates[e.dept] = t;
