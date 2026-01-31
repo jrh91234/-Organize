@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V23 (Top Management Global)</title>
+    <title>HR System V22 (Stable Core)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -43,6 +43,10 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+        // *** CONSTANTS (MOVED TO TOP TO FIX REFERENCE ERROR) ***
+        const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
+        const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
         // --- Utils ---
         const formatDriveUrl = (url) => { if (!url) return "https://placehold.co/100x100?text=No+Img"; if (url.includes('drive.google.com') || url.includes('docs.google.com')) { let id = null; const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/); if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; } if (id) return `https://lh3.googleusercontent.com/d/$$${id}`; } return url; };
@@ -104,6 +108,8 @@
             Minus: (p)=><IconBase {...p}><line x1="5" y1="12" x2="19" y2="12"/></IconBase>
         };
 
+        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => { const base = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"; const variants = { primary: "bg-blue-600 text-white hover:bg-blue-700", secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", success: "bg-green-600 text-white hover:bg-green-700", warning: "bg-orange-500 text-white hover:bg-orange-600", }; return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; };
+        
         // [V16 NEW] Unified Admin Panel with Dept Selector
         const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept }) => { 
             const [activeTab, setActiveTab] = useState('users'); 
@@ -124,8 +130,6 @@
             localStorage.setItem('users', JSON.stringify(updated)); if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); setLoading(false); };
             
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> 
-                
-                {/* Header with Tabs */}
                 <div className="bg-white border-b">
                     <div className="p-6 pb-4 flex justify-between items-center"><h2 className="text-xl font-bold flex items-center gap-2"><Icons.Settings/> Admin Panel</h2><button onClick={onClose}><Icons.X /></button></div> 
                     <div className="flex px-6 gap-6">
@@ -136,7 +140,7 @@
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50"> 
-                    
+                    {/* Tab 1: Users */}
                     {activeTab === 'users' && (
                     <div>
                         <div className="flex gap-2 mb-4 items-end bg-white p-4 rounded-xl shadow-sm flex-wrap border">
@@ -185,7 +189,6 @@
                             </div>
                         </div>
                     )}
-
                 </div> </div></div> );
         };
 
@@ -326,11 +329,11 @@
                     // 1. Cannot report to self
                     if (!s || s.id === formData.id) return false; 
                     
-                    // 2. Department Visibility Logic
+                    // 2. Department Visibility Logic (ALLOW EXECUTIVE)
                     const isSameDept = s.dept === formData.dept;
                     const isAdmin = currentUser?.dept === 'ALL';
                     // [V23 NEW] Allow Top Management to be seen by everyone
-                    const isTopManagement = ['EXECUTIVE', 'MANAGEMENT', 'TOP MANAGEMENT'].includes((s.dept || '').toUpperCase());
+                    const isTopManagement = ['EXECUTIVE', 'MANAGEMENT', 'TOP MANAGEMENT'].includes((s.dept || '').toUpperCase()) || getPositionRank(s.position) >= 6;
 
                     // Filter: Must be (Admin OR Same Dept OR Top Management)
                     if (!isAdmin && !isSameDept && !isTopManagement) {
@@ -340,7 +343,7 @@
                     // 3. Invalid Boss Logic (Operator/Feeder cannot be boss)
                     const lowerPos = (s.position || "").toLowerCase(); 
                     const isInvalidBoss = lowerPos.includes('operator') || lowerPos.includes('feeder'); 
-                    if (formData.reportsTo === s.id) return true; // Keep existing boss even if invalid
+                    if (formData.reportsTo === s.id) return true; 
                     return !isInvalidBoss; 
                 }); 
             }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
@@ -573,7 +576,7 @@
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
             const [employees, setEmployees] = useState(() => safeLocalLoad('orgData', []));
             const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
-            const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR"]));
+            const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR", "EXECUTIVE"]));
             
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
@@ -889,30 +892,6 @@
                 document.body.removeChild(a);
             };
 
-            // [Fix] SummaryDashboard Logic with Dept Updates Fix
-            const deptUpdates = useMemo(() => {
-                const updates = {};
-                departments.forEach(d => updates[d] = null);
-                (employees || []).forEach(e => {
-                    if (e.dept && e.lastModified && updates.hasOwnProperty(e.dept)) {
-                        const t = new Date(e.lastModified).getTime();
-                        if (!updates[e.dept] || t > updates[e.dept]) {
-                            updates[e.dept] = t;
-                        }
-                    }
-                });
-                return updates;
-            }, [employees, departments]);
-
-            // [Fix] Summary Stats Logic
-            const summaryStats = useMemo(() => {
-                try {
-                    const safeEmps = Array.isArray(employees) ? employees : [];
-                    return {}; 
-                } catch(e) { return {}; }
-            }, [employees]);
-
-
             // *** FIXED ZONE: ALL HOOKS ARE ABOVE THIS LINE ***
 
             const validEmployees = employees.filter(e => e.id);
@@ -968,6 +947,7 @@
                             {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
+                            {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
                         <div className="hidden lg:flex items-center gap-3">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
