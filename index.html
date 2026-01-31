@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V8 (Hybrid + Plus/Minus Grid)</title>
+    <title>HR System V9 (Reorder Fixed)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -322,6 +322,7 @@
                 }
             }, [employees, activeTab]);
 
+            // [NEW] Calculate Last Update Per Department
             const deptUpdates = useMemo(() => {
                 const updates = {};
                 departments.forEach(d => updates[d] = null);
@@ -354,6 +355,8 @@
                                     <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Position Breakdown ({activeTab})</h3>
                                     <div className="space-y-4 max-h-60 overflow-y-auto pr-2">{Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (<div key={pos} className="flex items-center group"><div className="w-40 text-sm font-medium text-gray-600 truncate pr-2 group-hover:text-blue-600">{pos}</div><div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{width: `${(count/stats.total)*100}%`}}></div></div><div className="w-12 text-right text-sm font-bold text-gray-800">{count}</div><div className="w-12 text-right text-xs text-gray-400">({Math.round((count/stats.total)*100)}%)</div></div>))}</div>
                                 </div>
+                                
+                                {/* [NEW] Department Updates Table */}
                                 <div className="bg-white rounded-xl shadow-sm p-6 border">
                                     <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Last Updates by Department</h3>
                                     <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -379,9 +382,11 @@
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' });
             const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true);
             try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } };
+            // เพิ่มปุ่ม Reset Data มุมขวาล่าง
             return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4 relative"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> <button onClick={()=>{if(confirm('ล้างข้อมูลทั้งหมดในเครื่องเพื่อแก้ปัญหา?')) { localStorage.clear(); location.reload(); }}} className="absolute bottom-4 right-4 text-xs text-gray-500 hover:text-white underline">Reset Data (Emergency)</button> </div> );
         };
 
+        // [New] Loading Overlay Component
         const LoadingScreen = () => (
             <div className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
                 <Icons.Loader size={48} className="text-blue-600 mb-4 animate-spin"/>
@@ -389,6 +394,7 @@
             </div>
         );
 
+        // [NEW] Status Indicator Component
         const StatusIndicator = ({ status }) => {
             let color = "bg-gray-400";
             let text = "Unknown";
@@ -425,6 +431,7 @@
         };
 
         const App = () => {
+            // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
             const [employees, setEmployees] = useState(() => safeLocalLoad('orgData', []));
             const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
@@ -433,6 +440,7 @@
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
+            // [FIXED] เพิ่มสถานะ isDataReady เพื่อป้องกัน White Screen
             const [isDataReady, setIsDataReady] = useState(false);
             
             const [viewMode, setViewMode] = useState('chart'); 
@@ -468,14 +476,19 @@
             const appApiCall = async (url, action, payload) => { try { const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action, ...payload }) }); return await res.json(); } catch (e) { throw e; } };
             const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
             
+            // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
             useEffect(() => { 
                 if (currentUser) {
-                    setIsDataReady(false);
+                    setIsDataReady(false); // เริ่มต้นโหลด
+                    
+                    // 1. โหลดจาก Local Storage ก่อน (ถ้ามี)
                     const localData = safeLocalLoad('orgData', null);
                     if (localData && Array.isArray(localData)) {
                         setEmployees(localData);
-                        setIsDataReady(true);
+                        setIsDataReady(true); // ข้อมูล Local พร้อมแล้ว แสดงผลได้เลย
                     }
+
+                    // 2. ถ้ามี Drive URL ให้โหลดจาก Cloud มาทับ
                     if (driveUrl) {
                         appApiCall(driveUrl, 'getData').then(res => { 
                             if (res?.status === 'success' && res.data) { 
@@ -484,9 +497,13 @@
                                 if (res.data.orgDepartments) setDepartments(res.data.orgDepartments); 
                                 setCloudStatus('online'); 
                             }
-                            setIsDataReady(true);
-                        }).catch(() => { setIsDataReady(true); setCloudStatus('error'); });
-                    } else { setIsDataReady(true); }
+                            setIsDataReady(true); // ข้อมูล Cloud มาแล้ว
+                        }).catch(() => {
+                            setIsDataReady(true); // ถึง Error ก็ต้องปล่อยให้ทำงานต่อด้วยข้อมูลเก่า
+                        });
+                    } else {
+                        setIsDataReady(true);
+                    }
                 }
             }, [driveUrl, currentUser]);
 
@@ -495,12 +512,17 @@
             
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
-            
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { 
                 pushToHistory(employees); 
+                // [NEW] Add Timestamps
                 const timestamp = new Date().toISOString();
                 const stampedUpdates = updates.map(u => ({ ...u, lastModified: timestamp }));
-                const finalState = newState.map(e => { const up = stampedUpdates.find(u => u.id === e.id); return up ? up : e; });
+                
+                const finalState = newState.map(e => {
+                    const up = stampedUpdates.find(u => u.id === e.id);
+                    return up ? up : e;
+                });
+
                 setEmployees(finalState); 
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
@@ -508,17 +530,41 @@
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
+                // [V8] Logic for Root Node Reordering (Swapping)
                 if (!target.reportsTo || target.reportsTo === 'STAGING') {
-                    const roots = employees.filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept)).sort((a, b) => (a.order || 0) - (b.order || 0));
-                    const currentIndex = roots.findIndex(e => e.id === id); if (currentIndex === -1) return;
-                    let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= roots.length) newIndex = roots.length - 1; if (newIndex === currentIndex) return;
-                    const itemToMove = roots[currentIndex]; roots.splice(currentIndex, 1); roots.splice(newIndex, 0, itemToMove);
+                    // This is a root node (Department Head or Staging)
+                    // Get all root nodes in the current view
+                    const roots = employees
+                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
+                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
+                    const currentIndex = roots.findIndex(e => e.id === id);
+                    if (currentIndex === -1) return;
+
+                    let newIndex = currentIndex + offset;
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex >= roots.length) newIndex = roots.length - 1;
+                    if (newIndex === currentIndex) return;
+
+                    // Swap mechanism
+                    const itemToMove = roots[currentIndex];
+                    roots.splice(currentIndex, 1);
+                    roots.splice(newIndex, 0, itemToMove);
+
+                    // Re-assign order based on new array position
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
-                    const newData = employees.map(e => { const updatedRoot = updates.find(u => u.id === e.id); return updatedRoot ? updatedRoot : e; });
+                    
+                    // Merge updates
+                    const newData = employees.map(e => {
+                        const updatedRoot = updates.find(u => u.id === e.id);
+                        return updatedRoot ? updatedRoot : e;
+                    });
+                    
                     updateStateFull(newData, updates, []);
                     return;
                 }
 
+                // Normal sibling reordering
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
@@ -528,12 +574,13 @@
                 updateStateFull(newData, updates, []);
             }, [employees, updateStateFull, currentDept]);
 
+            // [V8] Grid Column Cycler (+/-)
             const handleGridColChange = useCallback((id, delta) => {
                 const target = employees.find(e => e.id === id);
                 if (!target) return;
                 
-                const current = target.gridCols ? parseInt(target.gridCols) : 0; 
-                let nextVal = current === 0 ? 4 : current; 
+                const current = target.gridCols ? parseInt(target.gridCols) : 0; // 0 or NaN = Auto
+                let nextVal = current === 0 ? 4 : current; // Default starting point if Auto
                 
                 if (current === 0 && delta > 0) nextVal = 2; // From Auto to 2
                 else if (current === 0 && delta < 0) nextVal = 6; // From Auto back to 6? Or stay auto? Let's say Auto -> 6
@@ -541,31 +588,67 @@
                     nextVal += delta;
                 }
 
+                // Limits
                 if (nextVal > 6) nextVal = 0; // Loop back to Auto
                 if (nextVal < 2 && nextVal !== 0) nextVal = 0; // Loop to Auto
 
                 const updatedEmp = { ...target, gridCols: nextVal === 0 ? '' : nextVal.toString() };
                 const newData = employees.map(e => e.id === id ? updatedEmp : e);
+                
+                // Save immediately
                 updateStateFull(newData, [updatedEmp], []);
             }, [employees, updateStateFull]);
 
+            // [V8] Updated Drop Logic for Root Swapping
             const handleDropNode = useCallback((sourceIds, targetId) => {
                 const targetNode = employees.find(e => e.id === targetId);
-                const sourceNode = employees.find(e => e.id === sourceIds[0]); 
+                const sourceNode = employees.find(e => e.id === sourceIds[0]); // Handle first item for logic check
+
+                // Check if dragging a Root onto another Root (Swap)
                 const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
                 const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
 
                 if (isTargetRoot && isSourceRoot && sourceIds.length === 1) {
-                    const targetOrder = targetNode.order || 0; const sourceOrder = sourceNode.order || 0;
-                    const updates = [ { ...sourceNode, order: targetOrder }, { ...targetNode, order: sourceOrder } ];
-                    const newData = employees.map(e => { const up = updates.find(u => u.id === e.id); return up ? up : e; });
+                    // Logic to swap roots by re-ordering list
+                    // Similar to handleReorder but by target ID
+                    const roots = employees
+                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
+                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
+                    const sourceIndex = roots.findIndex(e => e.id === sourceNode.id);
+                    const targetIndex = roots.findIndex(e => e.id === targetNode.id);
+
+                    if (sourceIndex === -1 || targetIndex === -1) return;
+
+                    // Move item
+                    roots.splice(sourceIndex, 1);
+                    roots.splice(targetIndex, 0, sourceNode);
+
+                    // Re-index all
+                    const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
+                    
+                    // Merge updates
+                    const newData = employees.map(e => {
+                        const updatedRoot = updates.find(u => u.id === e.id);
+                        return updatedRoot ? updatedRoot : e;
+                    });
+                    
                     updateStateFull(newData, updates, []);
+
                 } else {
+                    // Standard: Reparent
                     const updates = []; 
-                    const newData = employees.map(e => { if(sourceIds.includes(e.id)) { const u = {...e, reportsTo: targetId}; updates.push(u); return u; } return e; }); 
+                    const newData = employees.map(e => { 
+                        if(sourceIds.includes(e.id)) { 
+                            const u = {...e, reportsTo: targetId}; 
+                            updates.push(u); 
+                            return u; 
+                        } 
+                        return e; 
+                    }); 
                     updateStateFull(newData, updates, []);
                 }
-            }, [employees, updateStateFull]);
+            }, [employees, updateStateFull, currentDept]);
 
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
@@ -598,13 +681,16 @@
                 document.body.removeChild(a);
             };
 
-            if (!currentUser) return <LoginScreen onLogin={(u)=>{setCurrentUser(u); localStorage.setItem('currentUser', JSON.stringify(u));}} driveUrl={driveUrl} apiCall={appApiCall} />;
-            if (!isDataReady) return <LoadingScreen />;
+            // *** FIXED ZONE: ALL HOOKS ARE ABOVE THIS LINE ***
 
             const validEmployees = employees.filter(e => e.id);
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
             const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept));
-            const rootEmployees = filteredAll.filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; });
+            // [V9 Fix] Sort root nodes by order!
+            const rootEmployees = filteredAll
+                .filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; })
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
             const isLocked = currentUser?.role !== 'admin' && currentUser?.role !== 'supervisor';
 
             const processedEmployees = useMemo(() => {
@@ -612,7 +698,13 @@
                 if (currentDept !== 'ALL') data = data.filter(e => e.dept === currentDept);
                 if (searchTerm) {
                     const lower = searchTerm.toLowerCase();
-                    data = data.filter(e => (e.name || "").toLowerCase().includes(lower) || (e.id || "").toLowerCase().includes(lower) || (e.position || "").toLowerCase().includes(lower) || (e.dept || "").toLowerCase().includes(lower) || (e.company || "").toLowerCase().includes(lower));
+                    data = data.filter(e => 
+                        (e.name || "").toLowerCase().includes(lower) ||
+                        (e.id || "").toLowerCase().includes(lower) ||
+                        (e.position || "").toLowerCase().includes(lower) ||
+                        (e.dept || "").toLowerCase().includes(lower) ||
+                        (e.company || "").toLowerCase().includes(lower)
+                    );
                 }
                 if (sortConfig.key) {
                     data.sort((a, b) => {
@@ -626,6 +718,12 @@
                 return data;
             }, [validEmployees, currentDept, searchTerm, sortConfig]);
 
+            // *** NOW IT IS SAFE TO RETURN ***
+            
+            if (!currentUser) return <LoginScreen onLogin={(u)=>{setCurrentUser(u); localStorage.setItem('currentUser', JSON.stringify(u));}} driveUrl={driveUrl} apiCall={appApiCall} />;
+            
+            if (!isDataReady) return <LoadingScreen />;
+
             return (
                 <div className="flex flex-col h-full bg-gray-50">
                     <nav className="bg-white shadow-sm border-b sticky top-0 z-40 h-14 flex items-center px-4 justify-between shrink-0">
@@ -635,6 +733,7 @@
                             
                             <select value={currentDept} onChange={e=>setCurrentDept(e.target.value)} className="font-bold text-sm border-none bg-blue-50 rounded px-2 py-1 outline-none cursor-pointer hover:bg-blue-100 transition-colors">{departments.map(d => <option key={d} value={d}>{d}</option>)}<option value="ALL">ALL DEPTS</option></select>
                             
+                            {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
