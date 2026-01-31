@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V12 (Ghost Dept Fix)</title>
+    <title>HR System V13 (Smart ID Management)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -262,7 +262,7 @@
                         <form className="p-6 space-y-4 overflow-y-auto grow">
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" disabled={isEditMode}/></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
                             <div className="flex gap-2 items-end">
                                 <div className="flex-1"><label className="text-xs text-gray-500 flex justify-between">Position</label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
@@ -555,59 +555,85 @@
             
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
+            
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { 
                 pushToHistory(employees); 
-                // [NEW] Add Timestamps
                 const timestamp = new Date().toISOString();
                 const stampedUpdates = updates.map(u => ({ ...u, lastModified: timestamp }));
-                
-                const finalState = newState.map(e => {
-                    const up = stampedUpdates.find(u => u.id === e.id);
-                    return up ? up : e;
-                });
-
+                const finalState = newState.map(e => { const up = stampedUpdates.find(u => u.id === e.id); return up ? up : e; });
                 setEmployees(finalState); 
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
             
+            // [V13 NEW] Save Logic with Validation & Cascading Update
+            const handleSave = useCallback((data) => { 
+                // 1. Validation: ID Required
+                if (!data.id || data.id.trim() === '') {
+                    alert("Error: Employee ID is required!");
+                    return;
+                }
+
+                // 2. Setup Context
+                const isNew = !employees.some(e => e.id === editingEmployee?.id); // Check if we are editing an existing record
+                const originalId = editingEmployee?.id;
+
+                // 3. Validation: Duplicate Check
+                // If ID exists AND it's not the current record we are editing -> Duplicate!
+                const isDuplicate = employees.some(e => e.id === data.id && e.id !== originalId);
+                if (isDuplicate) {
+                    alert("Error: ID " + data.id + " already exists!");
+                    return;
+                }
+
+                let updates = [data];
+                let allEmployeesCopy = [...employees];
+
+                // 4. Cascading Update (If ID Changed)
+                if (!isNew && originalId && originalId !== data.id) {
+                    // Find all subordinates who report to the OLD ID
+                    const subordinates = allEmployeesCopy.filter(e => e.reportsTo === originalId);
+                    
+                    // Update them to report to the NEW ID
+                    subordinates.forEach(sub => {
+                        const updatedSub = { ...sub, reportsTo: data.id };
+                        updates.push(updatedSub); // Add to updates list
+                    });
+                }
+
+                // 5. Merge Data
+                const newData = allEmployeesCopy.map(e => {
+                    // If this is the record being edited (match by OLD ID)
+                    if (e.id === originalId && !isNew) return data;
+                    
+                    // If this is a subordinate that got updated
+                    const subUpdate = updates.find(u => u.id === e.id && u.id !== data.id);
+                    return subUpdate ? subUpdate : e;
+                });
+
+                // If new record, push to array
+                if (isNew) newData.push(data);
+
+                // 6. Commit
+                updateStateFull(newData, updates, []);
+                setIsModalOpen(false); 
+            }, [employees, editingEmployee, updateStateFull]);
+
+            const handleDelete = useCallback((id) => { const newData = employees.filter(e => e.id !== id); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, updateStateFull]);
+            
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
-                // [V8] Logic for Root Node Reordering (Swapping)
                 if (!target.reportsTo || target.reportsTo === 'STAGING') {
-                    // This is a root node (Department Head or Staging)
-                    // Get all root nodes in the current view
-                    const roots = employees
-                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
-                        .sort((a, b) => (a.order || 0) - (b.order || 0));
-                    
-                    const currentIndex = roots.findIndex(e => e.id === id);
-                    if (currentIndex === -1) return;
-
-                    let newIndex = currentIndex + offset;
-                    if (newIndex < 0) newIndex = 0;
-                    if (newIndex >= roots.length) newIndex = roots.length - 1;
-                    if (newIndex === currentIndex) return;
-
-                    // Swap mechanism
-                    const itemToMove = roots[currentIndex];
-                    roots.splice(currentIndex, 1);
-                    roots.splice(newIndex, 0, itemToMove);
-
-                    // Re-assign order based on new array position
+                    const roots = employees.filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept)).sort((a, b) => (a.order || 0) - (b.order || 0));
+                    const currentIndex = roots.findIndex(e => e.id === id); if (currentIndex === -1) return;
+                    let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= roots.length) newIndex = roots.length - 1; if (newIndex === currentIndex) return;
+                    const itemToMove = roots[currentIndex]; roots.splice(currentIndex, 1); roots.splice(newIndex, 0, itemToMove);
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
-                    
-                    // Merge updates
-                    const newData = employees.map(e => {
-                        const updatedRoot = updates.find(u => u.id === e.id);
-                        return updatedRoot ? updatedRoot : e;
-                    });
-                    
+                    const newData = employees.map(e => { const updatedRoot = updates.find(u => u.id === e.id); return updatedRoot ? updatedRoot : e; });
                     updateStateFull(newData, updates, []);
                     return;
                 }
 
-                // Normal sibling reordering
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
@@ -617,13 +643,12 @@
                 updateStateFull(newData, updates, []);
             }, [employees, updateStateFull, currentDept]);
 
-            // [V8] Grid Column Cycler (+/-)
             const handleGridColChange = useCallback((id, delta) => {
                 const target = employees.find(e => e.id === id);
                 if (!target) return;
                 
-                const current = target.gridCols ? parseInt(target.gridCols) : 0; // 0 or NaN = Auto
-                let nextVal = current === 0 ? 4 : current; // Default starting point if Auto
+                const current = target.gridCols ? parseInt(target.gridCols) : 0; 
+                let nextVal = current === 0 ? 4 : current; 
                 
                 if (current === 0 && delta > 0) nextVal = 2; // From Auto to 2
                 else if (current === 0 && delta < 0) nextVal = 6; // From Auto back to 6? Or stay auto? Let's say Auto -> 6
@@ -631,29 +656,21 @@
                     nextVal += delta;
                 }
 
-                // Limits
                 if (nextVal > 6) nextVal = 0; // Loop back to Auto
                 if (nextVal < 2 && nextVal !== 0) nextVal = 0; // Loop to Auto
 
                 const updatedEmp = { ...target, gridCols: nextVal === 0 ? '' : nextVal.toString() };
                 const newData = employees.map(e => e.id === id ? updatedEmp : e);
-                
-                // Save immediately
                 updateStateFull(newData, [updatedEmp], []);
             }, [employees, updateStateFull]);
 
-            // [V8] Updated Drop Logic for Root Swapping
             const handleDropNode = useCallback((sourceIds, targetId) => {
                 const targetNode = employees.find(e => e.id === targetId);
-                const sourceNode = employees.find(e => e.id === sourceIds[0]); // Handle first item for logic check
-
-                // Check if dragging a Root onto another Root (Swap)
+                const sourceNode = employees.find(e => e.id === sourceIds[0]); 
                 const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
                 const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
 
                 if (isTargetRoot && isSourceRoot && sourceIds.length === 1) {
-                    // Logic to swap roots by re-ordering list
-                    // Similar to handleReorder but by target ID
                     const roots = employees
                         .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
                         .sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -663,14 +680,11 @@
 
                     if (sourceIndex === -1 || targetIndex === -1) return;
 
-                    // Move item
                     roots.splice(sourceIndex, 1);
                     roots.splice(targetIndex, 0, sourceNode);
 
-                    // Re-index all
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
                     
-                    // Merge updates
                     const newData = employees.map(e => {
                         const updatedRoot = updates.find(u => u.id === e.id);
                         return updatedRoot ? updatedRoot : e;
@@ -679,7 +693,6 @@
                     updateStateFull(newData, updates, []);
 
                 } else {
-                    // Standard: Reparent
                     const updates = []; 
                     const newData = employees.map(e => { 
                         if(sourceIds.includes(e.id)) { 
@@ -696,8 +709,8 @@
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
             useEffect(() => { window.addEventListener("mousemove", resize); window.addEventListener("mouseup", stopResizing); return () => { window.removeEventListener("mousemove", resize); window.removeEventListener("mouseup", stopResizing); }; }, [resize, stopResizing]);
-            const handleSave = useCallback((data) => { let updates = [data]; let newData = employees.find(e => e.id === data.id) ? employees.map(e => e.id === data.id ? data : e) : [...employees, data]; updateStateFull(newData, updates, []); setIsModalOpen(false); }, [employees, updateStateFull]);
-            const handleDelete = useCallback((id) => { const newData = employees.filter(e => e.id !== id); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, updateStateFull]);
+            
+            // [V13] Updated handleTransfer to handle dept validation
             const handleTransferToDept = (targetDept) => { if(selectedIds.length === 0) return; const updates = []; const newData = employees.map(e => { if (selectedIds.includes(e.id)) { const u = { ...e, dept: targetDept, reportsTo: 'STAGING' }; updates.push(u); return u; } return e; }); updateStateFull(newData, updates, []); setSelectedIds([]); setSelectionMode(false); alert(`Moved ${updates.length} employees to ${targetDept} (Waiting Area)`); };
 
             const requestSort = (key) => {
@@ -729,7 +742,6 @@
             const validEmployees = employees.filter(e => e.id);
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
             const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept));
-            // [V9 Fix] Sort root nodes by order!
             const rootEmployees = filteredAll
                 .filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; })
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
