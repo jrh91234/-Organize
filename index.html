@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V19 (Executive Link)</title>
+    <title>HR System V20 (Fixed Duplication)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -54,7 +54,6 @@
 
         const getPositionRank = (position) => {
             const p = (position || "").toLowerCase();
-            // [V19] Added Executive Ranks
             if (p.includes('ceo') || p.includes('md') || p.includes('gm') || p.includes('president') || p.includes('director')) return 6;
             if (p.includes('manager')) return 5;
             if (p.includes('supervisor') || p.includes('sup')) return 4;
@@ -129,8 +128,6 @@
             localStorage.setItem('users', JSON.stringify(updated)); if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); setLoading(false); };
             
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> 
-                
-                {/* Header with Tabs */}
                 <div className="bg-white border-b">
                     <div className="p-6 pb-4 flex justify-between items-center"><h2 className="text-xl font-bold flex items-center gap-2"><Icons.Settings/> Admin Panel</h2><button onClick={onClose}><Icons.X /></button></div> 
                     <div className="flex px-6 gap-6">
