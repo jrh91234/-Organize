@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System (Solid Gears & Colors)</title>
+    <title>HR System V8 (Hybrid Layout & Dept Sorting)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -69,12 +69,7 @@
         const Icons = { 
             Camera: (p)=><IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>, Plus: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>, Trash2: (p)=><IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>, 
             X: (p)=><IconBase {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></IconBase>, Check: (p)=><IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>, 
-            // [NEW] Solid/Filled Gear Icon
-            Settings: (p) => (
-                <svg xmlns="http://www.w3.org/2000/svg" width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="currentColor" stroke="none" className={p.className}>
-                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                </svg>
-            ),
+            Settings: (p) => ( <svg xmlns="http://www.w3.org/2000/svg" width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="currentColor" stroke="none" className={p.className}> <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/> </svg> ),
             Move: (p)=><IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>, Menu: (p)=><IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>, 
             Grid: (p)=><IconBase {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>, List: (p)=><IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>, 
             ChevronLeft: (p)=><IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>, ChevronRight: (p)=><IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>, 
@@ -93,7 +88,9 @@
             Users: (p)=><IconBase {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></IconBase>,
             Sort: (p)=><IconBase {...p}><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></IconBase>,
             Wifi: (p)=><IconBase {...p}><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>,
-            WifiOff: (p)=><IconBase {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>
+            WifiOff: (p)=><IconBase {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>,
+            // [NEW] Grid Icon for Columns
+            LayoutGrid: (p)=><IconBase {...p}><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></IconBase>
         };
 
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => { const base = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"; const variants = { primary: "bg-blue-600 text-white hover:bg-blue-700", secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", success: "bg-green-600 text-white hover:bg-green-700", warning: "bg-orange-500 text-white hover:bg-orange-600", }; return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; };
@@ -120,15 +117,25 @@
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
         };
 
-        const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder }) => {
+        const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange }) => {
             const isSub = employee.type === 'Subcontract';
+            const isLeader = (employee.position || "").toLowerCase().includes('leader');
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
             if (employee.customColor && THEMES[employee.customColor]) { const styles = THEMES[employee.customColor].lv0.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; } else if (className) { const styles = className.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; }
             if (employee.customShape && SHAPES[employee.customShape]) radiusClass = SHAPES[employee.customShape].cls;
             const textColorStyle = employee.textColor ? { color: employee.textColor } : {};
+            
             return (
                 <div draggable={!isLocked && !isViewOnly} onDragStart={(e) => !isLocked && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col items-center p-3 border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${isLocked||isViewOnly?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || isLocked) onClick(employee); }} id={`node-${employee.id}`}>
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
+                    
+                    {/* [NEW] Grid Column Toggle for Leaders */}
+                    {isLeader && !isLocked && !isViewOnly && !isStaging && (
+                        <button onClick={(e) => { e.stopPropagation(); onGridColChange(employee.id); }} className="absolute top-2 right-2 p-1 bg-white/80 rounded hover:bg-white text-gray-500 hover:text-blue-600 text-[10px] font-bold border border-transparent hover:border-gray-200 flex items-center gap-1 transition-all z-10" title="Toggle Grid Columns">
+                            <Icons.LayoutGrid size={12}/> {employee.gridCols ? employee.gridCols : 'A'}
+                        </button>
+                    )}
+
                     {selectionMode && <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected?'bg-purple-600 border-purple-600':'border-gray-300 bg-white'}`}>{isSelected && <Icons.Check size={12} className="text-white"/>}</div>}
                     {!isLocked && !isStaging && !selectionMode && !isViewOnly && ( <> 
                         <div className="reorder-controls" style={{left: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, -4); }}><Icons.ArrowUp size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button> </div> 
@@ -148,27 +155,64 @@
             );
         });
 
-        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm, visitedIds = new Set() }) => {
+        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm, visitedIds = new Set(), onGridColChange }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             const [isDragOverGroup, setIsDragOverGroup] = useState(false);
             if (!employee || visitedIds.has(employee.id)) return null;
             const newVisited = new Set(visitedIds).add(employee.id);
+            
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id && !newVisited.has(e.id)).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
+            
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
             const isMatch = searchTerm && employee.name.toLowerCase().includes(searchTerm.toLowerCase());
             if (isMatch) cardColor += " flash-active";
-            const isLargeTeam = subordinates.length > (layoutThreshold || 4);
-            const handleDropInternal = (e) => { if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
-            const handleDropOnGroup = (e) => { if (isLocked || isViewOnly) return; e.preventDefault(); e.stopPropagation(); setIsDragOverGroup(false); const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; if (droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); };
+            
+            // [V8] Hybrid Layout Logic: Check Position Keywork
+            const isLeader = (employee.position || "").toLowerCase().includes('leader');
+            const isGrid = isLeader; // If Leader -> Grid, Else -> Tree
+            
+            // [V8] Dynamic Grid Columns
+            const gridCols = employee.gridCols || '4'; // Default to 4 if auto or undefined in CSS class logic, but here we use style
+            const gridStyle = isGrid ? { 
+                display: 'grid', 
+                gridTemplateColumns: `repeat(${employee.gridCols || 'auto-fit'}, minmax(140px, 1fr))` 
+            } : {};
+
+            const handleDropInternal = (e) => { 
+                if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); 
+                const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; 
+                if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); 
+            };
+            const handleDropOnGroup = (e) => { 
+                if (isLocked || isViewOnly) return; e.preventDefault(); e.stopPropagation(); setIsDragOverGroup(false); 
+                const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; 
+                if (droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); 
+            };
+
             return (
                 <div className="flex flex-col items-center">
                     {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
                     <div onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && !isLocked && !isViewOnly && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
                         {moveTargetId && !isLocked && !isViewOnly && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
-                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder}/>
+                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange}/>
                         {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
-                    {subordinates.length > 0 && ( <> <div className="h-4 sm:h-6 w-px bg-gray-300"></div> <div className="flex relative"> {isLargeTeam ? ( <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited}/>))} {!isLocked && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )} </div> ) : ( <div className={`flex gap-4 sm:gap-6 pt-0 p-4 rounded-xl transition-colors ${isDragOverGroup ? 'bg-blue-50/50 ring-2 ring-blue-200' : ''}`} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited}/> </div>))} </div> )} </div> </> )}
+                    
+                    {subordinates.length > 0 && ( <> 
+                        <div className="h-4 sm:h-6 w-px bg-gray-300"></div> 
+                        <div className="flex relative"> 
+                            {isGrid ? ( 
+                                <div className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={gridStyle} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
+                                    {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange}/>))} 
+                                    {!isLocked && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )} 
+                                </div> 
+                            ) : ( 
+                                <div className={`flex gap-4 sm:gap-6 pt-0 p-4 rounded-xl transition-colors ${isDragOverGroup ? 'bg-blue-50/50 ring-2 ring-blue-200' : ''}`} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
+                                    {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange}/> </div>))} 
+                                </div> 
+                            )} 
+                        </div> 
+                    </> )}
                 </div>
             );
         });
@@ -477,6 +521,42 @@
             
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
+                
+                // [V8] Logic for Root Node Reordering (Swapping)
+                if (!target.reportsTo || target.reportsTo === 'STAGING') {
+                    // This is a root node (Department Head or Staging)
+                    // Get all root nodes in the current view
+                    const roots = employees
+                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
+                        .sort((a, b) => (a.order || 0) - (b.order || 0));
+                    
+                    const currentIndex = roots.findIndex(e => e.id === id);
+                    if (currentIndex === -1) return;
+
+                    let newIndex = currentIndex + offset;
+                    if (newIndex < 0) newIndex = 0;
+                    if (newIndex >= roots.length) newIndex = roots.length - 1;
+                    if (newIndex === currentIndex) return;
+
+                    // Swap mechanism
+                    const itemToMove = roots[currentIndex];
+                    roots.splice(currentIndex, 1);
+                    roots.splice(newIndex, 0, itemToMove);
+
+                    // Re-assign order based on new array position
+                    const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
+                    
+                    // Merge updates
+                    const newData = employees.map(e => {
+                        const updatedRoot = updates.find(u => u.id === e.id);
+                        return updatedRoot ? updatedRoot : e;
+                    });
+                    
+                    updateStateFull(newData, updates, []);
+                    return;
+                }
+
+                // Normal sibling reordering
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
@@ -484,6 +564,61 @@
                 const updates = siblings.map((sib, index) => ({ ...sib, order: index + 1 }));
                 const newData = employees.map(e => { const updatedSibling = updates.find(u => u.id === e.id); return updatedSibling ? updatedSibling : e; });
                 updateStateFull(newData, updates, []);
+            }, [employees, updateStateFull, currentDept]);
+
+            // [V8] Grid Column Cycler
+            const handleGridColChange = useCallback((id) => {
+                const target = employees.find(e => e.id === id);
+                if (!target) return;
+                
+                const current = target.gridCols ? parseInt(target.gridCols) : 0; // 0 or NaN = Auto
+                let next = '2';
+                if (isNaN(current) || current === 0) next = '2';
+                else if (current >= 6) next = ''; // Cycle back to Auto
+                else next = (current + 1).toString();
+
+                const updatedEmp = { ...target, gridCols: next };
+                const newData = employees.map(e => e.id === id ? updatedEmp : e);
+                updateStateFull(newData, [updatedEmp], []);
+            }, [employees, updateStateFull]);
+
+            // [V8] Updated Drop Logic for Root Swapping
+            const handleDropNode = useCallback((sourceIds, targetId) => {
+                const targetNode = employees.find(e => e.id === targetId);
+                const sourceNode = employees.find(e => e.id === sourceIds[0]); // Handle first item for logic check
+
+                // Check if dragging a Root onto another Root (Swap)
+                const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
+                const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
+
+                if (isTargetRoot && isSourceRoot && sourceIds.length === 1) {
+                    // Swap Order Logic
+                    const targetOrder = targetNode.order || 0;
+                    const sourceOrder = sourceNode.order || 0;
+                    
+                    const updates = [
+                        { ...sourceNode, order: targetOrder },
+                        { ...targetNode, order: sourceOrder }
+                    ];
+                    
+                    const newData = employees.map(e => {
+                        const up = updates.find(u => u.id === e.id);
+                        return up ? up : e;
+                    });
+                    updateStateFull(newData, updates, []);
+                } else {
+                    // Standard: Reparent
+                    const updates = []; 
+                    const newData = employees.map(e => { 
+                        if(sourceIds.includes(e.id)) { 
+                            const u = {...e, reportsTo: targetId}; 
+                            updates.push(u); 
+                            return u; 
+                        } 
+                        return e; 
+                    }); 
+                    updateStateFull(newData, updates, []);
+                }
             }, [employees, updateStateFull]);
 
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
@@ -614,7 +749,7 @@
                                     <div id="org-chart-full-view" className="bg-white p-8 rounded-2xl border shadow-xl inline-block min-w-[800px] org-chart-container relative">
                                         <div className="mb-8 border-b-2 pb-2"><h1 className="text-3xl font-bold text-gray-800 uppercase">{deptName}</h1></div>
                                         <div className="flex gap-16 justify-center">
-                                            {rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={filteredAll} onEdit={(e)=>{setEditingEmployee({...e, isNew:false}); setIsModalOpen(true);}} onDrop={(ids, targetId)=>{ const updates = []; const newData = employees.map(e => { if(ids.includes(e.id)) { const u = {...e, reportsTo: targetId}; updates.push(u); return u; } return e; }); updateStateFull(newData, updates, []); }} isLocked={isLocked} themeConf={THEMES[appTheme]} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev, id])} onAddChild={(p)=>{setEditingEmployee({isNew:true, reportsTo:p.id, dept:p.dept}); setIsModalOpen(true);}} layoutThreshold={layoutThreshold} searchTerm={searchTerm} onReorder={handleReorder}/>)}
+                                            {rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={filteredAll} onEdit={(e)=>{setEditingEmployee({...e, isNew:false}); setIsModalOpen(true);}} onDrop={handleDropNode} isLocked={isLocked} themeConf={THEMES[appTheme]} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev, id])} onAddChild={(p)=>{setEditingEmployee({isNew:true, reportsTo:p.id, dept:p.dept}); setIsModalOpen(true);}} layoutThreshold={layoutThreshold} searchTerm={searchTerm} onReorder={handleReorder} onGridColChange={handleGridColChange}/>)}
                                         </div>
                                     </div>
                                 </div>
