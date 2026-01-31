@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V9 (Reorder Fixed)</title>
+    <title>HR System V10 (Leader Drag Unlocked)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -123,7 +123,7 @@
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
         };
 
-        const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange }) => {
+        const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser }) => {
             const isSub = employee.type === 'Subcontract';
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
@@ -134,12 +134,21 @@
             const currentGrid = employee.gridCols ? parseInt(employee.gridCols) : 0;
             const displayGrid = (isNaN(currentGrid) || currentGrid === 0) ? 'Auto' : currentGrid;
 
+            // [V10] Determine if draggable based on smart lock logic
+            // Admin/Sup can always drag. Leaders can drag ONLY if they have permission over this node.
+            // But root nodes (Managers) shouldn't be draggable by Leaders.
+            // Logic: !isLocked OR (isLeaderRole AND canEdit)
+            const isLeaderRole = currentUser?.role === 'leader';
+            const canEditThis = canEditEmployee(currentUser, employee);
+            // Draggable if: (Not Locked global) OR (Is Leader AND Can Edit This Node)
+            const canDrag = !isLocked || (isLeaderRole && canEditThis);
+
             return (
-                <div draggable={!isLocked && !isViewOnly} onDragStart={(e) => !isLocked && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col items-center p-3 border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${isLocked||isViewOnly?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || isLocked) onClick(employee); }} id={`node-${employee.id}`}>
+                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col items-center p-3 border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
                     
                     {/* [NEW] Capsule Grid Control (+/-) */}
-                    {isLeader && !isLocked && !isViewOnly && !isStaging && (
+                    {isLeader && canDrag && !isViewOnly && !isStaging && (
                         <div className="absolute top-2 right-2 grid-control-pill z-20" onClick={e=>e.stopPropagation()}>
                             <div className="grid-btn" onClick={()=>onGridColChange(employee.id, -1)}><Icons.Minus size={10}/></div>
                             <div className="grid-val">{displayGrid}</div>
@@ -148,7 +157,7 @@
                     )}
 
                     {selectionMode && <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected?'bg-purple-600 border-purple-600':'border-gray-300 bg-white'}`}>{isSelected && <Icons.Check size={12} className="text-white"/>}</div>}
-                    {!isLocked && !isStaging && !selectionMode && !isViewOnly && !isLeader && ( <> 
+                    {canDrag && !isStaging && !selectionMode && !isViewOnly && !isLeader && ( <> 
                         <div className="reorder-controls" style={{left: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, -4); }}><Icons.ArrowUp size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button> </div> 
                         <div className="reorder-controls" style={{right: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, 4); }}><Icons.ArrowDown size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={8}/></button> </div> 
                     </> )}
@@ -161,12 +170,12 @@
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
                     </div>
-                    {isStaging && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
+                    {isStaging && canDrag && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
         });
 
-        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm, visitedIds = new Set(), onGridColChange }) => {
+        const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm, visitedIds = new Set(), onGridColChange, currentUser }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             const [isDragOverGroup, setIsDragOverGroup] = useState(false);
             if (!employee || visitedIds.has(employee.id)) return null;
@@ -186,37 +195,42 @@
                 gridTemplateColumns: `repeat(${employee.gridCols || 'auto-fit'}, minmax(140px, 1fr))` 
             } : {};
 
+            const isLeaderRole = currentUser?.role === 'leader';
+            const canDrag = !isLocked || (isLeaderRole && canEditEmployee(currentUser, employee));
+
             const handleDropInternal = (e) => { 
-                if(isLocked||isViewOnly)return; e.preventDefault(); setIsDragOver(false); 
+                if(!canDrag && isLocked) return; // Allow if leader rule met
+                e.preventDefault(); setIsDragOver(false); 
                 const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; 
                 if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); 
             };
             const handleDropOnGroup = (e) => { 
-                if (isLocked || isViewOnly) return; e.preventDefault(); e.stopPropagation(); setIsDragOverGroup(false); 
+                if(!canDrag && isLocked) return;
+                e.preventDefault(); e.stopPropagation(); setIsDragOverGroup(false); 
                 const rawData = e.dataTransfer.getData("empIds"); const droppedIds = rawData ? JSON.parse(rawData) : []; 
-                if (droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); 
+                if(droppedIds.length > 0 && !droppedIds.includes(employee.id)) onDrop(droppedIds, employee.id); 
             };
 
             return (
                 <div className="flex flex-col items-center">
                     {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
-                    <div onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && !isLocked && !isViewOnly && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
-                        {moveTargetId && !isLocked && !isViewOnly && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
-                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange}/>
-                        {!moveTargetId && !isLocked && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
+                    <div onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && (canDrag || !isLocked) && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
+                        {moveTargetId && (canDrag || !isLocked) && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
+                        <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange} currentUser={currentUser}/>
+                        {!moveTargetId && (canDrag || !isLocked) && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
                     
                     {subordinates.length > 0 && ( <> 
                         <div className="h-4 sm:h-6 w-px bg-gray-300"></div> 
                         <div className="flex relative"> 
                             {isGrid ? ( 
-                                <div className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={gridStyle} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
-                                    {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange}/>))} 
-                                    {!isLocked && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )} 
+                                <div className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={gridStyle} onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
+                                    {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange} currentUser={currentUser}/>))} 
+                                    {(canDrag || !isLocked) && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )} 
                                 </div> 
                             ) : ( 
-                                <div className={`flex gap-4 sm:gap-6 pt-0 p-4 rounded-xl transition-colors ${isDragOverGroup ? 'bg-blue-50/50 ring-2 ring-blue-200' : ''}`} onDragOver={(e)=>{if(!isLocked&&!isViewOnly){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
-                                    {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange}/> </div>))} 
+                                <div className={`flex gap-4 sm:gap-6 pt-0 p-4 rounded-xl transition-colors ${isDragOverGroup ? 'bg-blue-50/50 ring-2 ring-blue-200' : ''}`} onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
+                                    {subordinates.map((sub, i) => (<div key={sub.id} className="relative flex flex-col items-center"> {subordinates.length > 1 && <div className={`absolute top-0 h-px bg-gray-300 ${i===0?'w-1/2 right-0':''} ${i===subordinates.length-1?'w-1/2 left-0':''} ${i>0 && i<subordinates.length-1?'w-full':''}`}></div>} <EmployeeNode employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange} currentUser={currentUser}/> </div>))} 
                                 </div> 
                             )} 
                         </div> 
@@ -431,7 +445,6 @@
         };
 
         const App = () => {
-            // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
             const [employees, setEmployees] = useState(() => safeLocalLoad('orgData', []));
             const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
@@ -440,7 +453,6 @@
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
             const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
             
-            // [FIXED] เพิ่มสถานะ isDataReady เพื่อป้องกัน White Screen
             const [isDataReady, setIsDataReady] = useState(false);
             
             const [viewMode, setViewMode] = useState('chart'); 
@@ -476,19 +488,14 @@
             const appApiCall = async (url, action, payload) => { try { const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action, ...payload }) }); return await res.json(); } catch (e) { throw e; } };
             const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
             
-            // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
             useEffect(() => { 
                 if (currentUser) {
-                    setIsDataReady(false); // เริ่มต้นโหลด
-                    
-                    // 1. โหลดจาก Local Storage ก่อน (ถ้ามี)
+                    setIsDataReady(false);
                     const localData = safeLocalLoad('orgData', null);
                     if (localData && Array.isArray(localData)) {
                         setEmployees(localData);
-                        setIsDataReady(true); // ข้อมูล Local พร้อมแล้ว แสดงผลได้เลย
+                        setIsDataReady(true);
                     }
-
-                    // 2. ถ้ามี Drive URL ให้โหลดจาก Cloud มาทับ
                     if (driveUrl) {
                         appApiCall(driveUrl, 'getData').then(res => { 
                             if (res?.status === 'success' && res.data) { 
@@ -497,13 +504,9 @@
                                 if (res.data.orgDepartments) setDepartments(res.data.orgDepartments); 
                                 setCloudStatus('online'); 
                             }
-                            setIsDataReady(true); // ข้อมูล Cloud มาแล้ว
-                        }).catch(() => {
-                            setIsDataReady(true); // ถึง Error ก็ต้องปล่อยให้ทำงานต่อด้วยข้อมูลเก่า
-                        });
-                    } else {
-                        setIsDataReady(true);
-                    }
+                            setIsDataReady(true);
+                        }).catch(() => { setIsDataReady(true); setCloudStatus('error'); });
+                    } else { setIsDataReady(true); }
                 }
             }, [driveUrl, currentUser]);
 
@@ -512,17 +515,12 @@
             
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
+            
             const updateStateFull = useCallback((newState, updates = [], deletes = []) => { 
                 pushToHistory(employees); 
-                // [NEW] Add Timestamps
                 const timestamp = new Date().toISOString();
                 const stampedUpdates = updates.map(u => ({ ...u, lastModified: timestamp }));
-                
-                const finalState = newState.map(e => {
-                    const up = stampedUpdates.find(u => u.id === e.id);
-                    return up ? up : e;
-                });
-
+                const finalState = newState.map(e => { const up = stampedUpdates.find(u => u.id === e.id); return up ? up : e; });
                 setEmployees(finalState); 
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
@@ -530,41 +528,17 @@
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
-                // [V8] Logic for Root Node Reordering (Swapping)
                 if (!target.reportsTo || target.reportsTo === 'STAGING') {
-                    // This is a root node (Department Head or Staging)
-                    // Get all root nodes in the current view
-                    const roots = employees
-                        .filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept))
-                        .sort((a, b) => (a.order || 0) - (b.order || 0));
-                    
-                    const currentIndex = roots.findIndex(e => e.id === id);
-                    if (currentIndex === -1) return;
-
-                    let newIndex = currentIndex + offset;
-                    if (newIndex < 0) newIndex = 0;
-                    if (newIndex >= roots.length) newIndex = roots.length - 1;
-                    if (newIndex === currentIndex) return;
-
-                    // Swap mechanism
-                    const itemToMove = roots[currentIndex];
-                    roots.splice(currentIndex, 1);
-                    roots.splice(newIndex, 0, itemToMove);
-
-                    // Re-assign order based on new array position
+                    const roots = employees.filter(e => (!e.reportsTo || e.reportsTo === 'STAGING') && (currentDept === 'ALL' || e.dept === currentDept)).sort((a, b) => (a.order || 0) - (b.order || 0));
+                    const currentIndex = roots.findIndex(e => e.id === id); if (currentIndex === -1) return;
+                    let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= roots.length) newIndex = roots.length - 1; if (newIndex === currentIndex) return;
+                    const itemToMove = roots[currentIndex]; roots.splice(currentIndex, 1); roots.splice(newIndex, 0, itemToMove);
                     const updates = roots.map((root, index) => ({ ...root, order: index + 1 }));
-                    
-                    // Merge updates
-                    const newData = employees.map(e => {
-                        const updatedRoot = updates.find(u => u.id === e.id);
-                        return updatedRoot ? updatedRoot : e;
-                    });
-                    
+                    const newData = employees.map(e => { const updatedRoot = updates.find(u => u.id === e.id); return updatedRoot ? updatedRoot : e; });
                     updateStateFull(newData, updates, []);
                     return;
                 }
 
-                // Normal sibling reordering
                 const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
@@ -574,13 +548,12 @@
                 updateStateFull(newData, updates, []);
             }, [employees, updateStateFull, currentDept]);
 
-            // [V8] Grid Column Cycler (+/-)
             const handleGridColChange = useCallback((id, delta) => {
                 const target = employees.find(e => e.id === id);
                 if (!target) return;
                 
-                const current = target.gridCols ? parseInt(target.gridCols) : 0; // 0 or NaN = Auto
-                let nextVal = current === 0 ? 4 : current; // Default starting point if Auto
+                const current = target.gridCols ? parseInt(target.gridCols) : 0; 
+                let nextVal = current === 0 ? 4 : current; 
                 
                 if (current === 0 && delta > 0) nextVal = 2; // From Auto to 2
                 else if (current === 0 && delta < 0) nextVal = 6; // From Auto back to 6? Or stay auto? Let's say Auto -> 6
@@ -588,23 +561,17 @@
                     nextVal += delta;
                 }
 
-                // Limits
                 if (nextVal > 6) nextVal = 0; // Loop back to Auto
                 if (nextVal < 2 && nextVal !== 0) nextVal = 0; // Loop to Auto
 
                 const updatedEmp = { ...target, gridCols: nextVal === 0 ? '' : nextVal.toString() };
                 const newData = employees.map(e => e.id === id ? updatedEmp : e);
-                
-                // Save immediately
                 updateStateFull(newData, [updatedEmp], []);
             }, [employees, updateStateFull]);
 
-            // [V8] Updated Drop Logic for Root Swapping
             const handleDropNode = useCallback((sourceIds, targetId) => {
                 const targetNode = employees.find(e => e.id === targetId);
-                const sourceNode = employees.find(e => e.id === sourceIds[0]); // Handle first item for logic check
-
-                // Check if dragging a Root onto another Root (Swap)
+                const sourceNode = employees.find(e => e.id === sourceIds[0]); 
                 const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
                 const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
 
@@ -636,7 +603,6 @@
                     updateStateFull(newData, updates, []);
 
                 } else {
-                    // Standard: Reparent
                     const updates = []; 
                     const newData = employees.map(e => { 
                         if(sourceIds.includes(e.id)) { 
@@ -733,7 +699,6 @@
                             
                             <select value={currentDept} onChange={e=>setCurrentDept(e.target.value)} className="font-bold text-sm border-none bg-blue-50 rounded px-2 py-1 outline-none cursor-pointer hover:bg-blue-100 transition-colors">{departments.map(d => <option key={d} value={d}>{d}</option>)}<option value="ALL">ALL DEPTS</option></select>
                             
-                            {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
