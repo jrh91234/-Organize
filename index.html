@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V14 (Full Dashboard & Permissions)</title>
+    <title>HR System V15 (Central Admin)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -31,6 +31,10 @@
         .grid-btn:hover { background-color: #f1f5f9; color: #2563eb; }
         .grid-btn:active { background-color: #e2e8f0; }
         .grid-val { padding: 0 4px; font-size: 10px; font-weight: bold; color: #334155; min-width: 16px; text-align: center; user-select: none; }
+        /* Tab Button Style */
+        .tab-btn { padding: 8px 16px; font-size: 14px; font-weight: 600; border-bottom: 2px solid transparent; color: #64748b; transition: all 0.2s; }
+        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab-btn:hover:not(.active) { color: #334155; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
         @media print { nav, .zoom-controls, .undo-controls, .batch-actions, .sidebar-resizer, .sidebar-toggle-btn, aside, .grid-control-pill { display: none !important; } }
     </style>
 </head>
@@ -103,12 +107,15 @@
         const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
-        // --- COMPONENTS ---
-        const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall }) => { 
+        // [V15 NEW] Unified Admin Panel
+        const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept }) => { 
+            const [activeTab, setActiveTab] = useState('users'); // users, depts, system
             const [users, setUsers] = useState([]);
             const [newUser, setNewUser] = useState({ username: '', password: '', role: 'leader', name: '' }); 
             const [editingUsername, setEditingUsername] = useState(null);
+            const [newDeptName, setNewDeptName] = useState('');
             const [loading, setLoading] = useState(false); 
+            
             useEffect(() => { const loadUsers = async () => { setLoading(true); let loadedUsers = []; if (driveUrl) { try { const res = await apiCall(driveUrl, 'getUsers'); if (res?.status === 'success') loadedUsers = res.users; } catch (e) {} } if (loadedUsers.length === 0) loadedUsers = safeLocalLoad('users', []) || [{ username: 'admin', password: 'password', role: 'admin', name: 'Admin User' }]; setUsers(loadedUsers); setLoading(false); }; loadUsers(); }, [driveUrl]);
             const saveUserAction = async () => { if (!newUser.username || !newUser.password) return alert("กรุณากรอก User/Pass"); setLoading(true); let updatedUsers;
             if (editingUsername) updatedUsers = users.map(u => u.username === editingUsername ? newUser : u);
@@ -117,10 +124,72 @@
             } setEditingUsername(null); setNewUser({ username: '', password: '', role: 'leader', name: '' }); setLoading(false); };
             const deleteUserAction = async (username) => { if (!confirm('ยืนยันลบ?')) return; setLoading(true); const updated = users.filter(u => u.username !== username); setUsers(updated);
             localStorage.setItem('users', JSON.stringify(updated)); if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); setLoading(false); };
-            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> <div className="p-6 border-b flex justify-between items-center"><h2 className="text-xl font-bold">Admin Panel</h2><button onClick={onClose}><Icons.X /></button></div> <div className="p-6 overflow-y-auto space-y-6"> <div className="bg-blue-50 p-4 rounded-lg border border-blue-100"><h3 className="font-bold text-blue-800 mb-2 flex items-center"><Icons.Cloud className="mr-2"/> Google Script URL</h3><input type="text" value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} className="w-full p-2 border rounded text-sm"/></div> <div><h3 className="font-bold mb-4 flex items-center"><Icons.Users className="mr-2"/> Users {loading && <Icons.Loader className="ml-2"/>}</h3> <div className="flex gap-2 mb-4 items-end bg-gray-50 p-3 rounded flex-wrap"><div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">User</label><input value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="border p-2 rounded text-sm w-full" disabled={!!editingUsername}/></div><div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Pass</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div><div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div><div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div><button onClick={saveUserAction} className={`${editingUsername ? 'bg-orange-500' : 'bg-green-600'} text-white p-2 rounded h-[38px] w-[38px] flex justify-center items-center`}>{editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}</button></div> <table className="w-full text-sm text-left"><thead className="bg-gray-100"><tr><th className="p-2">User</th><th className="p-2">Name</th><th className="p-2">Role</th><th className="p-2">Act</th></tr></thead><tbody>{users.map((u, i) => <tr key={i} className="border-b"><td className="p-2 font-medium">{u.username}</td><td className="p-2">{u.name}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${u.role==='admin'?'bg-red-100 text-red-800':u.role==='supervisor'?'bg-blue-100 text-blue-800':'bg-gray-100'}`}>{u.role}</span></td><td className="p-2 flex gap-2"><button onClick={() => { setNewUser(u); setEditingUsername(u.username); }} className="text-orange-500 p-1"><Icons.Edit size={16}/></button>{u.username !== 'admin' && <button onClick={() => deleteUserAction(u.username)} className="text-red-500 p-1"><Icons.Trash2 size={16}/></button>}</td></tr>)}</tbody></table> </div> </div> </div></div> );
-        };
-        const ManageDeptsModal = ({ depts, onAdd, onDelete, onClose }) => { const [newD, setNewD] = useState("");
-            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
+            
+            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> 
+                
+                {/* Header with Tabs */}
+                <div className="bg-white border-b">
+                    <div className="p-6 pb-4 flex justify-between items-center"><h2 className="text-xl font-bold flex items-center gap-2"><Icons.Settings/> Admin Panel</h2><button onClick={onClose}><Icons.X /></button></div> 
+                    <div className="flex px-6 gap-6">
+                        <button onClick={()=>setActiveTab('users')} className={`tab-btn ${activeTab==='users'?'active':''}`}>User Management</button>
+                        <button onClick={()=>setActiveTab('depts')} className={`tab-btn ${activeTab==='depts'?'active':''}`}>Departments</button>
+                        <button onClick={()=>setActiveTab('system')} className={`tab-btn ${activeTab==='system'?'active':''}`}>System Config</button>
+                    </div>
+                </div>
+
+                <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-gray-50"> 
+                    
+                    {/* Tab 1: Users */}
+                    {activeTab === 'users' && (
+                    <div>
+                        <div className="flex gap-2 mb-4 items-end bg-white p-4 rounded-xl shadow-sm flex-wrap border">
+                            <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">User</label><input value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="border p-2 rounded text-sm w-full" disabled={!!editingUsername}/></div>
+                            <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Pass</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
+                            <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
+                            <div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div>
+                            <button onClick={saveUserAction} className={`${editingUsername ? 'bg-orange-500' : 'bg-green-600'} text-white p-2 rounded h-[38px] w-[38px] flex justify-center items-center shadow-sm`}>{editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}</button>
+                        </div> 
+                        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                            <table className="w-full text-sm text-left"><thead className="bg-gray-100 text-gray-600 uppercase text-xs"><tr><th className="p-3">User</th><th className="p-3">Name</th><th className="p-3">Role</th><th className="p-3">Action</th></tr></thead>
+                            <tbody className="divide-y">{users.map((u, i) => <tr key={i} className="hover:bg-gray-50"><td className="p-3 font-medium">{u.username}</td><td className="p-3">{u.name}</td><td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-bold ${u.role==='admin'?'bg-red-100 text-red-800':u.role==='supervisor'?'bg-blue-100 text-blue-800':'bg-gray-100 text-gray-600'}`}>{u.role}</span></td><td className="p-3 flex gap-2"><button onClick={() => { setNewUser(u); setEditingUsername(u.username); }} className="text-orange-500 hover:bg-orange-50 p-1 rounded"><Icons.Edit size={16}/></button>{u.username !== 'admin' && <button onClick={() => deleteUserAction(u.username)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Icons.Trash2 size={16}/></button>}</td></tr>)}</tbody></table> 
+                        </div>
+                    </div>
+                    )}
+
+                    {/* Tab 2: Departments */}
+                    {activeTab === 'depts' && (
+                    <div className="bg-white p-6 rounded-xl shadow-sm border">
+                        <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Grid/> Manage Departments</h3>
+                        <div className="flex gap-2 mb-4">
+                            <input value={newDeptName} onChange={e=>setNewDeptName(e.target.value)} placeholder="Enter new department name..." className="flex-1 border p-2 rounded text-sm"/>
+                            <button onClick={()=>{if(newDeptName){onAddDept(newDeptName);setNewDeptName('');}}} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 shadow-sm flex items-center gap-2"><Icons.Plus size={18}/> Add</button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
+                            {depts.map(d => (
+                                <div key={d} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border hover:border-blue-300 group transition-all">
+                                    <span className="font-medium text-gray-700">{d}</span>
+                                    <button onClick={()=>onDeleteDept(d)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    )}
+
+                    {/* Tab 3: System */}
+                    {activeTab === 'system' && (
+                        <div className="bg-white p-6 rounded-xl shadow-sm border">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Cloud/> System Connection</h3>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-600">Google Apps Script URL (Backend)</label>
+                                <div className="flex gap-2">
+                                    <input type="text" value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} className="w-full p-2 border rounded text-sm bg-gray-50 font-mono text-gray-600"/>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">Use this URL to connect your frontend to the Google Sheets backend.</p>
+                            </div>
+                        </div>
+                    )}
+
+                </div> </div></div> );
         };
 
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser }) => {
@@ -571,6 +640,21 @@
                 if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
             }, [employees, driveUrl, history, historyIndex]);
             
+            // [V15 NEW] Unified Admin Actions
+            const handleAddDept = (dept) => {
+                const newDepts = [...departments, dept];
+                setDepartments(newDepts);
+                localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
+                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+            };
+
+            const handleDeleteDept = (dept) => {
+                const newDepts = departments.filter(d => d !== dept);
+                setDepartments(newDepts);
+                localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
+                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+            };
+
             const handleReorder = useCallback((id, offset) => {
                 const target = employees.find(e => e.id === id); if (!target) return;
                 
@@ -780,7 +864,6 @@
                             {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
-                            {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
                         <div className="hidden lg:flex items-center gap-3">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
@@ -791,7 +874,10 @@
                             {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} className={`p-1.5 rounded border ${selectionMode?'bg-purple-600 text-white':'text-gray-600'}`}><Icons.CheckSquare size={18}/></button>}
                             <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600"><Icons.Chart size={20}/></button>
                             <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full ${showRulers ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}><Icons.RulerIcon size={20}/></button>
-                            <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-700 hover:text-gray-900" title="Admin Panel"><Icons.Settings size={20}/></button>
+                            
+                            {/* Admin Panel Button Only */}
+                            {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-700 hover:text-gray-900" title="Admin Panel"><Icons.Settings size={20}/></button>}
+                            
                             <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="text-red-500 p-2"><Icons.LogOut size={20}/></button>
                         </div>
                     </nav>
@@ -887,8 +973,10 @@
                     </div>
 
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
-                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} />}
-                    {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={(d)=>{const nd = [...departments, d]; setDepartments(nd); localStorage.setItem('orgDepartments', JSON.stringify(nd)); if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: nd});}} onDelete={(d)=>{const nd = departments.filter(x=>x!==d); setDepartments(nd); localStorage.setItem('orgDepartments', JSON.stringify(nd));}} onClose={()=>setIsManageDeptsOpen(false)} />}
+                    
+                    {/* [V15] Admin Panel is now the central hub */}
+                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} />}
+                    
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={(p)=>{const np = [...positions, p]; setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np)); if(driveUrl) appApiCall(driveUrl, 'saveData', {orgPositions: np});}} onDelete={(p)=>{const np = positions.filter(x=>x!==p); setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np));}} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
