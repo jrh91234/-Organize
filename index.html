@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V24 (Sup Self-Edit)</title>
+    <title>HR System V23 (Button Fix)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -71,19 +71,14 @@
             if (role === 'leader') return 2;     
             return 0; // Viewer
         };
-        // [V24] Update: Allow Supervisor to edit same-rank (Self-Edit)
         const canEditEmployee = (currentUser, targetEmp) => {
             if (!currentUser) return false;
             if (currentUser.role === 'admin') return true; 
             if (currentUser.dept !== 'ALL' && currentUser.dept !== targetEmp.dept) return false;
             const myRank = getUserRoleRank(currentUser.role);
             const targetRank = getPositionRank(targetEmp.position);
-            
-            // Allow Supervisor (Rank 4) to edit Rank 4 (Self/Peers)
-            if (currentUser.role === 'supervisor') {
-                return myRank >= targetRank;
-            }
-
+            // Allow Supervisor to edit same rank (Self-Edit)
+            if (currentUser.role === 'supervisor') return myRank >= targetRank;
             return myRank > targetRank;
         };
 
@@ -113,6 +108,19 @@
             WifiOff: (p)=><IconBase {...p}><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></IconBase>,
             LayoutGrid: (p)=><IconBase {...p}><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></IconBase>,
             Minus: (p)=><IconBase {...p}><line x1="5" y1="12" x2="19" y2="12"/></IconBase>
+        };
+
+        // [V23 Fix] Explicitly define Button component here to ensure global availability
+        const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => { 
+            const base = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"; 
+            const variants = { 
+                primary: "bg-blue-600 text-white hover:bg-blue-700", 
+                secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", 
+                danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", 
+                success: "bg-green-600 text-white hover:bg-green-700", 
+                warning: "bg-orange-500 text-white hover:bg-orange-600", 
+            }; 
+            return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; 
         };
 
         // [V16 NEW] Unified Admin Panel with Dept Selector
@@ -152,7 +160,6 @@
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Pass</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
                             <div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div>
-                            {/* [V16 Fix] Added Dept Selector */}
                             <div className="w-32"><label className="text-xs text-gray-500">Dept</label><select value={newUser.dept || 'ASSEMBLY'} onChange={e => setNewUser({...newUser, dept: e.target.value})} className="border p-2 rounded text-sm w-full bg-blue-50"><option value="ALL">ALL (Admin)</option>{depts.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
                             <button onClick={saveUserAction} className={`${editingUsername ? 'bg-orange-500' : 'bg-green-600'} text-white p-2 rounded h-[38px] w-[38px] flex justify-center items-center shadow-sm`}>{editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}</button>
                         </div> 
@@ -162,7 +169,6 @@
                         </div>
                     </div>
                     )}
-
                     {activeTab === 'depts' && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border">
                         <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Grid/> Manage Departments</h3>
@@ -180,7 +186,6 @@
                         </div>
                     </div>
                     )}
-
                     {activeTab === 'system' && (
                         <div className="bg-white p-6 rounded-xl shadow-sm border">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Icons.Cloud/> System Connection</h3>
@@ -977,6 +982,7 @@
                             
                             <select value={currentDept} onChange={e=>setCurrentDept(e.target.value)} className="font-bold text-sm border-none bg-blue-50 rounded px-2 py-1 outline-none cursor-pointer hover:bg-blue-100 transition-colors">{departments.map(d => <option key={d} value={d}>{d}</option>)}<option value="ALL">ALL DEPTS</option></select>
                             
+                            {/* Status Indicator */}
                             <StatusIndicator status={cloudStatus} />
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
