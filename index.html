@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HR System V24 (Dept Badge & Text)</title>
+    <title>HR System V25 (Full Version & Enhanced Logging)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -49,7 +49,7 @@
         const SHAPES = { rounded: { name: 'Rounded', cls: 'rounded-xl' }, sharp: { name: 'Square', cls: 'rounded-none' }, pill: { name: 'Pill', cls: 'rounded-[2rem]' }, leaf: { name: 'Leaf', cls: 'rounded-tr-3xl rounded-bl-3xl rounded-tl-md rounded-br-md' } };
 
         // --- Utils ---
-        const formatDriveUrl = (url) => { if (!url) return "https://placehold.co/100x100?text=No+Img"; if (url.includes('drive.google.com') || url.includes('docs.google.com')) { let id = null; const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/); if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; } if (id) return `https://lh3.googleusercontent.com/d/$$${id}`; } return url; };
+        const formatDriveUrl = (url) => { if (!url) return "https://placehold.co/100x100?text=No+Img"; if (url.includes('drive.google.com') || url.includes('docs.google.com')) { let id = null; const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/); if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; } if (id) return `https://lh3.googleusercontent.com/d/${id}`; } return url; };
         const compressImage = (file, targetSizeKB = 512) => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600; if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality); while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); } resolve(dataUrl); }; img.onerror = reject; }; reader.onerror = reject; }); };
         const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
         const formatDateTime = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
@@ -526,7 +526,7 @@
         };
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' });
             const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true);
-            try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } };
+            try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } };
             // เพิ่มปุ่ม Reset Data มุมขวาล่าง
             return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4 relative"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> <button onClick={()=>{if(confirm('ล้างข้อมูลทั้งหมดในเครื่องเพื่อแก้ปัญหา?')) { localStorage.clear(); location.reload(); }}} className="absolute bottom-4 right-4 text-xs text-gray-500 hover:text-white underline">Reset Data (Emergency)</button> </div> );
         };
@@ -618,7 +618,27 @@
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
-            const appApiCall = async (url, action, payload) => { try { const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action, ...payload }) }); return await res.json(); } catch (e) { throw e; } };
+            const appApiCall = async (url, action, payload) => { 
+                try { 
+                    const executor = currentUser ? {
+                        username: currentUser.username,
+                        name: currentUser.name,
+                        role: currentUser.role,
+                        dept: currentUser.dept || 'ALL'
+                    } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
+                    
+                    const res = await fetch(url, { 
+                        method: 'POST', 
+                        body: JSON.stringify({ 
+                            action, 
+                            ...payload,
+                            executor 
+                        }) 
+                    }); 
+                    return await res.json(); 
+                } catch (e) { throw e; } 
+            };
+            
             const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
             
             // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
@@ -1097,7 +1117,7 @@
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
                     
                     {/* [V15] Admin Panel is now the central hub */}
-                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} />}
+                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser}/>}
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={(p)=>{const np = [...positions, p]; setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np)); if(driveUrl) appApiCall(driveUrl, 'saveData', {orgPositions: np});}} onDelete={(p)=>{const np = positions.filter(x=>x!==p); setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np));}} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
