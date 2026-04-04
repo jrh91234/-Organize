@@ -302,12 +302,14 @@
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
             const isGrid = isLeader; 
             
-            const cols = employee.gridCols || 'auto-fit';
+            const cols = employee.gridCols || 0;
+            const totalItems = allEmployees.filter(e => e.reportsTo === employee.id).length + 1;
             const gridStyle = isGrid ? {
                 display: 'grid',
-                gridTemplateColumns: typeof cols === 'number' || (typeof cols === 'string' && cols !== 'auto-fit')
+                gridTemplateColumns: cols > 0
                     ? `repeat(${cols}, minmax(140px, 200px))`
-                    : `repeat(auto-fit, minmax(140px, 200px))`,
+                    : `repeat(${totalItems}, minmax(140px, 200px))`,
+                gridAutoFlow: cols > 0 ? 'row' : 'column',
                 minWidth: 'min-content'
             } : {};
 
