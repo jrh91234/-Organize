@@ -476,17 +476,28 @@
                     });
 
                     const avgTenure = countTenure > 0 ? (totalYears / countTenure).toFixed(1) : 0;
-                    
+
                     // [V11] Ratio Formatting
                     const totalOps = opsSub + opsPerm;
-                    const opsRatioText = totalOps > 0 
-                        ? `${Math.round((opsSub / totalOps) * 100)}% (${opsSub} : ${opsPerm})` 
+                    const opsRatioText = totalOps > 0
+                        ? `${Math.round((opsSub / totalOps) * 100)}% (${opsSub} : ${opsPerm})`
                         : "No Data";
 
-                    return { total, byType, byPosition, avgTenure, opsRatioText };
+                    // Leader Team Summary
+                    const leaderSummary = targetEmps
+                        .filter(e => (e.position || '').toLowerCase().includes('leader'))
+                        .map(leader => {
+                            const members = targetEmps.filter(e => e.reportsTo === leader.id);
+                            const perm = members.filter(e => e.type === 'Permanent').length;
+                            const sub = members.filter(e => e.type === 'Subcontract').length;
+                            return { id: leader.id, name: leader.name, position: leader.position, dept: leader.dept, total: members.length, perm, sub };
+                        })
+                        .sort((a, b) => b.total - a.total);
+
+                    return { total, byType, byPosition, avgTenure, opsRatioText, leaderSummary };
                 } catch (error) {
                     console.error("Dashboard calculation error:", error);
-                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-" };
+                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-", leaderSummary: [] };
                 }
             }, [employees, activeTab]);
 
@@ -530,6 +541,48 @@
                                 </div>
                             </div> 
                             
+                            {/* Leader Team Summary */}
+                            {stats.leaderSummary.length > 0 && (
+                                <div className="bg-white rounded-xl shadow-sm p-6 border mb-6">
+                                    <h3 className="font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2"><Icons.Users size={18} className="text-blue-600"/> Leader Team Summary ({activeTab})</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-left text-xs uppercase text-gray-500 border-b">
+                                                    <th className="pb-2 pr-4">Leader</th>
+                                                    <th className="pb-2 pr-4">Position</th>
+                                                    {activeTab === 'Overview' && <th className="pb-2 pr-4">Dept</th>}
+                                                    <th className="pb-2 pr-2 text-center">Total</th>
+                                                    <th className="pb-2 pr-2 text-center text-green-600">Permanent</th>
+                                                    <th className="pb-2 pr-2 text-center text-orange-600">Subcontract</th>
+                                                    <th className="pb-2 text-center">Ratio (P:S)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {stats.leaderSummary.map(l => (
+                                                    <tr key={l.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                        <td className="py-2.5 pr-4 font-bold text-gray-800">{l.name}</td>
+                                                        <td className="py-2.5 pr-4 text-gray-500">{l.position}</td>
+                                                        {activeTab === 'Overview' && <td className="py-2.5 pr-4"><span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{l.dept || '-'}</span></td>}
+                                                        <td className="py-2.5 pr-2 text-center"><span className="bg-blue-100 text-blue-700 font-bold px-2.5 py-0.5 rounded-full">{l.total}</span></td>
+                                                        <td className="py-2.5 pr-2 text-center"><span className="bg-green-100 text-green-700 font-bold px-2.5 py-0.5 rounded-full">{l.perm}</span></td>
+                                                        <td className="py-2.5 pr-2 text-center"><span className="bg-orange-100 text-orange-700 font-bold px-2.5 py-0.5 rounded-full">{l.sub}</span></td>
+                                                        <td className="py-2.5 text-center text-gray-600 font-medium">{l.perm} : {l.sub}</td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="bg-gray-50 font-bold text-gray-700">
+                                                    <td className="py-2.5 pr-4" colSpan={activeTab === 'Overview' ? 3 : 2}>Total ({stats.leaderSummary.length} Leaders)</td>
+                                                    <td className="py-2.5 pr-2 text-center">{stats.leaderSummary.reduce((s, l) => s + l.total, 0)}</td>
+                                                    <td className="py-2.5 pr-2 text-center text-green-700">{stats.leaderSummary.reduce((s, l) => s + l.perm, 0)}</td>
+                                                    <td className="py-2.5 pr-2 text-center text-orange-700">{stats.leaderSummary.reduce((s, l) => s + l.sub, 0)}</td>
+                                                    <td className="py-2.5 text-center">{stats.leaderSummary.reduce((s, l) => s + l.perm, 0)} : {stats.leaderSummary.reduce((s, l) => s + l.sub, 0)}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div className="bg-white rounded-xl shadow-sm p-6 border">
                                     <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Position Breakdown ({activeTab})</h3>
