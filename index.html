@@ -246,7 +246,7 @@
                     )}
 
                     {selectionMode && <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected?'bg-purple-600 border-purple-600':'border-gray-300 bg-white'}`}>{isSelected && <Icons.Check size={12} className="text-white"/>}</div>}
-                    {canDrag && !isStaging && !selectionMode && !isViewOnly && !isLeader && ( <> 
+                    {canDrag && !isStaging && !selectionMode && !isViewOnly && ( <>
                         <div className="reorder-controls" style={{left: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, -4); }}><Icons.ArrowUp size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button> </div> 
                         <div className="reorder-controls" style={{right: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, 4); }}><Icons.ArrowDown size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={8}/></button> </div> 
                     </> )}
