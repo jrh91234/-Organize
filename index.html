@@ -35,6 +35,10 @@
         .tab-btn { padding: 8px 16px; font-size: 14px; font-weight: 600; border-bottom: 2px solid transparent; color: #64748b; transition: all 0.2s; }
         .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
         .tab-btn:hover:not(.active) { color: #334155; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
+        .overflow-x-auto { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+        .overflow-x-auto::-webkit-scrollbar { height: 6px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         @media print { nav, .zoom-controls, .undo-controls, .batch-actions, .sidebar-resizer, .sidebar-toggle-btn, aside, .grid-control-pill { display: none !important; } }
     </style>
 </head>
@@ -275,9 +279,13 @@
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
             const isGrid = isLeader; 
             
-            const gridStyle = isGrid ? { 
-                display: 'grid', 
-                gridTemplateColumns: `repeat(${employee.gridCols || 'auto-fit'}, minmax(140px, 1fr))` 
+            const cols = employee.gridCols || 'auto-fit';
+            const gridStyle = isGrid ? {
+                display: 'grid',
+                gridTemplateColumns: typeof cols === 'number' || (typeof cols === 'string' && cols !== 'auto-fit')
+                    ? `repeat(${cols}, minmax(140px, 200px))`
+                    : `repeat(auto-fit, minmax(140px, 200px))`,
+                minWidth: 'min-content'
             } : {};
 
             const isLeaderRole = currentUser?.role === 'leader';
@@ -305,11 +313,11 @@
                         {!moveTargetId && (canDrag || !isLocked) && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
                     
-                    {subordinates.length > 0 && ( <> 
-                        <div className="h-4 sm:h-6 w-px bg-gray-300"></div> 
-                        <div className="flex relative"> 
-                            {isGrid ? ( 
-                                <div className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={gridStyle} onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
+                    {subordinates.length > 0 && ( <>
+                        <div className="h-4 sm:h-6 w-px bg-gray-300"></div>
+                        <div className="flex relative">
+                            {isGrid ? (
+                                <div className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors overflow-x-auto ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={{...gridStyle, maxWidth: '80vw'}} onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}> 
                                     {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange} currentUser={currentUser} isAllDepts={isAllDepts}/>))} 
                                     {(canDrag || !isLocked) && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )} 
                                 </div> 
