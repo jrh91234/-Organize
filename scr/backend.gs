@@ -67,6 +67,7 @@ function doPost(e) {
       case 'updateEmployees': return batchUpdateEmployees(data);
       case 'saveData': return saveData(data);
       case 'getData': return getData();
+      case 'recoverOrgData': return recoverOrgData(data);
       default: return createJSONOutput({ status: 'error', message: 'Unknown action' });
     }
   } catch (error) {
@@ -134,9 +135,11 @@ function batchUpdateEmployees(data) {
   const newContent = JSON.stringify(currentData);
   if (fileId) { 
     DriveApp.getFileById(fileId).setContent(newContent);
+    normalizeOrgDataFileNames_(fileId);
   } else { 
     const file = folder.createFile("orgData.json", newContent, MimeType.PLAIN_TEXT); 
-    sheet.appendRow(['orgData', 'FILE_ID:' + file.getId()]);
+    upsertDataKey(sheet, 'orgData', 'FILE_ID:' + file.getId());
+    normalizeOrgDataFileNames_(file.getId());
   }
   return createJSONOutput({ status: 'success', message: 'Synced' });
 }
@@ -260,41 +263,237 @@ function saveData(data) {
   const updates = {};
   
   // นำ orgData กลับมาจัดการเผื่อกรณีที่มีการ Save แบบเก่า
-  if(data.orgData) { 
-    const f = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile("orgData.json", JSON.stringify(data.orgData), MimeType.PLAIN_TEXT); 
-    updates['orgData'] = 'FILE_ID:' + f.getId(); 
+  // [FIX] ถ้ามี FILE_ID เดิม ให้เขียนทับไฟล์เดิมแทนการสร้างไฟล์ใหม่ทุกครั้ง
+  if(data.orgData) {
+    const existingRef = getLatestDataKeyValue(sheet, 'orgData');
+    const payload = JSON.stringify(data.orgData);
+    let fileId = null;
+
+    if (existingRef && String(existingRef).startsWith('FILE_ID:')) {
+      fileId = String(existingRef).split('FILE_ID:')[1];
+    }
+
+    if (fileId) {
+      try {
+        DriveApp.getFileById(fileId).setContent(payload);
+        updates['orgData'] = 'FILE_ID:' + fileId;
+        normalizeOrgDataFileNames_(fileId);
+      } catch (e) {
+        const f = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+        updates['orgData'] = 'FILE_ID:' + f.getId();
+        normalizeOrgDataFileNames_(f.getId());
+      }
+    } else {
+      const f = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+      updates['orgData'] = 'FILE_ID:' + f.getId();
+      normalizeOrgDataFileNames_(f.getId());
+    }
   } 
   if(data.orgPositions) updates['orgPositions'] = JSON.stringify(data.orgPositions);
   if(data.orgDepartments) updates['orgDepartments'] = JSON.stringify(data.orgDepartments);
 
-  const rows = sheet.getDataRange().getValues(); 
-  for(let i=1; i<rows.length; i++) {
-      if(updates[rows[i][0]]) { 
-        sheet.getRange(i+1, 2).setValue(updates[rows[i][0]]); 
-        delete updates[rows[i][0]];
-      }
-  } 
-  
-  for(let k in updates) {
-      sheet.appendRow([k, updates[k]]); 
+  // [FIX] อัปเดตแบบ Upsert ต่อ key พร้อมลบ row ซ้ำออก เพื่อไม่ให้ getData โดนทับค่าจาก row ล่าสุดแบบไม่ตั้งใจ
+  for (let k in updates) {
+    upsertDataKey(sheet, k, updates[k]);
   }
+  
   return createJSONOutput({status:'success'}); 
 }
 
 function getData() { 
-  const rows = getSheet('Data').getDataRange().getValues(); 
+  const sheet = getSheet('Data');
+  const rows = sheet.getDataRange().getValues(); 
   const res = {};
   
-  rows.slice(1).forEach(r => { 
-    if(r[1] && String(r[1]).startsWith('FILE_ID:')) { 
+  // [FIX] ถ้ามี key ซ้ำ ให้ใช้ค่าจากแถวล่าสุดที่มีข้อมูล แล้วทำให้ key ไม่ซ้ำก่อนคืนข้อมูล
+  const latestValues = {};
+  rows.slice(1).forEach(r => {
+    const key = r[0];
+    const value = r[1];
+    if (!key) return;
+    if (value !== '' && value !== null && value !== undefined) latestValues[key] = value;
+  });
+
+  Object.keys(latestValues).forEach(key => {
+    const val = latestValues[key];
+    if(val && String(val).startsWith('FILE_ID:')) { 
       try { 
-          res[r[0]] = JSON.parse(DriveApp.getFileById(String(r[1]).split('FILE_ID:')[1]).getBlob().getDataAsString()); 
-      } catch(e) { res[r[0]] = []; } 
+          res[key] = JSON.parse(DriveApp.getFileById(String(val).split('FILE_ID:')[1]).getBlob().getDataAsString()); 
+      } catch(e) { res[key] = []; } 
     } else { 
-      try { res[r[0]] = JSON.parse(r[1]); } catch(e) { res[r[0]] = []; } 
+      try { res[key] = JSON.parse(val); } catch(e) { res[key] = []; } 
     } 
-  }); 
+  });
+
+  cleanupDuplicateDataKeys(sheet);
   return createJSONOutput({status: 'success', data: res});
+}
+
+function recoverOrgData(data) {
+  const result = recoverOrgDataFromAllFiles_(true);
+  return createJSONOutput({
+    status: result.status,
+    message: result.message,
+    recoveredCount: result.recoveredCount,
+    scannedFiles: result.scannedFiles,
+    savedFileId: result.savedFileId || null
+  });
+}
+
+function recoverOrgDataFromAllFiles_(saveRecovered) {
+  const sheet = getSheet('Data');
+  const rows = sheet.getDataRange().getValues();
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  const fileInfo = [];
+  const seenFileIds = {};
+
+  // 1) เก็บไฟล์จาก FILE_ID ที่เคยอ้างอิงในชีต Data
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== 'orgData') continue;
+    const raw = String(rows[i][1] || '');
+    if (!raw.startsWith('FILE_ID:')) continue;
+    const fileId = raw.split('FILE_ID:')[1];
+    if (!fileId || seenFileIds[fileId]) continue;
+
+    try {
+      const f = DriveApp.getFileById(fileId);
+      fileInfo.push({ id: fileId, updated: f.getLastUpdated().getTime(), file: f, source: 'sheet' });
+      seenFileIds[fileId] = true;
+    } catch (e) {}
+  }
+
+  // 2) เก็บไฟล์กลุ่ม orgData ทั้งหมดในโฟลเดอร์ (รวม backup) กรณีเคยหลุดจากชีต
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    const name = String(f.getName() || '');
+    if (!/^orgData(\.json|_backup_.*\.json)$/.test(name)) continue;
+    const fileId = f.getId();
+    if (seenFileIds[fileId]) continue;
+    fileInfo.push({ id: fileId, updated: f.getLastUpdated().getTime(), file: f, source: 'folder' });
+    seenFileIds[fileId] = true;
+  }
+
+  if (fileInfo.length === 0) {
+    return { status: 'error', message: 'No orgData files found for recovery', recoveredCount: 0, scannedFiles: 0 };
+  }
+
+  // ไล่จากเก่า -> ใหม่ เพื่อให้ข้อมูลล่าสุด overwrite รายการเดิมตามรหัสพนักงาน
+  fileInfo.sort((a, b) => a.updated - b.updated);
+  const mergedMap = new Map();
+
+  for (let i = 0; i < fileInfo.length; i++) {
+    try {
+      const txt = fileInfo[i].file.getBlob().getDataAsString();
+      const arr = JSON.parse(txt);
+      if (!Array.isArray(arr)) continue;
+
+      arr.forEach(emp => {
+        if (!emp || emp.id === null || emp.id === undefined || String(emp.id).trim() === '') return;
+        mergedMap.set(String(emp.id), emp);
+      });
+    } catch (e) {}
+  }
+
+  const recovered = Array.from(mergedMap.values());
+  if (!saveRecovered) {
+    return { status: 'success', message: 'Recovery preview completed', recoveredCount: recovered.length, scannedFiles: fileInfo.length };
+  }
+
+  const payload = JSON.stringify(recovered);
+  const existingRef = getLatestDataKeyValue(sheet, 'orgData');
+  let targetFileId = null;
+  if (existingRef && String(existingRef).startsWith('FILE_ID:')) {
+    targetFileId = String(existingRef).split('FILE_ID:')[1];
+  }
+
+  if (targetFileId) {
+    try {
+      DriveApp.getFileById(targetFileId).setContent(payload);
+    } catch (e) {
+      const newFile = folder.createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+      targetFileId = newFile.getId();
+    }
+  } else {
+    const newFile = folder.createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+    targetFileId = newFile.getId();
+  }
+
+  upsertDataKey(sheet, 'orgData', 'FILE_ID:' + targetFileId);
+  normalizeOrgDataFileNames_(targetFileId);
+  return {
+    status: 'success',
+    message: 'Recovered orgData from historical files',
+    recoveredCount: recovered.length,
+    scannedFiles: fileInfo.length,
+    savedFileId: targetFileId
+  };
+}
+
+function normalizeOrgDataFileNames_(activeFileId) {
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  const files = folder.getFilesByName("orgData.json");
+  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Bangkok', 'yyyyMMdd_HHmmss');
+  let backupIdx = 1;
+
+  while (files.hasNext()) {
+    const f = files.next();
+    if (f.getId() === activeFileId) continue;
+    const newName = "orgData_backup_" + stamp + "_" + backupIdx + ".json";
+    f.setName(newName);
+    backupIdx++;
+  }
+}
+
+function getLatestDataKeyValue(sheet, key) {
+  const rows = sheet.getDataRange().getValues();
+  let latest = null;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(key)) latest = rows[i][1];
+  }
+  return latest;
+}
+
+function upsertDataKey(sheet, key, value) {
+  const rows = sheet.getDataRange().getValues();
+  const matchedRows = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(key)) matchedRows.push(i + 1);
+  }
+
+  if (matchedRows.length === 0) {
+    sheet.appendRow([key, value]);
+    return;
+  }
+
+  const keepRow = matchedRows[matchedRows.length - 1];
+  sheet.getRange(keepRow, 2).setValue(value);
+
+  // ลบ row ซ้ำโดยลบจากล่างขึ้นบน ป้องกัน index เพี้ยน
+  for (let i = matchedRows.length - 2; i >= 0; i--) {
+    sheet.deleteRow(matchedRows[i]);
+  }
+}
+
+function cleanupDuplicateDataKeys(sheet) {
+  const rows = sheet.getDataRange().getValues();
+  const latestIndex = {};
+  for (let i = 1; i < rows.length; i++) {
+    const key = rows[i][0];
+    if (key) latestIndex[String(key)] = i + 1;
+  }
+
+  const toDelete = [];
+  for (let i = 1; i < rows.length; i++) {
+    const key = rows[i][0];
+    if (!key) continue;
+    const rowNumber = i + 1;
+    if (latestIndex[String(key)] !== rowNumber) toDelete.push(rowNumber);
+  }
+
+  for (let i = toDelete.length - 1; i >= 0; i--) {
+    sheet.deleteRow(toDelete[i]);
+  }
 }
 
 function createJSONOutput(obj) { 
