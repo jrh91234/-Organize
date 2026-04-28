@@ -743,12 +743,12 @@
 
                     // 2. ถ้ามี Drive URL ให้โหลดจาก Cloud มาทับ
                     if (driveUrl) {
-                        appApiCall(driveUrl, 'getData').then(res => { 
-                            if (res?.status === 'success' && res.data) { 
-                                if (res.data.orgData) setEmployees(res.data.orgData); 
-                                if (res.data.orgPositions) setPositions(res.data.orgPositions); 
-                                if (res.data.orgDepartments) setDepartments(res.data.orgDepartments); 
-                                setCloudStatus('online'); 
+                        appApiCall(driveUrl, 'getData').then(res => {
+                            if (res?.status === 'success' && res.data) {
+                                if (Array.isArray(res.data.orgData) && res.data.orgData.length > 0) setEmployees(res.data.orgData);
+                                if (Array.isArray(res.data.orgPositions) && res.data.orgPositions.length > 0) setPositions(res.data.orgPositions);
+                                if (Array.isArray(res.data.orgDepartments) && res.data.orgDepartments.length > 0) setDepartments(res.data.orgDepartments);
+                                setCloudStatus('online');
                             }
                             setIsDataReady(true); // ข้อมูล Cloud มาแล้ว
                         }).catch(() => {

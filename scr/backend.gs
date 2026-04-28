@@ -113,12 +113,12 @@ function batchUpdateEmployees(data) {
   let currentData = [];
   const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
   
-  if (fileId) { 
-    try { 
-        currentData = JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString()); 
-    } catch(e) { 
-        currentData = []; 
-    } 
+  if (fileId) {
+    try {
+      currentData = JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString());
+    } catch(e) {
+      return createJSONOutput({ status: 'error', message: 'Failed to read current data from Drive. Aborting to prevent data loss: ' + e.toString() });
+    }
   }
 
   if (data.deletes) { 
@@ -316,13 +316,16 @@ function getData() {
 
   Object.keys(latestValues).forEach(key => {
     const val = latestValues[key];
-    if(val && String(val).startsWith('FILE_ID:')) { 
-      try { 
-          res[key] = JSON.parse(DriveApp.getFileById(String(val).split('FILE_ID:')[1]).getBlob().getDataAsString()); 
-      } catch(e) { res[key] = []; } 
-    } else { 
-      try { res[key] = JSON.parse(val); } catch(e) { res[key] = []; } 
-    } 
+    if(val && String(val).startsWith('FILE_ID:')) {
+      try {
+        res[key] = JSON.parse(DriveApp.getFileById(String(val).split('FILE_ID:')[1]).getBlob().getDataAsString());
+      } catch(e) {
+        console.error('Failed to read Drive file for key: ' + key + ' — ' + e.toString());
+        // ไม่ set ค่า key นี้ เพื่อให้ frontend รู้ว่าอ่านไม่ได้ (ไม่ส่ง [] กลับ)
+      }
+    } else {
+      try { res[key] = JSON.parse(val); } catch(e) { /* skip invalid JSON */ }
+    }
   });
 
   cleanupDuplicateDataKeys(sheet);
