@@ -67,6 +67,7 @@ function doPost(e) {
       case 'updateEmployees': return batchUpdateEmployees(data);
       case 'saveData': return saveData(data);
       case 'getData': return getData();
+      case 'recoverOrgData': return recoverOrgData(data);
       default: return createJSONOutput({ status: 'error', message: 'Unknown action' });
     }
   } catch (error) {
@@ -321,6 +322,104 @@ function getData() {
 
   cleanupDuplicateDataKeys(sheet);
   return createJSONOutput({status: 'success', data: res});
+}
+
+function recoverOrgData(data) {
+  const result = recoverOrgDataFromAllFiles_(true);
+  return createJSONOutput({
+    status: result.status,
+    message: result.message,
+    recoveredCount: result.recoveredCount,
+    scannedFiles: result.scannedFiles,
+    savedFileId: result.savedFileId || null
+  });
+}
+
+function recoverOrgDataFromAllFiles_(saveRecovered) {
+  const sheet = getSheet('Data');
+  const rows = sheet.getDataRange().getValues();
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  const fileInfo = [];
+  const seenFileIds = {};
+
+  // 1) เก็บไฟล์จาก FILE_ID ที่เคยอ้างอิงในชีต Data
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== 'orgData') continue;
+    const raw = String(rows[i][1] || '');
+    if (!raw.startsWith('FILE_ID:')) continue;
+    const fileId = raw.split('FILE_ID:')[1];
+    if (!fileId || seenFileIds[fileId]) continue;
+
+    try {
+      const f = DriveApp.getFileById(fileId);
+      fileInfo.push({ id: fileId, updated: f.getLastUpdated().getTime(), file: f, source: 'sheet' });
+      seenFileIds[fileId] = true;
+    } catch (e) {}
+  }
+
+  // 2) เก็บไฟล์ชื่อ orgData.json ทั้งหมดในโฟลเดอร์ (กรณีเคยหลุดจากชีต)
+  const files = folder.getFilesByName("orgData.json");
+  while (files.hasNext()) {
+    const f = files.next();
+    const fileId = f.getId();
+    if (seenFileIds[fileId]) continue;
+    fileInfo.push({ id: fileId, updated: f.getLastUpdated().getTime(), file: f, source: 'folder' });
+    seenFileIds[fileId] = true;
+  }
+
+  if (fileInfo.length === 0) {
+    return { status: 'error', message: 'No orgData files found for recovery', recoveredCount: 0, scannedFiles: 0 };
+  }
+
+  // ไล่จากเก่า -> ใหม่ เพื่อให้ข้อมูลล่าสุด overwrite รายการเดิมตามรหัสพนักงาน
+  fileInfo.sort((a, b) => a.updated - b.updated);
+  const mergedMap = new Map();
+
+  for (let i = 0; i < fileInfo.length; i++) {
+    try {
+      const txt = fileInfo[i].file.getBlob().getDataAsString();
+      const arr = JSON.parse(txt);
+      if (!Array.isArray(arr)) continue;
+
+      arr.forEach(emp => {
+        if (!emp || emp.id === null || emp.id === undefined || String(emp.id).trim() === '') return;
+        mergedMap.set(String(emp.id), emp);
+      });
+    } catch (e) {}
+  }
+
+  const recovered = Array.from(mergedMap.values());
+  if (!saveRecovered) {
+    return { status: 'success', message: 'Recovery preview completed', recoveredCount: recovered.length, scannedFiles: fileInfo.length };
+  }
+
+  const payload = JSON.stringify(recovered);
+  const existingRef = getLatestDataKeyValue(sheet, 'orgData');
+  let targetFileId = null;
+  if (existingRef && String(existingRef).startsWith('FILE_ID:')) {
+    targetFileId = String(existingRef).split('FILE_ID:')[1];
+  }
+
+  if (targetFileId) {
+    try {
+      DriveApp.getFileById(targetFileId).setContent(payload);
+    } catch (e) {
+      const newFile = folder.createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+      targetFileId = newFile.getId();
+    }
+  } else {
+    const newFile = folder.createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
+    targetFileId = newFile.getId();
+  }
+
+  upsertDataKey(sheet, 'orgData', 'FILE_ID:' + targetFileId);
+  return {
+    status: 'success',
+    message: 'Recovered orgData from historical files',
+    recoveredCount: recovered.length,
+    scannedFiles: fileInfo.length,
+    savedFileId: targetFileId
+  };
 }
 
 function getLatestDataKeyValue(sheet, key) {
