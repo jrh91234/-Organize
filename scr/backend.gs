@@ -135,9 +135,11 @@ function batchUpdateEmployees(data) {
   const newContent = JSON.stringify(currentData);
   if (fileId) { 
     DriveApp.getFileById(fileId).setContent(newContent);
+    normalizeOrgDataFileNames_(fileId);
   } else { 
     const file = folder.createFile("orgData.json", newContent, MimeType.PLAIN_TEXT); 
-    sheet.appendRow(['orgData', 'FILE_ID:' + file.getId()]);
+    upsertDataKey(sheet, 'orgData', 'FILE_ID:' + file.getId());
+    normalizeOrgDataFileNames_(file.getId());
   }
   return createJSONOutput({ status: 'success', message: 'Synced' });
 }
@@ -275,13 +277,16 @@ function saveData(data) {
       try {
         DriveApp.getFileById(fileId).setContent(payload);
         updates['orgData'] = 'FILE_ID:' + fileId;
+        normalizeOrgDataFileNames_(fileId);
       } catch (e) {
         const f = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
         updates['orgData'] = 'FILE_ID:' + f.getId();
+        normalizeOrgDataFileNames_(f.getId());
       }
     } else {
       const f = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile("orgData.json", payload, MimeType.PLAIN_TEXT);
       updates['orgData'] = 'FILE_ID:' + f.getId();
+      normalizeOrgDataFileNames_(f.getId());
     }
   } 
   if(data.orgPositions) updates['orgPositions'] = JSON.stringify(data.orgPositions);
@@ -357,10 +362,12 @@ function recoverOrgDataFromAllFiles_(saveRecovered) {
     } catch (e) {}
   }
 
-  // 2) เก็บไฟล์ชื่อ orgData.json ทั้งหมดในโฟลเดอร์ (กรณีเคยหลุดจากชีต)
-  const files = folder.getFilesByName("orgData.json");
+  // 2) เก็บไฟล์กลุ่ม orgData ทั้งหมดในโฟลเดอร์ (รวม backup) กรณีเคยหลุดจากชีต
+  const files = folder.getFiles();
   while (files.hasNext()) {
     const f = files.next();
+    const name = String(f.getName() || '');
+    if (!/^orgData(\.json|_backup_.*\.json)$/.test(name)) continue;
     const fileId = f.getId();
     if (seenFileIds[fileId]) continue;
     fileInfo.push({ id: fileId, updated: f.getLastUpdated().getTime(), file: f, source: 'folder' });
@@ -413,6 +420,7 @@ function recoverOrgDataFromAllFiles_(saveRecovered) {
   }
 
   upsertDataKey(sheet, 'orgData', 'FILE_ID:' + targetFileId);
+  normalizeOrgDataFileNames_(targetFileId);
   return {
     status: 'success',
     message: 'Recovered orgData from historical files',
@@ -420,6 +428,21 @@ function recoverOrgDataFromAllFiles_(saveRecovered) {
     scannedFiles: fileInfo.length,
     savedFileId: targetFileId
   };
+}
+
+function normalizeOrgDataFileNames_(activeFileId) {
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  const files = folder.getFilesByName("orgData.json");
+  const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Bangkok', 'yyyyMMdd_HHmmss');
+  let backupIdx = 1;
+
+  while (files.hasNext()) {
+    const f = files.next();
+    if (f.getId() === activeFileId) continue;
+    const newName = "orgData_backup_" + stamp + "_" + backupIdx + ".json";
+    f.setName(newName);
+    backupIdx++;
+  }
 }
 
 function getLatestDataKeyValue(sheet, key) {
