@@ -200,6 +200,40 @@
                                 </div>
                             </div>
 
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-blue-200">
+                                <h3 className="font-bold text-gray-800 mb-1 flex items-center gap-2"><Icons.Upload size={18}/> นำเข้าข้อมูลจากไฟล์ (Import JSON)</h3>
+                                <p className="text-xs text-gray-500 mb-4">อัปโหลดไฟล์ <code className="bg-gray-100 px-1 rounded">orgData.json</code> ที่ดาวน์โหลดจาก Google Drive Version History เพื่อกู้คืนข้อมูลกลับเข้าระบบ</p>
+                                <label className="flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-sm w-fit">
+                                    <Icons.Upload size={16}/>
+                                    เลือกไฟล์ JSON
+                                    <input type="file" accept=".json" className="hidden" onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        try {
+                                            const text = await file.text();
+                                            const parsed = JSON.parse(text);
+                                            if (!Array.isArray(parsed)) return alert('ไฟล์ไม่ถูกต้อง: ต้องเป็น JSON Array');
+                                            if (!confirm(`พบข้อมูล ${parsed.length} รายการในไฟล์\nต้องการนำเข้าและเขียนทับข้อมูลปัจจุบันใช่ไหม?`)) { e.target.value = ''; return; }
+                                            if (driveUrl) {
+                                                const res = await apiCall(driveUrl, 'saveData', { orgData: parsed });
+                                                if (res?.status === 'success') {
+                                                    onDataRecovered && onDataRecovered(parsed);
+                                                    alert(`นำเข้าสำเร็จ! ${parsed.length} รายการ`);
+                                                } else {
+                                                    alert('บันทึกลง Cloud ไม่สำเร็จ: ' + (res?.message || 'unknown error'));
+                                                }
+                                            } else {
+                                                onDataRecovered && onDataRecovered(parsed);
+                                                alert(`นำเข้าสำเร็จ (Local only)! ${parsed.length} รายการ`);
+                                            }
+                                        } catch(err) {
+                                            alert('ไฟล์ไม่ถูกต้อง: ' + err.toString());
+                                        }
+                                        e.target.value = '';
+                                    }}/>
+                                </label>
+                            </div>
+
                             <div className="bg-white p-6 rounded-xl shadow-sm border border-orange-200">
                                 <h3 className="font-bold text-gray-800 mb-1 flex items-center gap-2"><Icons.RotateCcw size={18}/> กู้คืนข้อมูล (Data Recovery)</h3>
                                 <p className="text-xs text-gray-500 mb-4">ระบบจะค้นหาไฟล์สำรอง <code className="bg-gray-100 px-1 rounded">orgData_backup_*.json</code> ทั้งหมดใน Google Drive แล้ว merge ข้อมูลกลับมา เหมาะใช้เมื่อข้อมูลหายหรือถูกเขียนทับ</p>

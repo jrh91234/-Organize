@@ -264,7 +264,7 @@ function saveData(data) {
   
   // นำ orgData กลับมาจัดการเผื่อกรณีที่มีการ Save แบบเก่า
   // [FIX] ถ้ามี FILE_ID เดิม ให้เขียนทับไฟล์เดิมแทนการสร้างไฟล์ใหม่ทุกครั้ง
-  if(data.orgData) {
+  if(Array.isArray(data.orgData) && data.orgData.length > 0) {
     const existingRef = getLatestDataKeyValue(sheet, 'orgData');
     const payload = JSON.stringify(data.orgData);
     let fileId = null;
