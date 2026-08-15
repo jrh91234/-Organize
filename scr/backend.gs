@@ -351,10 +351,48 @@ function saveData(data) {
   const sheet = getSheet('Data'); 
   const updates = {};
   
-  // นำ orgData กลับมาจัดการเผื่อกรณีที่มีการ Save แบบเก่า
-  // [FIX] ถ้ามี FILE_ID เดิม ให้เขียนทับไฟล์เดิมแทนการสร้างไฟล์ใหม่ทุกครั้ง
-  if(Array.isArray(data.orgData) && data.orgData.length > 0) {
+  // นำ orgData กลับมาจัดการเผื่อกรณีที่มีการ Import/Recovery
+  // ตรวจ version ก่อนเขียนทับทั้งชุด เพื่อไม่ให้ไฟล์ backup เก่าทับข้อมูลใหม่ของผู้ใช้อื่น
+  if (Array.isArray(data.orgData)) {
     const existingRef = getLatestDataKeyValue(sheet, 'orgData');
+    const baseVersions = data.baseVersions && typeof data.baseVersions === 'object' ? data.baseVersions : null;
+    if (!baseVersions) {
+      return createJSONOutput({
+        status: 'conflict',
+        message: 'ไม่สามารถเขียนทับข้อมูลโดยไม่มี version ล่าสุด กรุณาโหลดข้อมูลใหม่แล้วลองอีกครั้ง',
+        conflicts: [{ id: '*', reason: 'missing-client-version' }]
+      });
+    }
+
+    let currentData = [];
+    if (existingRef && String(existingRef).startsWith('FILE_ID:')) {
+      try {
+        currentData = JSON.parse(DriveApp.getFileById(String(existingRef).split('FILE_ID:')[1]).getBlob().getDataAsString());
+        if (!Array.isArray(currentData)) currentData = [];
+      } catch (e) {
+        return createJSONOutput({ status: 'error', message: 'อ่านข้อมูลปัจจุบันไม่สำเร็จ ยกเลิกการ Import เพื่อป้องกันข้อมูลเสียหาย' });
+      }
+    }
+
+    const currentMap = new Map(currentData.map(item => [String(item.id), item]));
+    const conflicts = [];
+    currentMap.forEach((item, id) => {
+      if (!Object.prototype.hasOwnProperty.call(baseVersions, id)) {
+        conflicts.push({ id: id, reason: 'record-added-after-load', expected: '', actual: normalizeVersion_(item.lastModified) });
+      } else if (normalizeVersion_(baseVersions[id]) !== normalizeVersion_(item.lastModified)) {
+        conflicts.push({ id: id, reason: 'stale-record', expected: normalizeVersion_(baseVersions[id]), actual: normalizeVersion_(item.lastModified) });
+      }
+    });
+    Object.keys(baseVersions).forEach(id => {
+      if (!currentMap.has(String(id))) {
+        conflicts.push({ id: String(id), reason: 'record-deleted-after-load', expected: normalizeVersion_(baseVersions[id]), actual: '' });
+      }
+    });
+    if (conflicts.length > 0) {
+      return createJSONOutput({ status: 'conflict', message: 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว กรุณาโหลดข้อมูลล่าสุดก่อน Import', conflicts: conflicts });
+    }
+
+    // [FIX] ถ้ามี FILE_ID เดิม ให้เขียนทับไฟล์เดิมแทนการสร้างไฟล์ใหม่ทุกครั้ง
     const payload = JSON.stringify(data.orgData);
     let fileId = null;
 
