@@ -834,7 +834,17 @@
                     method: 'POST',
                     body: JSON.stringify({ action, ...payload, executor })
                 });
-                return await res.json();
+                const raw = await res.text();
+                let result;
+                try {
+                    result = JSON.parse(raw);
+                } catch (error) {
+                    throw new Error(`Backend returned an invalid response (HTTP ${res.status})`);
+                }
+                if (!res.ok) {
+                    throw new Error(result?.message || result?.error || `Backend request failed (HTTP ${res.status})`);
+                }
+                return result;
             }, [currentUser]);
 
             const persistPendingSync = useCallback((queue) => {
@@ -857,7 +867,21 @@
                 try {
                     while (pendingSyncRef.current.length > 0) {
                         const operation = pendingSyncRef.current[0];
-                        const res = await appApiCall(driveUrl, 'updateEmployees', operation);
+                        let res = null;
+                        let lastError = 'unknown error';
+                        for (let attempt = 0; attempt < 3; attempt++) {
+                            try {
+                                res = await appApiCall(driveUrl, 'updateEmployees', operation);
+                                lastError = res?.message || res?.error || lastError;
+                            } catch (error) {
+                                lastError = error?.message || String(error);
+                            }
+
+                            if (res?.status === 'success' || res?.status === 'conflict') break;
+                            const retryable = !res || /server busy|temporar|timeout|network|fetch/i.test(lastError);
+                            if (!retryable || attempt >= 2) break;
+                            await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+                        }
 
                         if (res?.status === 'conflict') {
                             setCloudStatus('conflict');
@@ -878,13 +902,13 @@
                                 setCloudStatus('error');
                                 alert('เกิด Conflict แต่โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณากด Retry อีกครั้ง');
                             }
-                            break;
+                            return;
                         }
 
                         if (res?.status !== 'success') {
                             setCloudStatus('error');
-                            alert('บันทึก Cloud ไม่สำเร็จ: ' + (res?.message || 'unknown error') + '\nข้อมูลยังค้างอยู่ในเครื่อง กด Retry เพื่อบันทึกอีกครั้ง');
-                            break;
+                            alert('บันทึก Cloud ไม่สำเร็จ: ' + lastError + '\nข้อมูลยังค้างอยู่ในเครื่อง ระบบจะให้กด Retry เพื่อบันทึกอีกครั้ง');
+                            return;
                         }
 
                         persistPendingSync(pendingSyncRef.current.slice(1));
@@ -893,7 +917,7 @@
                     if (pendingSyncRef.current.length === 0) setCloudStatus('online');
                 } catch (e) {
                     setCloudStatus('error');
-                    alert('บันทึก Cloud ไม่สำเร็จ ข้อมูลยังค้างอยู่ในเครื่อง กด Retry เมื่อเชื่อมต่อได้');
+                    alert('บันทึก Cloud ไม่สำเร็จ: ' + (e?.message || String(e)) + '\nข้อมูลยังค้างอยู่ในเครื่อง กด Retry เมื่อเชื่อมต่อได้');
                 } finally {
                     syncInFlightRef.current = false;
                 }
@@ -903,7 +927,7 @@
                 if (!driveUrl) return;
                 const operation = { updates, deletes, baseVersions, renames };
                 persistPendingSync([...pendingSyncRef.current, operation]);
-                void flushPendingSync();
+                return flushPendingSync();
             }, [driveUrl, persistPendingSync, flushPendingSync]);
             
             // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
@@ -1169,7 +1193,11 @@
             
             // [V13 NEW] Save Logic with Validation & Cascading Update - Defined BEFORE passed to EmployeeForm
             const handleSave = useCallback((data) => { 
-                const cleanData = { ...data };
+                const cleanData = {
+                    ...data,
+                    id: String(data?.id ?? '').trim(),
+                    position: String(data?.position ?? '').trim()
+                };
                 delete cleanData.isNew;
                 data = cleanData;
                 // 1. Validation: ID Required
