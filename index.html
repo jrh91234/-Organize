@@ -1017,12 +1017,13 @@
                 }
 
                 // 2. Setup Context
-                const isNew = !employees.some(e => e.id === editingEmployee?.id); // Check if we are editing an existing record
                 const originalId = editingEmployee?.id;
+                const isNew = !originalId || !employees.some(e => String(e.id) === String(originalId)); // Check if we are editing an existing record
+                const idChanged = !isNew && String(originalId) !== String(data.id);
 
                 // 3. Validation: Duplicate Check
                 // If ID exists AND it's not the current record we are editing -> Duplicate!
-                const isDuplicate = employees.some(e => e.id === data.id && e.id !== originalId);
+                const isDuplicate = employees.some(e => String(e.id) === String(data.id) && String(e.id) !== String(originalId));
                 if (isDuplicate) {
                     alert("Error: ID " + data.id + " already exists!");
                     return;
@@ -1032,7 +1033,7 @@
                 let allEmployeesCopy = [...employees];
 
                 // 4. Cascading Update (If ID Changed)
-                if (!isNew && originalId && originalId !== data.id) {
+                if (idChanged) {
                     // Find all subordinates who report to the OLD ID
                     const subordinates = allEmployeesCopy.filter(e => e.reportsTo === originalId);
                     
@@ -1046,7 +1047,7 @@
                 // 5. Merge Data
                 const newData = allEmployeesCopy.map(e => {
                     // If this is the record being edited (match by OLD ID)
-                    if (e.id === originalId && !isNew) return data;
+                    if (!isNew && String(e.id) === String(originalId)) return data;
                     
                     // If this is a subordinate that got updated
                     const subUpdate = updates.find(u => u.id === e.id && u.id !== data.id);
@@ -1057,7 +1058,9 @@
                 if (isNew) newData.push(data);
 
                 // 6. Commit
-                updateStateFull(newData, updates, []);
+                // If the ID changed, remove the old cloud record after adding the new one.
+                const deletes = idChanged ? [String(originalId)] : [];
+                updateStateFull(newData, updates, deletes);
                 setIsModalOpen(false); 
             }, [employees, editingEmployee, updateStateFull]);
 
