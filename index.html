@@ -130,7 +130,7 @@
         const Button = ({ children, onClick, variant = 'primary', className = '', icon: Icon, disabled, title }) => { const base = "flex items-center justify-center px-3 py-2 sm:px-4 sm:py-2 rounded-lg font-medium transition-all active:scale-95 shadow-sm disabled:opacity-50 text-sm sm:text-base whitespace-nowrap"; const variants = { primary: "bg-blue-600 text-white hover:bg-blue-700", secondary: "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50", danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100", success: "bg-green-600 text-white hover:bg-green-700", warning: "bg-orange-500 text-white hover:bg-orange-600", }; return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`} title={title}>{Icon && <Icon size={18} className="mr-2" />} {children}</button>; };
         
         // [V16 NEW] Unified Admin Panel with Dept Selector
-        const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept, onDataRecovered }) => {
+        const AdminPanel = ({ onClose, driveUrl, setDriveUrl, apiCall, depts, onAddDept, onDeleteDept, onDataRecovered, orgData }) => {
             const [activeTab, setActiveTab] = useState('users');
             const [users, setUsers] = useState([]);
             // [V16 Fix] Add 'dept' to initial state
@@ -224,7 +224,11 @@
                                             if (!Array.isArray(parsed)) return alert('ไฟล์ไม่ถูกต้อง: ต้องเป็น JSON Array');
                                             if (!confirm(`พบข้อมูล ${parsed.length} รายการในไฟล์\nต้องการนำเข้าและเขียนทับข้อมูลปัจจุบันใช่ไหม?`)) { e.target.value = ''; return; }
                                             if (driveUrl) {
-                                                const res = await apiCall(driveUrl, 'saveData', { orgData: parsed });
+                                                const baseVersions = (Array.isArray(orgData) ? orgData : []).reduce((acc, item) => {
+                                                    if (item && item.id !== null && item.id !== undefined) acc[String(item.id)] = item.lastModified || null;
+                                                    return acc;
+                                                }, {});
+                                                const res = await apiCall(driveUrl, 'saveData', { orgData: parsed, baseVersions });
                                                 if (res?.status === 'success') {
                                                     onDataRecovered && onDataRecovered(parsed);
                                                     alert(`นำเข้าสำเร็จ! ${parsed.length} รายการ`);
@@ -450,7 +454,7 @@
             const isEditMode = employee && !employee.isNew;
             
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
-            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || '', dept: employee?.dept || (safeDepts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
+            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: employee?.dept || (safeDepts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee, safePositions, safeDepts]);
             const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
@@ -698,7 +702,21 @@
         };
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' });
             const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true);
-            try { if (driveUrl) { const res = await apiCall(driveUrl, 'login', creds); if (res?.status === 'success') { onLogin(res.user); return; } } if (creds.username === 'admin' && creds.password === 'password') { onLogin({ username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' }); } else { alert("Login failed"); } } catch (err) { alert("Error"); } finally { setLoading(false); } };
+            try {
+                if (driveUrl) {
+                    const res = await apiCall(driveUrl, 'login', creds);
+                    if (res?.status === 'success') { onLogin(res.user); return; }
+                    alert(res?.message || "Login failed");
+                    return;
+                }
+                if (creds.username === 'admin' && creds.password === 'password') {
+                    onLogin({ username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' });
+                } else {
+                    alert("Login failed");
+                }
+            } catch (err) {
+                alert("ไม่สามารถเชื่อมต่อ Backend ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่");
+            } finally { setLoading(false); } };
             // เพิ่มปุ่ม Reset Data มุมขวาล่าง
             return ( <div className="h-screen flex items-center justify-center bg-slate-900 px-4 relative"> <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"> <div className="flex flex-col items-center mb-8"> <div className="bg-red-600 p-3 rounded-xl text-white font-bold text-2xl mb-2">HR</div> <h1 className="text-xl font-bold text-gray-800">Organize System</h1> </div> <form onSubmit={handleSubmit} className="space-y-4"> <input type="text" placeholder="Username" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, username: e.target.value})} required /> <input type="password" placeholder="Password" className="w-full p-3 border rounded-lg" onChange={e => setCreds({...creds, password: e.target.value})} required /> <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition-colors"> {loading ? 'Logging in...' : 'Login'} </button> </form> </div> <button onClick={()=>{if(confirm('ล้างข้อมูลทั้งหมดในเครื่องเพื่อแก้ปัญหา?')) { localStorage.clear(); location.reload(); }}} className="absolute bottom-4 right-4 text-xs text-gray-500 hover:text-white underline">Reset Data (Emergency)</button> </div> );
         };
@@ -712,7 +730,7 @@
         );
 
         // [NEW] Status Indicator Component
-        const StatusIndicator = ({ status }) => {
+        const StatusIndicator = ({ status, pendingCount = 0, onRetry }) => {
             let color = "bg-gray-400";
             let text = "Unknown";
             let icon = <Icons.WifiOff size={14} className="text-gray-600"/>;
@@ -748,14 +766,20 @@
                     {icon}
                     <span className={`w-2 h-2 rounded-full ${color}`}></span>
                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider hidden sm:inline-block">{text}</span>
+                    {pendingCount > 0 && <button type="button" onClick={onRetry} disabled={status === 'syncing'} className="text-[10px] font-bold text-orange-600 hover:text-orange-800 disabled:opacity-50" title="Retry pending cloud changes">
+                        Retry ({pendingCount})
+                    </button>}
                 </div>
             );
         };
 
         const App = () => {
             // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
+            const initialEmployees = safeLocalLoad('orgData', []);
+            const initialPendingSync = safeLocalLoad('pendingSync', []);
+            const safeInitialPendingSync = Array.isArray(initialPendingSync) ? initialPendingSync : [];
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
-            const [employees, setEmployees] = useState(() => safeLocalLoad('orgData', []));
+            const [employees, setEmployees] = useState(initialEmployees);
             const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
             const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR", "EXECUTIVE"]));
             
@@ -786,99 +810,191 @@
             const [annotations, setAnnotations] = useState([]);
             const [linkStartId, setLinkStartId] = useState(null);
             const [showRulers, setShowRulers] = useState(false);
-            const [history, setHistory] = useState([]);
-            const [historyIndex, setHistoryIndex] = useState(-1);
+            const [history, setHistory] = useState([initialEmployees]);
+            const [historyIndex, setHistoryIndex] = useState(0);
+            const [pendingSyncCount, setPendingSyncCount] = useState(safeInitialPendingSync.length);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [sidebarWidth, setSidebarWidth] = useState(256);
             const sidebarRef = useRef(null);
             const isResizing = useRef(false);
+            const pendingSyncRef = useRef(safeInitialPendingSync);
+            const syncInFlightRef = useRef(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
-            const appApiCall = async (url, action, payload) => { 
-                try { 
-                    const executor = currentUser ? {
-                        username: currentUser.username,
-                        name: currentUser.name,
-                        role: currentUser.role,
-                        dept: currentUser.dept || 'ALL'
-                    } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
-                    
-                    const res = await fetch(url, { 
-                        method: 'POST', 
-                        body: JSON.stringify({ 
-                            action, 
-                            ...payload,
-                            executor 
-                        }) 
-                    }); 
-                    return await res.json(); 
-                } catch (e) { throw e; } 
-            };
-            
-            const syncUpdatesToCloud = async (updates = [], deletes = [], baseVersions = {}, renames = []) => {
-                if (!driveUrl) return;
+            const appApiCall = useCallback(async (url, action, payload = {}) => {
+                const executor = currentUser ? {
+                    username: currentUser.username,
+                    name: currentUser.name,
+                    role: currentUser.role,
+                    dept: currentUser.dept || 'ALL'
+                } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    body: JSON.stringify({ action, ...payload, executor })
+                });
+                return await res.json();
+            }, [currentUser]);
+
+            const persistPendingSync = useCallback((queue) => {
+                const safeQueue = Array.isArray(queue) ? queue : [];
+                pendingSyncRef.current = safeQueue;
+                setPendingSyncCount(safeQueue.length);
+                localStorage.setItem('pendingSync', JSON.stringify(safeQueue));
+            }, []);
+
+            const resetHistory = useCallback((state) => {
+                const snapshot = Array.isArray(state) ? state : [];
+                setHistory([snapshot]);
+                setHistoryIndex(0);
+            }, []);
+
+            const flushPendingSync = useCallback(async () => {
+                if (!driveUrl || syncInFlightRef.current || pendingSyncRef.current.length === 0) return;
+                syncInFlightRef.current = true;
                 setCloudStatus('syncing');
                 try {
-                    const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes, baseVersions, renames });
-                    if (res?.status === 'conflict') {
-                        setCloudStatus('conflict');
-                        const latest = await appApiCall(driveUrl, 'getData');
-                        if (latest?.status === 'success' && Array.isArray(latest.data?.orgData)) {
-                            setEmployees(latest.data.orgData);
-                            localStorage.setItem('orgData', JSON.stringify(latest.data.orgData));
-                            setCloudStatus('online');
-                            alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nระบบโหลดข้อมูลล่าสุดให้แล้ว กรุณาตรวจสอบและบันทึกใหม่');
-                        } else {
-                            setCloudStatus('error');
-                            alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nไม่สามารถโหลดข้อมูลล่าสุดได้ กรุณารีเฟรชหน้าเว็บ');
+                    while (pendingSyncRef.current.length > 0) {
+                        const operation = pendingSyncRef.current[0];
+                        const res = await appApiCall(driveUrl, 'updateEmployees', operation);
+
+                        if (res?.status === 'conflict') {
+                            setCloudStatus('conflict');
+                            try {
+                                const latest = await appApiCall(driveUrl, 'getData');
+                                if (latest?.status === 'success' && Array.isArray(latest.data?.orgData)) {
+                                    setEmployees(latest.data.orgData);
+                                    localStorage.setItem('orgData', JSON.stringify(latest.data.orgData));
+                                    resetHistory(latest.data.orgData);
+                                    persistPendingSync([]);
+                                    setCloudStatus('online');
+                                    alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nระบบโหลดข้อมูลล่าสุดให้แล้ว รายการที่ค้างถูกยกเลิก กรุณาตรวจสอบและบันทึกใหม่');
+                                } else {
+                                    setCloudStatus('error');
+                                    alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nไม่สามารถโหลดข้อมูลล่าสุดได้ กรุณากด Retry หรือรีเฟรชหน้าเว็บ');
+                                }
+                            } catch (e) {
+                                setCloudStatus('error');
+                                alert('เกิด Conflict แต่โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณากด Retry อีกครั้ง');
+                            }
+                            break;
                         }
-                        return;
+
+                        if (res?.status !== 'success') {
+                            setCloudStatus('error');
+                            alert('บันทึก Cloud ไม่สำเร็จ: ' + (res?.message || 'unknown error') + '\nข้อมูลยังค้างอยู่ในเครื่อง กด Retry เพื่อบันทึกอีกครั้ง');
+                            break;
+                        }
+
+                        persistPendingSync(pendingSyncRef.current.slice(1));
                     }
-                    setCloudStatus(res?.status === 'success' ? 'online' : 'error');
+
+                    if (pendingSyncRef.current.length === 0) setCloudStatus('online');
                 } catch (e) {
                     setCloudStatus('error');
+                    alert('บันทึก Cloud ไม่สำเร็จ ข้อมูลยังค้างอยู่ในเครื่อง กด Retry เมื่อเชื่อมต่อได้');
+                } finally {
+                    syncInFlightRef.current = false;
                 }
-            };
+            }, [driveUrl, appApiCall, persistPendingSync, resetHistory]);
+
+            const queueSync = useCallback((updates = [], deletes = [], baseVersions = {}, renames = []) => {
+                if (!driveUrl) return;
+                const operation = { updates, deletes, baseVersions, renames };
+                persistPendingSync([...pendingSyncRef.current, operation]);
+                void flushPendingSync();
+            }, [driveUrl, persistPendingSync, flushPendingSync]);
             
             // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
-            useEffect(() => { 
+            useEffect(() => {
                 if (currentUser) {
-                    setIsDataReady(false); // เริ่มต้นโหลด
-                    
-                    // 1. โหลดจาก Local Storage ก่อน (ถ้ามี)
+                    setIsDataReady(false);
                     const localData = safeLocalLoad('orgData', null);
                     if (localData && Array.isArray(localData)) {
                         setEmployees(localData);
-                        setIsDataReady(true); // ข้อมูล Local พร้อมแล้ว แสดงผลได้เลย
+                        resetHistory(localData);
+                        setIsDataReady(true);
                     }
 
-                    // 2. ถ้ามี Drive URL ให้โหลดจาก Cloud มาทับ
                     if (driveUrl) {
                         appApiCall(driveUrl, 'getData').then(res => {
                             if (res?.status === 'success' && res.data) {
-                                if (Array.isArray(res.data.orgData) && res.data.orgData.length > 0) setEmployees(res.data.orgData);
-                                if (Array.isArray(res.data.orgPositions) && res.data.orgPositions.length > 0) setPositions(res.data.orgPositions);
-                                if (Array.isArray(res.data.orgDepartments) && res.data.orgDepartments.length > 0) setDepartments(res.data.orgDepartments);
+                                // Keep local edits when there is an unsent queue; otherwise cloud is authoritative.
+                                if (pendingSyncRef.current.length === 0 && Array.isArray(res.data.orgData)) {
+                                    setEmployees(res.data.orgData);
+                                    localStorage.setItem('orgData', JSON.stringify(res.data.orgData));
+                                    resetHistory(res.data.orgData);
+                                }
+                                if (Array.isArray(res.data.orgPositions)) setPositions(res.data.orgPositions);
+                                if (Array.isArray(res.data.orgDepartments)) setDepartments(res.data.orgDepartments);
                                 setCloudStatus('online');
                             }
-                            setIsDataReady(true); // ข้อมูล Cloud มาแล้ว
+                            setIsDataReady(true);
+                            if (pendingSyncRef.current.length > 0) void flushPendingSync();
                         }).catch(() => {
-                            setIsDataReady(true); // ถึง Error ก็ต้องปล่อยให้ทำงานต่อด้วยข้อมูลเก่า
+                            setIsDataReady(true);
+                            if (pendingSyncRef.current.length > 0) setCloudStatus('error');
                         });
                     } else {
                         setIsDataReady(true);
                     }
                 }
-            }, [driveUrl, currentUser]);
+            }, [driveUrl, currentUser, appApiCall, resetHistory, flushPendingSync]);
 
             useEffect(() => { localStorage.setItem('orgData', JSON.stringify(employees)); }, [employees]);
             useEffect(() => { setDeptName(currentDept + " DEPT"); }, [currentDept]);
             
-            const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
-            const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
+            const pushToHistory = useCallback((nextState) => {
+                const newHistory = history.slice(0, historyIndex + 1);
+                newHistory.push(nextState);
+                if (newHistory.length > 10) newHistory.shift();
+                setHistory(newHistory);
+                setHistoryIndex(newHistory.length - 1);
+            }, [history, historyIndex]);
+
+            const buildEmployeeDelta = useCallback((fromState, toState) => {
+                const fromMap = new Map((Array.isArray(fromState) ? fromState : []).map(item => [String(item.id), item]));
+                const toMap = new Map((Array.isArray(toState) ? toState : []).map(item => [String(item.id), item]));
+                const updates = [];
+                const deletes = [];
+                const baseVersions = {};
+
+                toMap.forEach((target, id) => {
+                    const current = fromMap.get(id);
+                    if (!current || JSON.stringify(current) !== JSON.stringify(target)) {
+                        updates.push(target);
+                        baseVersions[id] = current ? (current.lastModified || null) : null;
+                    }
+                });
+                fromMap.forEach((current, id) => {
+                    if (!toMap.has(id)) {
+                        deletes.push(id);
+                        baseVersions[id] = current.lastModified || null;
+                    }
+                });
+                return { updates, deletes, baseVersions };
+            }, []);
+
+            const handleUndo = useCallback(() => {
+                if (historyIndex <= 0) return;
+                const targetState = history[historyIndex - 1];
+                const delta = buildEmployeeDelta(employees, targetState);
+                const timestamp = new Date().toISOString();
+                const stampedUpdates = delta.updates.map(item => ({ ...item, lastModified: timestamp }));
+                const finalState = targetState.map(item => {
+                    const update = stampedUpdates.find(candidate => String(candidate.id) === String(item.id));
+                    return update || item;
+                });
+                setEmployees(finalState);
+                setHistoryIndex(historyIndex - 1);
+                localStorage.setItem('orgData', JSON.stringify(finalState));
+                if (stampedUpdates.length > 0 || delta.deletes.length > 0) {
+                    queueSync(stampedUpdates, delta.deletes, delta.baseVersions, []);
+                }
+            }, [historyIndex, history, employees, buildEmployeeDelta, queueSync]);
+
             const updateStateFull = useCallback((newState, updates = [], deletes = [], baseVersions = {}, renames = []) => {
-                pushToHistory(employees); 
                 const resolvedBaseVersions = { ...baseVersions };
                 const captureBaseVersion = (id) => {
                     const key = String(id);
@@ -902,9 +1018,10 @@
                     return up ? up : e;
                 });
 
-                setEmployees(finalState); 
-                if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes, resolvedBaseVersions, renames);
-            }, [employees, driveUrl, history, historyIndex]);
+                pushToHistory(finalState);
+                setEmployees(finalState);
+                if (stampedUpdates.length > 0 || deletes.length > 0) queueSync(stampedUpdates, deletes, resolvedBaseVersions, renames);
+            }, [employees, pushToHistory, queueSync]);
             
             // [V15 NEW] Unified Admin Actions
             const handleAddDept = (dept) => {
@@ -1052,9 +1169,16 @@
             
             // [V13 NEW] Save Logic with Validation & Cascading Update - Defined BEFORE passed to EmployeeForm
             const handleSave = useCallback((data) => { 
+                const cleanData = { ...data };
+                delete cleanData.isNew;
+                data = cleanData;
                 // 1. Validation: ID Required
                 if (!data.id || data.id.trim() === '') {
                     alert("Error: Employee ID is required!");
+                    return;
+                }
+                if (!data.position || data.position.trim() === '') {
+                    alert("Error: Employee position is required!");
                     return;
                 }
 
@@ -1217,7 +1341,7 @@
                             <select value={currentDept} onChange={e=>setCurrentDept(e.target.value)} className="font-bold text-sm border-none bg-blue-50 rounded px-2 py-1 outline-none cursor-pointer hover:bg-blue-100 transition-colors">{departments.map(d => <option key={d} value={d}>{d}</option>)}<option value="ALL">ALL DEPTS</option></select>
                             
                             {/* Status Indicator */}
-                            <StatusIndicator status={cloudStatus} />
+                            <StatusIndicator status={cloudStatus} pendingCount={pendingSyncCount} onRetry={flushPendingSync} />
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
@@ -1335,7 +1459,7 @@
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
                     
                     {/* [V15] Admin Panel is now the central hub */}
-                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} onDataRecovered={(data) => { setEmployees(data); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
+                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} orgData={employees} onDataRecovered={(data) => { setEmployees(data); resetHistory(data); persistPendingSync([]); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={(p)=>{const np = [...positions, p]; setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np)); if(driveUrl) appApiCall(driveUrl, 'saveData', {orgPositions: np});}} onDelete={(p)=>{const np = positions.filter(x=>x!==p); setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np));}} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
