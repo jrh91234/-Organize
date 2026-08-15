@@ -570,9 +570,11 @@
                         .filter(e => (e.position || '').toLowerCase().includes('leader'))
                         .map(leader => {
                             const members = targetEmps.filter(e => e.reportsTo === leader.id);
-                            const perm = members.filter(e => e.type === 'Permanent').length;
-                            const sub = members.filter(e => e.type === 'Subcontract').length;
-                            return { id: leader.id, name: leader.name, position: leader.position, dept: leader.dept, total: members.length, perm, sub };
+                            // Include the leader in their own team totals.
+                            const teamMembers = [leader, ...members];
+                            const perm = teamMembers.filter(e => e.type === 'Permanent').length;
+                            const sub = teamMembers.filter(e => e.type === 'Subcontract').length;
+                            return { id: leader.id, name: leader.name, position: leader.position, dept: leader.dept, total: teamMembers.length, perm, sub };
                         })
                         .sort((a, b) => b.total - a.total);
 
