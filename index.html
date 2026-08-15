@@ -737,6 +737,11 @@
                 text = "Error"; 
                 icon = <Icons.Alert size={14} className="text-red-600"/>;
             }
+            else if (status === 'conflict') {
+                color = "bg-orange-500";
+                text = "Conflict";
+                icon = <Icons.Alert size={14} className="text-orange-600"/>;
+            }
 
             return (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-gray-200" title={`Connection Status: ${text}`}>
@@ -811,7 +816,30 @@
                 } catch (e) { throw e; } 
             };
             
-            const syncUpdatesToCloud = async (updates = [], deletes = []) => { if (!driveUrl) return; setCloudStatus('syncing'); try { const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes }); setCloudStatus(res?.status === 'success' ? 'online' : 'error'); } catch (e) { setCloudStatus('error'); } };
+            const syncUpdatesToCloud = async (updates = [], deletes = [], baseVersions = {}, renames = []) => {
+                if (!driveUrl) return;
+                setCloudStatus('syncing');
+                try {
+                    const res = await appApiCall(driveUrl, 'updateEmployees', { updates, deletes, baseVersions, renames });
+                    if (res?.status === 'conflict') {
+                        setCloudStatus('conflict');
+                        const latest = await appApiCall(driveUrl, 'getData');
+                        if (latest?.status === 'success' && Array.isArray(latest.data?.orgData)) {
+                            setEmployees(latest.data.orgData);
+                            localStorage.setItem('orgData', JSON.stringify(latest.data.orgData));
+                            setCloudStatus('online');
+                            alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nระบบโหลดข้อมูลล่าสุดให้แล้ว กรุณาตรวจสอบและบันทึกใหม่');
+                        } else {
+                            setCloudStatus('error');
+                            alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nไม่สามารถโหลดข้อมูลล่าสุดได้ กรุณารีเฟรชหน้าเว็บ');
+                        }
+                        return;
+                    }
+                    setCloudStatus(res?.status === 'success' ? 'online' : 'error');
+                } catch (e) {
+                    setCloudStatus('error');
+                }
+            };
             
             // [FIXED] Logic การโหลดข้อมูล: รอให้โหลดเสร็จก่อนค่อยพร้อมใช้งาน (กันจอขาว)
             useEffect(() => { 
@@ -849,19 +877,33 @@
             
             const pushToHistory = (newData) => { const newHistory = history.slice(0, historyIndex + 1); newHistory.push(newData); if (newHistory.length > 10) newHistory.shift(); setHistory(newHistory); setHistoryIndex(newHistory.length - 1); };
             const handleUndo = () => { if (historyIndex > 0) { const prevState = history[historyIndex - 1]; setEmployees(prevState); setHistoryIndex(prev => prev - 1); localStorage.setItem('orgData', JSON.stringify(prevState)); } };
-            const updateStateFull = useCallback((newState, updates = [], deletes = []) => { 
+            const updateStateFull = useCallback((newState, updates = [], deletes = [], baseVersions = {}, renames = []) => {
                 pushToHistory(employees); 
+                const resolvedBaseVersions = { ...baseVersions };
+                const captureBaseVersion = (id) => {
+                    const key = String(id);
+                    if (!Object.prototype.hasOwnProperty.call(resolvedBaseVersions, key)) {
+                        const current = employees.find(e => String(e.id) === key);
+                        resolvedBaseVersions[key] = current ? (current.lastModified || null) : null;
+                    }
+                };
+                updates.forEach(u => u && u.id !== null && u.id !== undefined && captureBaseVersion(u.id));
+                deletes.forEach(captureBaseVersion);
+                renames.forEach(rename => {
+                    if (rename && rename.fromId !== null && rename.fromId !== undefined) captureBaseVersion(rename.fromId);
+                });
+
                 // [NEW] Add Timestamps
                 const timestamp = new Date().toISOString();
                 const stampedUpdates = updates.map(u => ({ ...u, lastModified: timestamp }));
                 
                 const finalState = newState.map(e => {
-                    const up = stampedUpdates.find(u => u.id === e.id);
+                    const up = stampedUpdates.find(u => String(u.id) === String(e.id));
                     return up ? up : e;
                 });
 
                 setEmployees(finalState); 
-                if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes); 
+                if(stampedUpdates.length > 0 || deletes.length > 0) syncUpdatesToCloud(stampedUpdates, deletes, resolvedBaseVersions, renames);
             }, [employees, driveUrl, history, historyIndex]);
             
             // [V15 NEW] Unified Admin Actions
@@ -1035,7 +1077,7 @@
                 // 4. Cascading Update (If ID Changed)
                 if (idChanged) {
                     // Find all subordinates who report to the OLD ID
-                    const subordinates = allEmployeesCopy.filter(e => e.reportsTo === originalId);
+                    const subordinates = allEmployeesCopy.filter(e => String(e.reportsTo) === String(originalId));
                     
                     // Update them to report to the NEW ID
                     subordinates.forEach(sub => {
@@ -1050,7 +1092,7 @@
                     if (!isNew && String(e.id) === String(originalId)) return data;
                     
                     // If this is a subordinate that got updated
-                    const subUpdate = updates.find(u => u.id === e.id && u.id !== data.id);
+                    const subUpdate = updates.find(u => String(u.id) === String(e.id) && String(u.id) !== String(data.id));
                     return subUpdate ? subUpdate : e;
                 });
 
@@ -1060,7 +1102,8 @@
                 // 6. Commit
                 // If the ID changed, remove the old cloud record after adding the new one.
                 const deletes = idChanged ? [String(originalId)] : [];
-                updateStateFull(newData, updates, deletes);
+                const renames = idChanged ? [{ fromId: String(originalId), toId: String(data.id) }] : [];
+                updateStateFull(newData, updates, deletes, {}, renames);
                 setIsModalOpen(false); 
             }, [employees, editingEmployee, updateStateFull]);
 

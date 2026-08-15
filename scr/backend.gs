@@ -121,14 +121,99 @@ function batchUpdateEmployees(data) {
     }
   }
 
-  if (data.deletes) { 
-    const deleteSet = new Set(data.deletes.map(String));
+  const deletes = Array.isArray(data.deletes) ? data.deletes : [];
+  const updates = Array.isArray(data.updates) ? data.updates : [];
+  const baseVersions = data.baseVersions && typeof data.baseVersions === 'object' ? data.baseVersions : null;
+  const renames = Array.isArray(data.renames) ? data.renames : [];
+  const currentMap = new Map(currentData.map(item => [String(item.id), item]));
+  const conflicts = [];
+  const checkedIds = new Set();
+  const renamedTargets = new Set();
+
+  const hasBaseVersion = (id) => baseVersions && Object.prototype.hasOwnProperty.call(baseVersions, String(id));
+  const expectedVersion = (id) => normalizeVersion_(baseVersions[String(id)]);
+  const actualVersion = (id) => {
+    const current = currentMap.get(String(id));
+    return normalizeVersion_(current && current.lastModified);
+  };
+  const addConflict = (id, reason, expected, actual) => {
+    conflicts.push({ id: String(id), reason, expected: expected || '', actual: actual || '' });
+  };
+
+  // Check every affected record against the version the client originally loaded.
+  // This prevents a stale client from silently overwriting a newer cloud change.
+  if ((deletes.length > 0 || updates.length > 0) && !baseVersions) {
+    return createJSONOutput({
+      status: 'conflict',
+      message: 'This client does not support conflict detection. Please reload the page and try again.',
+      conflicts: [{ id: '*', reason: 'missing-client-version' }]
+    });
+  }
+
+  renames.forEach(rename => {
+    const fromId = rename && rename.fromId;
+    const toId = rename && rename.toId;
+    if (fromId === null || fromId === undefined || toId === null || toId === undefined) return;
+
+    const fromKey = String(fromId);
+    const toKey = String(toId);
+    checkedIds.add(fromKey);
+    renamedTargets.add(toKey);
+
+    if (!hasBaseVersion(fromId)) {
+      addConflict(fromId, 'missing-base-version');
+    } else if (expectedVersion(fromId) !== actualVersion(fromId)) {
+      addConflict(fromId, 'stale-record', expectedVersion(fromId), actualVersion(fromId));
+    }
+
+    if (fromKey !== toKey && currentMap.has(toKey)) {
+      addConflict(toId, 'id-already-exists', '', actualVersion(toId));
+    }
+  });
+
+  deletes.forEach(id => {
+    const key = String(id);
+    if (checkedIds.has(key)) return;
+    checkedIds.add(key);
+    if (!hasBaseVersion(id)) {
+      addConflict(id, 'missing-base-version');
+    } else if (expectedVersion(id) !== actualVersion(id)) {
+      addConflict(id, 'stale-record', expectedVersion(id), actualVersion(id));
+    }
+  });
+
+  updates.forEach(item => {
+    if (!item || item.id === null || item.id === undefined) {
+      addConflict('', 'invalid-record');
+      return;
+    }
+
+    const key = String(item.id);
+    // A renamed record is checked against its old ID above.
+    if (renamedTargets.has(key)) return;
+    if (!hasBaseVersion(item.id)) {
+      addConflict(item.id, 'missing-base-version');
+    } else if (expectedVersion(item.id) !== actualVersion(item.id)) {
+      addConflict(item.id, 'stale-record', expectedVersion(item.id), actualVersion(item.id));
+    }
+  });
+
+  if (conflicts.length > 0) {
+    return createJSONOutput({
+      status: 'conflict',
+      message: 'ข้อมูลบางรายการถูกแก้ไขโดยผู้ใช้อื่นแล้ว กรุณาโหลดข้อมูลล่าสุดก่อนบันทึกอีกครั้ง',
+      conflicts
+    });
+  }
+
+  if (deletes.length > 0) {
+    const deleteSet = new Set(deletes.map(String));
     currentData = currentData.filter(emp => !deleteSet.has(String(emp.id))); 
   }
   
-  if (data.updates) { 
+  if (updates.length > 0) {
     const dataMap = new Map(currentData.map(item => [String(item.id), item]));
-    data.updates.forEach(item => dataMap.set(String(item.id), item)); 
+    updates.forEach(item => dataMap.set(String(item.id), item));
     currentData = Array.from(dataMap.values()); 
   }
 
@@ -142,6 +227,10 @@ function batchUpdateEmployees(data) {
     normalizeOrgDataFileNames_(file.getId());
   }
   return createJSONOutput({ status: 'success', message: 'Synced' });
+}
+
+function normalizeVersion_(value) {
+  return value === null || value === undefined ? '' : String(value);
 }
 
 function handleImageUpload(data) {
