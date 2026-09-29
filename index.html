@@ -68,6 +68,25 @@
         const formatDateTime = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
         const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start.getTime())) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return "New"; return `${years} ปี ${months} ด.`; };
         const safeLocalLoad = (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch (e) { console.warn(`Error loading ${key}, using fallback.`, e); return fallback; } };
+        // Imported/cloud data may carry numeric IDs; the UI compares IDs with ===, so keep them as strings.
+        const normalizeEmployees = (list) => (Array.isArray(list) ? list : []).filter(e => e && typeof e === 'object').map(e => ({
+            ...e,
+            id: e.id === null || e.id === undefined ? e.id : String(e.id),
+            reportsTo: e.reportsTo === null || e.reportsTo === undefined ? e.reportsTo : String(e.reportsTo)
+        }));
+        // True when `ancestorId` appears in the reporting chain above `nodeId` (or is the node itself).
+        const isInChainAbove = (employees, ancestorId, nodeId) => {
+            const byId = new Map(employees.map(e => [String(e.id), e]));
+            const seen = new Set();
+            let cur = nodeId === null || nodeId === undefined ? null : String(nodeId);
+            while (cur && cur !== 'STAGING' && !seen.has(cur)) {
+                if (cur === String(ancestorId)) return true;
+                seen.add(cur);
+                const node = byId.get(cur);
+                cur = node && node.reportsTo ? String(node.reportsTo) : null;
+            }
+            return false;
+        };
 
         const getPositionRank = (position) => {
             const p = (position || "").toLowerCase();
@@ -144,10 +163,10 @@
             const saveUserAction = async () => { if (!newUser.username || !newUser.password) return alert("กรุณากรอก User/Pass"); setLoading(true); let updatedUsers;
             if (editingUsername) updatedUsers = users.map(u => u.username === editingUsername ? newUser : u);
             else { if (users.some(u => u.username === newUser.username)) { setLoading(false); return alert('ชื่อซ้ำ'); } updatedUsers = [...users, newUser]; } setUsers(updatedUsers);
-            localStorage.setItem('users', JSON.stringify(updatedUsers)); if (driveUrl) try { await apiCall(driveUrl, 'saveUser', { user: newUser }); } catch (e) { alert("บันทึก Cloud ไม่สำเร็จ");
+            localStorage.setItem('users', JSON.stringify(updatedUsers)); if (driveUrl) try { const res = await apiCall(driveUrl, 'saveUser', { user: newUser }); if (res?.status !== 'success') alert("บันทึก Cloud ไม่สำเร็จ: " + (res?.message || res?.error || 'unknown error')); } catch (e) { alert("บันทึก Cloud ไม่สำเร็จ");
             } setEditingUsername(null); setNewUser({ username: '', password: '', role: 'leader', name: '', dept: 'ASSEMBLY' }); setLoading(false); };
             const deleteUserAction = async (username) => { if (!confirm('ยืนยันลบ?')) return; setLoading(true); const updated = users.filter(u => u.username !== username); setUsers(updated);
-            localStorage.setItem('users', JSON.stringify(updated)); if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); setLoading(false); };
+            localStorage.setItem('users', JSON.stringify(updated)); try { if (driveUrl) await apiCall(driveUrl, 'deleteUser', { username }); } catch (e) { alert("ลบผู้ใช้บน Cloud ไม่สำเร็จ"); } finally { setLoading(false); } };
             
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"><div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]"> 
                 <div className="bg-white border-b">
@@ -382,7 +401,7 @@
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id && !newVisited.has(e.id)).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
             
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
-            const isMatch = searchTerm && employee.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const isMatch = searchTerm && (employee.name || '').toLowerCase().includes(searchTerm.toLowerCase());
             if (isMatch) cardColor += " flash-active";
             
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
@@ -454,8 +473,9 @@
             const isEditMode = employee && !employee.isNew;
             
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
-            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: employee?.dept || (safeDepts[0] || ''), reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee, safePositions, safeDepts]);
-            const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(err.message); } finally { setIsUploading(false); } };
+            // Only reset when a different employee is opened; adding a position or department while the form is open must not wipe what was typed.
+            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
+            const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert('อัปโหลดรูปไม่สำเร็จ: ' + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
                 return supervisors.filter(s => { 
@@ -481,7 +501,7 @@
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
                         <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"><h2 className="text-lg font-bold">{isEditMode ? 'Edit Employee' : 'Add Employee'}</h2><button onClick={onCancel}><Icons.X/></button></div>
                         <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>General Info</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Details & Style</button></div>
-                        <form className="p-6 space-y-4 overflow-y-auto grow">
+                        <form className="p-6 space-y-4 overflow-y-auto grow" onSubmit={e=>e.preventDefault()}>
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
@@ -775,7 +795,7 @@
 
         const App = () => {
             // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
-            const initialEmployees = safeLocalLoad('orgData', []);
+            const initialEmployees = normalizeEmployees(safeLocalLoad('orgData', []));
             const initialPendingSync = safeLocalLoad('pendingSync', []);
             const safeInitialPendingSync = Array.isArray(initialPendingSync) ? initialPendingSync : [];
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
@@ -784,7 +804,7 @@
             const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR", "EXECUTIVE"]));
             
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
-            const [driveUrl, setDriveUrl] = useState("https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec");
+            const [driveUrl, setDriveUrl] = useState(() => safeLocalLoad('driveUrl', "https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec"));
             
             // [FIXED] เพิ่มสถานะ isDataReady เพื่อป้องกัน White Screen
             const [isDataReady, setIsDataReady] = useState(false);
@@ -888,9 +908,10 @@
                             try {
                                 const latest = await appApiCall(driveUrl, 'getData');
                                 if (latest?.status === 'success' && Array.isArray(latest.data?.orgData)) {
-                                    setEmployees(latest.data.orgData);
-                                    localStorage.setItem('orgData', JSON.stringify(latest.data.orgData));
-                                    resetHistory(latest.data.orgData);
+                                    const latestData = normalizeEmployees(latest.data.orgData);
+                                    setEmployees(latestData);
+                                    localStorage.setItem('orgData', JSON.stringify(latestData));
+                                    resetHistory(latestData);
                                     persistPendingSync([]);
                                     setCloudStatus('online');
                                     alert((res.message || 'ข้อมูลถูกแก้ไขโดยผู้ใช้อื่นแล้ว') + '\nระบบโหลดข้อมูลล่าสุดให้แล้ว รายการที่ค้างถูกยกเลิก กรุณาตรวจสอบและบันทึกใหม่');
@@ -934,8 +955,9 @@
             useEffect(() => {
                 if (currentUser) {
                     setIsDataReady(false);
-                    const localData = safeLocalLoad('orgData', null);
-                    if (localData && Array.isArray(localData)) {
+                    const rawLocalData = safeLocalLoad('orgData', null);
+                    const localData = Array.isArray(rawLocalData) ? normalizeEmployees(rawLocalData) : null;
+                    if (localData) {
                         setEmployees(localData);
                         resetHistory(localData);
                         setIsDataReady(true);
@@ -946,12 +968,13 @@
                             if (res?.status === 'success' && res.data) {
                                 // Keep local edits when there is an unsent queue; otherwise cloud is authoritative.
                                 if (pendingSyncRef.current.length === 0 && Array.isArray(res.data.orgData)) {
-                                    setEmployees(res.data.orgData);
-                                    localStorage.setItem('orgData', JSON.stringify(res.data.orgData));
-                                    resetHistory(res.data.orgData);
+                                    const cloudData = normalizeEmployees(res.data.orgData);
+                                    setEmployees(cloudData);
+                                    localStorage.setItem('orgData', JSON.stringify(cloudData));
+                                    resetHistory(cloudData);
                                 }
-                                if (Array.isArray(res.data.orgPositions)) setPositions(res.data.orgPositions);
-                                if (Array.isArray(res.data.orgDepartments)) setDepartments(res.data.orgDepartments);
+                                if (Array.isArray(res.data.orgPositions)) { setPositions(res.data.orgPositions); localStorage.setItem('orgPositions', JSON.stringify(res.data.orgPositions)); }
+                                if (Array.isArray(res.data.orgDepartments)) { setDepartments(res.data.orgDepartments); localStorage.setItem('orgDepartments', JSON.stringify(res.data.orgDepartments)); }
                                 setCloudStatus('online');
                             }
                             setIsDataReady(true);
@@ -967,6 +990,7 @@
             }, [driveUrl, currentUser, appApiCall, resetHistory, flushPendingSync]);
 
             useEffect(() => { localStorage.setItem('orgData', JSON.stringify(employees)); }, [employees]);
+            useEffect(() => { try { localStorage.setItem('driveUrl', JSON.stringify(driveUrl)); } catch (e) {} }, [driveUrl]);
             useEffect(() => { setDeptName(currentDept + " DEPT"); }, [currentDept]);
             
             const pushToHistory = useCallback((nextState) => {
@@ -1048,18 +1072,48 @@
             }, [employees, pushToHistory, queueSync]);
             
             // [V15 NEW] Unified Admin Actions
-            const handleAddDept = (dept) => {
+            const saveSettingsToCloud = (payload) => {
+                if (!driveUrl) return;
+                appApiCall(driveUrl, 'saveData', payload)
+                    .then(res => { if (res?.status !== 'success') alert('บันทึกการตั้งค่าลง Cloud ไม่สำเร็จ: ' + (res?.message || res?.error || 'unknown error')); })
+                    .catch(e => alert('บันทึกการตั้งค่าลง Cloud ไม่สำเร็จ: ' + (e?.message || e)));
+            };
+
+            const handleAddDept = (rawDept) => {
+                const dept = String(rawDept || '').trim();
+                if (!dept) return;
+                if (departments.some(d => d.toLowerCase() === dept.toLowerCase()) || dept.toUpperCase() === 'ALL') return alert(`แผนก "${dept}" มีอยู่แล้ว`);
                 const newDepts = [...departments, dept];
                 setDepartments(newDepts);
                 localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
-                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+                saveSettingsToCloud({orgDepartments: newDepts});
             };
 
             const handleDeleteDept = (dept) => {
+                const count = employees.filter(e => e.dept === dept).length;
+                if (!confirm(count > 0 ? `แผนก "${dept}" ยังมีพนักงาน ${count} คน (จะดูได้เฉพาะใน ALL DEPTS)\nยืนยันลบแผนก?` : `ยืนยันลบแผนก "${dept}"?`)) return;
                 const newDepts = departments.filter(d => d !== dept);
                 setDepartments(newDepts);
                 localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
-                if(driveUrl) appApiCall(driveUrl, 'saveData', {orgDepartments: newDepts});
+                if (currentDept === dept) setCurrentDept(newDepts[0] || 'ALL');
+                saveSettingsToCloud({orgDepartments: newDepts});
+            };
+
+            const handleAddPosition = (rawPos) => {
+                const pos = String(rawPos || '').trim();
+                if (!pos) return;
+                if (positions.some(p => p.toLowerCase() === pos.toLowerCase())) return alert(`ตำแหน่ง "${pos}" มีอยู่แล้ว`);
+                const np = [...positions, pos];
+                setPositions(np);
+                localStorage.setItem('orgPositions', JSON.stringify(np));
+                saveSettingsToCloud({orgPositions: np});
+            };
+
+            const handleDeletePosition = (pos) => {
+                const np = positions.filter(x => x !== pos);
+                setPositions(np);
+                localStorage.setItem('orgPositions', JSON.stringify(np));
+                saveSettingsToCloud({orgPositions: np});
             };
 
             // [V23 Add Annotation Function]
@@ -1106,7 +1160,7 @@
                 }
 
                 // Normal sibling reordering
-                const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return (a.id || "").localeCompare(b.id || ""); });
+                const siblings = employees.filter(e => e.reportsTo === target.reportsTo).sort((a, b) => { const orderA = a.order || 0; const orderB = b.order || 0; if (orderA !== orderB) return orderA - orderB; return String(a.id ?? "").localeCompare(String(b.id ?? "")); });
                 const currentIndex = siblings.findIndex(e => e.id === id); if (currentIndex === -1) return;
                 let newIndex = currentIndex + offset; if (newIndex < 0) newIndex = 0; if (newIndex >= siblings.length) newIndex = siblings.length - 1; if (newIndex === currentIndex) return;
                 const itemToMove = siblings[currentIndex]; siblings.splice(currentIndex, 1); siblings.splice(newIndex, 0, itemToMove);
@@ -1147,7 +1201,8 @@
 
                 // Check if dragging a Root onto another Root (Swap)
                 const isTargetRoot = targetNode && (!targetNode.reportsTo || targetNode.reportsTo === 'STAGING');
-                const isSourceRoot = sourceNode && (!sourceNode.reportsTo || sourceNode.reportsTo === 'STAGING');
+                // Waiting-area employees dropped on a root must be assigned under it, not reordered.
+                const isSourceRoot = sourceNode && sourceNode.reportsTo !== 'STAGING' && !employees.some(b => b.id === sourceNode.reportsTo && (currentDept === 'ALL' || b.dept === currentDept));
 
                 if (isTargetRoot && isSourceRoot && sourceIds.length === 1) {
                     // Logic to swap roots by re-ordering list
@@ -1177,10 +1232,13 @@
                     updateStateFull(newData, updates, []);
 
                 } else {
-                    // Standard: Reparent
+                    // Standard: Reparent (skip moves that would make someone report to their own subordinate)
+                    const movableIds = sourceIds.filter(id => !isInChainAbove(employees, id, targetId));
+                    if (movableIds.length < sourceIds.length) alert('ไม่สามารถย้ายหัวหน้าไปอยู่ใต้ลูกทีมของตัวเองได้');
+                    if (movableIds.length === 0) return;
                     const updates = []; 
                     const newData = employees.map(e => { 
-                        if(sourceIds.includes(e.id)) { 
+                        if(movableIds.includes(e.id)) { 
                             const u = {...e, reportsTo: targetId}; 
                             updates.push(u); 
                             return u; 
@@ -1213,6 +1271,10 @@
                 // 2. Setup Context
                 const originalId = editingEmployee?.id;
                 const isNew = !originalId || !employees.some(e => String(e.id) === String(originalId)); // Check if we are editing an existing record
+                if (data.reportsTo && data.reportsTo !== 'STAGING' && (String(data.reportsTo) === data.id || (!isNew && isInChainAbove(employees, originalId, data.reportsTo)))) {
+                    alert("Error: ไม่สามารถให้พนักงานรายงานต่อตัวเองหรือลูกทีมของตัวเองได้");
+                    return;
+                }
                 const idChanged = !isNew && String(originalId) !== String(data.id);
 
                 // 3. Validation: Duplicate Check
@@ -1259,7 +1321,8 @@
                 setIsModalOpen(false); 
             }, [employees, editingEmployee, updateStateFull]);
 
-            const handleDelete = useCallback((id) => { const newData = employees.filter(e => e.id !== id); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, updateStateFull]);
+            // Delete by the ID the record was opened with, even if the ID field was edited in the form.
+            const handleDelete = useCallback((formId) => { const id = editingEmployee?.id ?? formId; const newData = employees.filter(e => String(e.id) !== String(id)); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, editingEmployee, updateStateFull]);
 
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
@@ -1319,7 +1382,7 @@
             // *** FIXED ZONE: ALL HOOKS ARE ABOVE THIS LINE ***
 
             const validEmployees = employees.filter(e => e.id);
-            const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || e.name.toLowerCase().includes(searchTerm.toLowerCase())));
+            const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || (e.name || '').toLowerCase().includes(searchTerm.toLowerCase())));
             const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept));
             // [V9 Fix] Sort root nodes by order!
             const rootEmployees = filteredAll
@@ -1335,7 +1398,7 @@
                     const lower = searchTerm.toLowerCase();
                     data = data.filter(e => 
                         (e.name || "").toLowerCase().includes(lower) ||
-                        (e.id || "").toLowerCase().includes(lower) ||
+                        String(e.id ?? "").toLowerCase().includes(lower) ||
                         (e.position || "").toLowerCase().includes(lower) ||
                         (e.dept || "").toLowerCase().includes(lower) ||
                         (e.company || "").toLowerCase().includes(lower)
@@ -1394,7 +1457,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -1406,7 +1469,7 @@
                                     <button onClick={()=>setIsSidebarOpen(false)} className="lg:hidden text-gray-400 hover:text-red-500"><Icons.X size={18}/></button>
                                 </div>
                                 <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-20">
-                                    {stagingEmployees.map(emp => <EmployeeCard key={emp.id} employee={emp} onClick={()=> {setEditingEmployee({...emp, isNew:false}); setIsModalOpen(true);}} onDragStart={(e,id)=>e.dataTransfer.setData("empIds", JSON.stringify([id]))} isStaging={true} isLocked={isLocked} selectionMode={selectionMode} isSelected={selectedIds.includes(emp.id)} toggleSelection={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev, id])}/>)}
+                                    {stagingEmployees.map(emp => <EmployeeCard key={emp.id} employee={emp} onClick={()=> {setEditingEmployee({...emp, isNew:false}); setIsModalOpen(true);}} onDragStart={(e,id)=>e.dataTransfer.setData("empIds", JSON.stringify([id]))} isStaging={true} isLocked={isLocked} currentUser={currentUser} selectionMode={selectionMode} isSelected={selectedIds.includes(emp.id)} toggleSelection={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev, id])}/>)}
                                 </div>
                                 <div className="sidebar-resizer hidden lg:block" onMouseDown={()=>isResizing.current=true}></div>
                                 <button className="sidebar-toggle-btn hidden lg:flex" style={{right: '-12px', borderRadius: '50%'}} onClick={()=>setIsSidebarCollapsed(true)}><Icons.ChevronLeft size={14}/></button>
@@ -1471,7 +1534,7 @@
                                     <div className="h-6 w-px bg-gray-200 mx-2"></div>
                                     <span className="text-xs text-gray-400 mr-2">Transfer To:</span>
                                     {departments.map(d => <button key={d} onClick={()=>handleTransferToDept(d)} className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100">{d}</button>)}
-                                    <button onClick={()=>{if(confirm('Delete?')) updateStateFull(employees.filter(e=>!selectedIds.includes(e.id)), [], selectedIds); setSelectedIds([]);}} className="p-2 text-red-600 ml-4"><Icons.Trash2 size={16}/></button>
+                                    <button onClick={()=>{if(!confirm(`Delete ${selectedIds.length} employees?`)) return; updateStateFull(employees.filter(e=>!selectedIds.includes(e.id)), [], selectedIds); setSelectedIds([]); setSelectionMode(false);}} className="p-2 text-red-600 ml-4"><Icons.Trash2 size={16}/></button>
                                 </div>
                             )}
 
@@ -1487,9 +1550,10 @@
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
                     
                     {/* [V15] Admin Panel is now the central hub */}
-                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} orgData={employees} onDataRecovered={(data) => { setEmployees(data); resetHistory(data); persistPendingSync([]); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
+                    {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} orgData={employees} onDataRecovered={(raw) => { const data = normalizeEmployees(raw); setEmployees(data); resetHistory(data); persistPendingSync([]); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
                     
-                    {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={(p)=>{const np = [...positions, p]; setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np)); if(driveUrl) appApiCall(driveUrl, 'saveData', {orgPositions: np});}} onDelete={(p)=>{const np = positions.filter(x=>x!==p); setPositions(np); localStorage.setItem('orgPositions', JSON.stringify(np));}} onClose={()=>setIsManagePositionsOpen(false)} />}
+                    {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onClose={()=>setIsManagePositionsOpen(false)} />}
+                    {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
             );

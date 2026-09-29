@@ -292,8 +292,10 @@ function loginUser(data) {
     }
   } 
   
-  // System Admin Fallback
-  if(data.username === 'admin' && data.password === 'password') {
+  // System Admin Fallback: only for first-time setup, before any admin exists in the Users sheet.
+  // Otherwise admin/password would keep working even after a real admin password is set.
+  const hasAdmin = rows.slice(1).some(r => String(r[3] || '').trim().toLowerCase() === 'admin');
+  if(!hasAdmin && data.username === 'admin' && data.password === 'password') {
     return createJSONOutput({
       status: 'success', 
       user: { username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' }
@@ -305,13 +307,17 @@ function loginUser(data) {
 function getUsers() { 
   return createJSONOutput({
     status: 'success', 
-    users: getSheet('Users').getDataRange().getValues().slice(1).map(r => ({
-      username: String(r[0]).trim(), 
-      password: String(r[1]).trim(), 
-      name: String(r[2]).trim(), 
-      role: String(r[3]).trim().toLowerCase(), 
-      dept: String(r[4]).trim() || 'ALL'
-    }))
+    users: getSheet('Users').getDataRange().getValues().slice(1).map(r => {
+      const role = String(r[3]).trim().toLowerCase();
+      return {
+        username: String(r[0]).trim(), 
+        password: String(r[1]).trim(), 
+        name: String(r[2]).trim(), 
+        role: role, 
+        // Same default as loginUser; defaulting to ALL here would grant all-dept access when the user is re-saved from the Admin Panel.
+        dept: String(r[4]).trim() || (role === 'admin' ? 'ALL' : 'ASSEMBLY')
+      };
+    })
   }); 
 }
 
