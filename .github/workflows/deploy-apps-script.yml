@@ -1,0 +1,83 @@
+# Pushes scr/backend.gs to Google Apps Script and redeploys the existing web app
+# deployment, so the /exec URL used by index.html stays the same.
+# One-time setup: see docs/apps-script-deploy.md
+name: Deploy Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scr/**'
+      - '.github/workflows/deploy-apps-script.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: apps-script-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+      # Deployment ID = the part of the web app URL between /s/ and /exec (the URL in index.html by default).
+      DEPLOYMENT_ID: ${{ vars.APPS_SCRIPT_DEPLOYMENT_ID || 'AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H' }}
+    steps:
+      - name: Check configuration
+        id: cfg
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::warning::Apps Script deploy skipped: set the CLASPRC_JSON and APPS_SCRIPT_ID repository secrets (see docs/apps-script-deploy.md)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          node-version: 20
+
+      - name: Install clasp
+        if: steps.cfg.outputs.ready == 'true'
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Write clasp credentials
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          chmod 600 ~/.clasprc.json
+
+      - name: Pull current project (keeps appsscript.json and web app settings)
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          mkdir -p build
+          cd build
+          printf '{"scriptId":"%s","rootDir":".","fileExtension":"gs"}' "$SCRIPT_ID" > .clasp.json
+          clasp pull
+          test -f appsscript.json
+          echo "Remote files before update:"
+          ls -1
+
+      - name: Replace server code with scr/backend.gs
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          cd build
+          # The repo is the source of truth for server code: drop every remote .gs/.js file
+          # so an old copy (e.g. Code.gs) can't define a second doPost.
+          find . -maxdepth 1 -type f \( -name '*.gs' -o -name '*.js' \) -delete
+          cp ../scr/backend.gs backend.gs
+          echo "Files to push:"
+          ls -1
+
+      - name: Push
+        if: steps.cfg.outputs.ready == 'true'
+        run: cd build && clasp push -f
+
+      - name: Redeploy existing web app (same URL)
+        if: steps.cfg.outputs.ready == 'true'
+        run: cd build && clasp deploy -i "$DEPLOYMENT_ID" -d "GitHub ${GITHUB_SHA::7}"
