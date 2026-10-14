@@ -963,7 +963,7 @@
             );
         };
 
-        const AttendanceQrScanner = ({ onScan, onClose, onSave, saving, queuedCount, scanMessage }) => {
+        const AttendanceQrScanner = ({ onScan, onClose, queuedCount, scanMessage }) => {
             const scannerRef = useRef(null);
             const onScanRef = useRef(onScan);
             const [cameraError, setCameraError] = useState('');
@@ -1006,8 +1006,8 @@
                         {!cameraReady && !cameraError && <p className="mt-3 text-center text-sm text-gray-500">กำลังเปิดกล้อง…</p>}
                         {cameraError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{cameraError}</p>}
                         {scanMessage && <p role="status" className="mt-3 rounded-xl bg-blue-50 p-3 text-center text-sm font-semibold text-blue-800">{scanMessage}</p>}
-                        <p className="mt-3 text-center text-sm font-semibold text-green-700">เข้าคิวแล้ว {queuedCount} รายการ</p>
-                        {queuedCount > 0 && <button type="button" onClick={onSave} disabled={saving} className="mt-3 min-h-12 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-60">{saving ? 'กำลังบันทึก…' : `บันทึกทั้งหมด ${queuedCount} รายการ`}</button>}
+                        <p className="mt-3 text-center text-sm font-semibold text-green-700">เข้าคิวแล้ว {queuedCount} รายการ · สแกนต่อได้ ระบบยังไม่บันทึก</p>
+                        <button type="button" onClick={onClose} className="mt-3 min-h-12 w-full rounded-xl bg-blue-700 px-4 font-bold text-white">เสร็จสิ้นการสแกน · กลับไปบันทึกทั้งหมด</button>
                     </div>
                 </div>
             );
@@ -1241,7 +1241,7 @@
                     </div>}
 
                     {qrEmployee && <AttendanceQRCodeModal employee={qrEmployee} onClose={() => setQrEmployee(null)} />}
-                    {scannerOpen && <AttendanceQrScanner onScan={handleQrScan} onClose={() => setScannerOpen(false)} onSave={() => { setScannerOpen(false); void saveBatch(); }} saving={Boolean(savingType)} queuedCount={pendingList.length} scanMessage={scanNotice} />}
+                    {scannerOpen && <AttendanceQrScanner onScan={handleQrScan} onClose={() => setScannerOpen(false)} queuedCount={pendingList.length} scanMessage={scanNotice} />}
                 </section>
             );
         };
