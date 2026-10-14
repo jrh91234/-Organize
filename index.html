@@ -1703,7 +1703,7 @@
                     if (!movableIds.includes(employee.id)) return employee;
                     const employeeShift = ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '';
                     const manualShift = ['A', 'B'].includes(String(manualShifts[employee.id] || '').trim().toUpperCase()) ? String(manualShifts[employee.id]).trim().toUpperCase() : '';
-                    const shift = targetIsLeader ? (employeeShift || leaderShift || manualShift) : employee.shift;
+                    const shift = targetIsLeader ? (leaderShift || employeeShift || manualShift) : employee.shift;
                     const updatedEmployee = { ...employee, reportsTo: targetId, shift };
                     updates.push(updatedEmployee);
                     return updatedEmployee;
