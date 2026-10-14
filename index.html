@@ -92,6 +92,7 @@
             ...e,
             id: e.id === null || e.id === undefined ? e.id : String(e.id),
             reportsTo: e.reportsTo === null || e.reportsTo === undefined ? e.reportsTo : String(e.reportsTo),
+            subDept: String(e.subDept || '').trim(),
             shift: ['A', 'B'].includes(String(e.shift || '').trim().toUpperCase()) ? String(e.shift).trim().toUpperCase() : ''
         }));
         // True when `ancestorId` appears in the reporting chain above `nodeId` (or is the node itself).
@@ -380,6 +381,7 @@
                         <p className="text-[10px] sm:text-xs font-bold opacity-60">{employee.id}</p>
                         <h3 className="text-xs sm:text-sm font-bold leading-tight truncate w-full">{employee.name}</h3>
                         <p className="text-[10px] sm:text-xs opacity-70 truncate w-full">{employee.position}</p>
+                        {employee.subDept && <p className="text-[9px] sm:text-[10px] text-blue-700 opacity-80 truncate w-full">{employee.subDept}</p>}
                         {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <span className="mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-bold text-indigo-700">กะ {String(employee.shift).toUpperCase()}</span>}
                         {employee.showPhone && employee.phone && <p className="text-[10px] bg-gray-100 rounded px-1 mt-0.5 inline-block text-gray-600">📞 {employee.phone}</p>}
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
@@ -488,14 +490,14 @@
         const EmployeeForm = ({ employee, supervisors, positions, depts, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
             const safeDepts = depts || [];
-            const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', shift: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
+            const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info');
             const fileInputRef = useRef(null); 
             const isEditMode = employee && !employee.isNew;
             
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
             // Only reset when a different employee is opened; adding a position or department while the form is open must not wipe what was typed.
-            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
+            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', subDept: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, subDept: '', shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
             const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert('อัปโหลดรูปไม่สำเร็จ: ' + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
@@ -515,6 +517,7 @@
             }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
 
             const tenureText = useMemo(() => calculateTenure(formData.startDate), [formData.startDate]);
+            const subDeptSuggestions = useMemo(() => Array.from(new Set((supervisors || []).filter(item => item.dept === formData.dept).map(item => String(item.subDept || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [supervisors, formData.dept]);
             if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">Access Denied</h2> <p className="text-gray-500 mt-2">คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
 
             return (
@@ -525,7 +528,8 @@
                         <form className="p-6 space-y-4 overflow-y-auto grow" onSubmit={e=>e.preventDefault()}>
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">แผนกหลัก</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value, subDept: ''})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
+                            <div><label className="text-xs text-gray-500">แผนกย่อย / ทีม</label><input list="employee-sub-departments" value={formData.subDept || ''} onChange={e=>setFormData({...formData, subDept: e.target.value})} className="w-full border p-2 rounded" placeholder="เช่น H9 Team A, QC Line 1"/><datalist id="employee-sub-departments">{subDeptSuggestions.map(name=><option key={name} value={name}/>)}</datalist></div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
                             <div><label className="text-xs text-gray-500">กะทำงาน</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">ไม่มีกะ</option><option value="A">กะ A</option><option value="B">กะ B</option></select></div>
                             <div className="flex gap-2 items-end">
@@ -915,6 +919,7 @@
             const isAdmin = currentUser?.role === 'admin';
             const userKey = currentUser ? `${currentUser.attendanceToken || currentUser.username || ''}|${currentUser.dept || ''}` : '';
             const [selectedDept, setSelectedDept] = useState(() => currentUser?.dept || currentDept || '');
+            const [selectedSubDept, setSelectedSubDept] = useState('ALL');
             const [selectedShift, setSelectedShift] = useState('ALL');
             const [searchTerm, setSearchTerm] = useState('');
             const [pendingActions, setPendingActions] = useState({});
@@ -944,19 +949,26 @@
                 const userDept = String(currentUser.dept || '').trim();
                 const preferredDept = deptOptions.find(dept => dept.toLocaleLowerCase() === userDept.toLocaleLowerCase());
                 setSelectedDept(isAdmin ? (preferredDept || 'ALL') : (preferredDept || deptOptions[0] || ''));
+                setSelectedSubDept(String(selfEmployee?.subDept || '').trim() || 'ALL');
                 const shift = String(selfEmployee?.shift || '').trim().toUpperCase();
                 setSelectedShift(shift === 'A' || shift === 'B' ? shift : 'ALL');
                 setSearchTerm('');
                 setPendingActions({});
-            }, [userKey, currentUser?.username, currentUser?.dept, data?.actorUsername, data?.selfId, deptOptionsKey, employees.length, isAdmin, selfEmployee?.shift]);
+            }, [userKey, currentUser?.username, currentUser?.dept, data?.actorUsername, data?.selfId, deptOptionsKey, employees.length, isAdmin, selfEmployee?.subDept, selfEmployee?.shift]);
 
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'วันนี้';
             const scopedEmployees = employees.filter(employee => selectedDept === 'ALL' || (employee.dept || '__NO_DEPT__') === selectedDept);
-            const shiftScopedEmployees = scopedEmployees.filter(employee => selectedShift === 'ALL' || (selectedShift === 'UNASSIGNED' ? !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) : String(employee.shift || '').trim().toUpperCase() === selectedShift));
+            const subDeptOptions = Array.from(new Set(scopedEmployees.map(employee => String(employee.subDept || '').trim() || '__NO_SUB_DEPT__'))).sort((a, b) => a === '__NO_SUB_DEPT__' ? 1 : b === '__NO_SUB_DEPT__' ? -1 : a.localeCompare(b));
+            const subDeptOptionsKey = subDeptOptions.join('|');
+            useEffect(() => {
+                if (selectedSubDept !== 'ALL' && !subDeptOptions.includes(selectedSubDept)) setSelectedSubDept('ALL');
+            }, [selectedSubDept, subDeptOptionsKey]);
+            const subDeptScopedEmployees = scopedEmployees.filter(employee => selectedSubDept === 'ALL' || (String(employee.subDept || '').trim() || '__NO_SUB_DEPT__') === selectedSubDept);
+            const shiftScopedEmployees = subDeptScopedEmployees.filter(employee => selectedShift === 'ALL' || (selectedShift === 'UNASSIGNED' ? !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) : String(employee.shift || '').trim().toUpperCase() === selectedShift));
             const query = searchTerm.trim().toLowerCase();
-            const visibleEmployees = shiftScopedEmployees.filter(employee => !query || `${employee.name} ${employee.id} ${employee.position || ''} ${employee.shift || ''}`.toLowerCase().includes(query));
+            const visibleEmployees = shiftScopedEmployees.filter(employee => !query || `${employee.name} ${employee.id} ${employee.dept || ''} ${employee.subDept || ''} ${employee.position || ''} ${employee.shift || ''}`.toLowerCase().includes(query));
             const recordsByEmployee = records.reduce((map, record) => {
                 const existing = map[record.username] || {};
                 existing[record.type] = record;
@@ -1027,7 +1039,7 @@
             };
 
             return (
-                <section className="mx-auto w-full max-w-5xl space-y-4 pb-28">
+                <section className="mx-auto w-full max-w-6xl space-y-4 pb-28">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="text-sm font-semibold text-blue-600">เช็คชื่อประจำวัน</div>
@@ -1042,16 +1054,24 @@
                     {data?.rosterMessage && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">{data.rosterMessage}</div>}
                     {scanNotice && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">{scanNotice}</div>}
 
-                    <div className="flex flex-col gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:flex-row sm:items-end">
-                        <label className="min-w-0 flex-1 text-sm font-semibold text-gray-700">
+                    <div className="grid grid-cols-1 gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:grid-cols-2 xl:grid-cols-12">
+                        <label className="min-w-0 text-sm font-semibold text-gray-700 xl:col-span-2">
                             แผนก
-                            <select value={selectedDept} onChange={event => setSelectedDept(event.target.value)} disabled={loading || deptOptions.length === 0}
+                            <select value={selectedDept} onChange={event => { setSelectedDept(event.target.value); setSelectedSubDept('ALL'); }} disabled={loading || deptOptions.length === 0}
                                 className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-base font-semibold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100">
                                 {isAdmin && <option value="ALL">ทุกแผนก</option>}
                                 {deptOptions.map(dept => <option key={dept} value={dept}>{dept === '__NO_DEPT__' ? 'ไม่ระบุแผนก' : dept}</option>)}
                             </select>
                         </label>
-                        <label className="min-w-0 flex-1 text-sm font-semibold text-gray-700">
+                        <label className="min-w-0 text-sm font-semibold text-gray-700 xl:col-span-2">
+                            แผนกย่อย / ทีม
+                            <select value={selectedSubDept} onChange={event => setSelectedSubDept(event.target.value)} disabled={loading || scopedEmployees.length === 0}
+                                className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-base font-semibold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100">
+                                <option value="ALL">ทุกแผนกย่อย</option>
+                                {subDeptOptions.map(subDept => <option key={subDept} value={subDept}>{subDept === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : subDept}</option>)}
+                            </select>
+                        </label>
+                        <label className="min-w-0 text-sm font-semibold text-gray-700 xl:col-span-2">
                             กะ
                             <select value={selectedShift} onChange={event => setSelectedShift(event.target.value)} disabled={loading || employees.length === 0}
                                 className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 bg-white px-3 text-base font-semibold text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-100">
@@ -1061,20 +1081,20 @@
                                 <option value="UNASSIGNED">ไม่มีกะ</option>
                             </select>
                         </label>
-                        <label className="min-w-0 flex-[2] text-sm font-semibold text-gray-700">
+                        <label className="min-w-0 text-sm font-semibold text-gray-700 xl:col-span-3">
                             ค้นหาพนักงาน
                             <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="ชื่อหรือรหัสพนักงาน" className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 px-3 text-base font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                         </label>
-                        <div className="flex flex-wrap gap-2 sm:pb-1">
-                            <span className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800">เข้างาน {workCount}/{shiftScopedEmployees.length}</span>
-                            <span className="rounded-full bg-violet-100 px-3 py-2 text-xs font-bold text-violet-800">OT {otCount}/{shiftScopedEmployees.length}</span>
+                        <div className="flex flex-wrap items-end gap-2 sm:col-span-2 sm:justify-end xl:col-span-3 xl:justify-between">
+                            <span className="whitespace-nowrap rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800">เข้างาน {workCount}/{shiftScopedEmployees.length}</span>
+                            <span className="whitespace-nowrap rounded-full bg-violet-100 px-3 py-2 text-xs font-bold text-violet-800">OT {otCount}/{shiftScopedEmployees.length}</span>
                             <button type="button" onClick={() => { setScanNotice(''); setScannerOpen(true); }} disabled={loading || employees.length === 0} className="min-h-10 rounded-xl bg-green-700 px-4 text-sm font-bold text-white hover:bg-green-800 disabled:opacity-50">สแกน QR</button>
                         </div>
                     </div>
 
                     {loading && employees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">กำลังโหลดรายชื่อ…</div>}
                     {!loading && employees.length === 0 && !data?.rosterMessage && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">ไม่มีรายชื่อพนักงานที่เข้าถึงได้</div>}
-                    {employees.length > 0 && visibleEmployees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">{selectedShift === 'UNASSIGNED' ? 'ไม่พบพนักงานที่ไม่มีกะ' : `ไม่พบพนักงานใน${selectedShift === 'ALL' ? 'แผนกนี้' : `กะ ${selectedShift}`}`}</div>}
+                    {employees.length > 0 && visibleEmployees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">{selectedShift === 'UNASSIGNED' ? 'ไม่พบพนักงานที่ไม่มีกะ' : selectedSubDept !== 'ALL' ? `ไม่พบพนักงานในแผนกย่อย ${selectedSubDept === '__NO_SUB_DEPT__' ? 'ที่ไม่ระบุ' : selectedSubDept}` : `ไม่พบพนักงานใน${selectedShift === 'ALL' ? 'แผนกนี้' : `กะ ${selectedShift}`}`}</div>}
                     <div className="space-y-3">
                         {visibleEmployees.map(employee => {
                             const employeeRecords = recordsByEmployee[employee.id] || {};
@@ -1092,7 +1112,7 @@
                                             <AttendanceAvatar employee={employee} />
                                             <div className="min-w-0">
                                                 <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
-                                                <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}{employee.shift ? ` · กะ ${employee.shift}` : ' · ไม่มีกะ'}</div>
+                                                <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}{employee.subDept ? ` · ${employee.subDept}` : ''}{employee.shift ? ` · กะ ${employee.shift}` : ' · ไม่มีกะ'}</div>
                                             </div>
                                         </div>
                                         {employee.qrEnabled !== false && <button type="button" aria-label={`แสดง QR ${employee.name}`} onClick={() => setQrEmployee(employee)} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">QR</button>}
@@ -1111,7 +1131,7 @@
                         })}
                     </div>
 
-                    {pendingList.length > 0 && <div className="fixed inset-x-3 bottom-3 z-[60] mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:px-5">
+                    {pendingList.length > 0 && <div className="fixed inset-x-3 bottom-3 z-[60] mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:px-5">
                         <div className="min-w-0"><div className="font-bold text-gray-900">รอบันทึก {pendingList.length} รายการ</div><div className="hidden text-xs text-gray-500 sm:block">ระบบจะส่งบันทึกทั้งหมดในครั้งเดียว</div></div>
                         <div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPendingActions({})} disabled={Boolean(savingType)} className="min-h-11 rounded-xl border px-3 text-sm font-semibold text-gray-600">ล้าง</button><button type="button" onClick={saveBatch} disabled={Boolean(savingType)} className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-60">{savingType === 'batch' ? 'กำลังบันทึก…' : 'บันทึกทั้งหมด'}</button></div>
                     </div>}
@@ -1650,7 +1670,8 @@
                 const cleanData = {
                     ...data,
                     id: String(data?.id ?? '').trim(),
-                    position: String(data?.position ?? '').trim()
+                    position: String(data?.position ?? '').trim(),
+                    subDept: String(data?.subDept ?? '').trim()
                 };
                 delete cleanData.isNew;
                 data = cleanData;
@@ -1734,10 +1755,10 @@
             };
 
             const exportCSV = () => {
-                const headers = ["ID", "Name", "Department", "Shift", "Position", "Type", "Status", "Phone", "Start Date", "Company"];
+                const headers = ["ID", "Name", "Department", "Sub-department", "Shift", "Position", "Type", "Status", "Phone", "Start Date", "Company"];
                 const csvRows = [headers.join(",")];
                 processedEmployees.forEach(e => {
-                    const row = [e.id, `"${e.name}"`, e.dept, e.shift || '', e.position, e.type, e.status, `"${e.phone||''}"`, e.startDate, `"${e.company||''}"`];
+                    const row = [e.id, `"${e.name}"`, e.dept, `"${e.subDept || ''}"`, e.shift || '', e.position, e.type, e.status, `"${e.phone||''}"`, e.startDate, `"${e.company||''}"`];
                     csvRows.push(row.join(","));
                 });
                 const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -1797,6 +1818,7 @@
                         String(e.id ?? "").toLowerCase().includes(lower) ||
                         (e.position || "").toLowerCase().includes(lower) ||
                         (e.dept || "").toLowerCase().includes(lower) ||
+                        (e.subDept || "").toLowerCase().includes(lower) ||
                         (e.company || "").toLowerCase().includes(lower) ||
                         (e.shift || "").toLowerCase().includes(lower)
                     );
@@ -1905,8 +1927,8 @@
                                         <table className="min-w-full divide-y">
                                             <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                                 <tr>
-                                                    {['ID','Name','Dept','Shift','Position','Type','Status','Phone','Start Date','Company'].map(h => (
-                                                        <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':'company')}>
+                                                    {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company'].map(h => (
+                                                        <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Sub-dept'?'subDept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':'company')}>
                                                             <div className="flex items-center">{h} <Icons.Sort size={12} className="ml-1 opacity-50"/></div>
                                                         </th>
                                                     ))}
@@ -1918,6 +1940,7 @@
                                                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{emp.id}</td>
                                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2"><img src={formatDriveUrl(emp.image)} className="w-6 h-6 rounded-full bg-gray-200"/>{emp.name}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs">{emp.dept}</span></td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{emp.subDept || <span className="text-gray-400">ไม่ระบุ</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">ไม่มีกะ</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{emp.position}</td>
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 rounded-full text-xs font-bold ${emp.type==='Permanent'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}`}>{emp.type}</span></td>

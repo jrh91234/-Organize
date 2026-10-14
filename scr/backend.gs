@@ -267,13 +267,14 @@ function getSheet(name) {
     if(name === 'Users') sheet.appendRow(['Username','Password','Name','Role','Department']); 
     if(name === 'Data') sheet.appendRow(['Key','Value']); 
     if(name === 'Logs') sheet.appendRow(['Timestamp','Username','Name','Role','Department','Action','Detail']);
-    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName']);
+    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName','SubDepartment']);
   } 
   if (name === 'Attendance') {
-    if (sheet.getMaxColumns() < 8) sheet.insertColumnsAfter(sheet.getMaxColumns(), 8 - sheet.getMaxColumns());
+    if (sheet.getMaxColumns() < 9) sheet.insertColumnsAfter(sheet.getMaxColumns(), 9 - sheet.getMaxColumns());
     if (sheet.getRange(1, 7, 1, 2).getValues()[0].join('|') !== 'CheckedByUsername|CheckedByName') {
       sheet.getRange(1, 7, 1, 2).setValues([['CheckedByUsername', 'CheckedByName']]);
     }
+    if (sheet.getRange(1, 9).getValue() !== 'SubDepartment') sheet.getRange(1, 9).setValue('SubDepartment');
   }
   return sheet; 
 }
@@ -735,7 +736,8 @@ function attendanceRecordFromRow_(row) {
     dept: String(row[4] || ''),
     type: String(row[5]),
     checkedByUsername: String(row[6] || ''),
-    checkedByName: String(row[7] || '')
+    checkedByName: String(row[7] || ''),
+    subDept: String(row[8] || '')
   };
 }
 
@@ -815,6 +817,7 @@ function getAttendanceRoster_(actor) {
     id: attendanceEmployeeId_(employee),
     name: String(employee.name || employee.id || ''),
     dept: String(employee.dept || ''),
+    subDept: String(employee.subDept || '').trim(),
     position: String(employee.position || ''),
     image: String(employee.image || ''),
     shift: ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '',
@@ -924,7 +927,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
     }
 
     const timestamp = new Date();
-    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name];
+    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name, target.subDept || ''];
     const record = attendanceRecordFromRow_(row);
     writes.push(row);
     mine[type] = record;
@@ -933,7 +936,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
 
   if (writes.length > 0) {
     const firstRow = sheet.getLastRow() + 1;
-    sheet.getRange(firstRow, 1, writes.length, 8).setValues(writes);
+    sheet.getRange(firstRow, 1, writes.length, 9).setValues(writes);
   }
   return { status: 'success', date: today, items: outcomes };
 }
