@@ -1737,7 +1737,12 @@
                     const employeeShift = ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '';
                     const manualShift = ['A', 'B'].includes(String(manualShifts[employee.id] || '').trim().toUpperCase()) ? String(manualShifts[employee.id]).trim().toUpperCase() : '';
                     const shift = targetIsLeader ? (leaderShift || employeeShift || manualShift) : employee.shift;
-                    const updatedEmployee = { ...employee, reportsTo: targetId, shift };
+                    const updatedEmployee = {
+                        ...employee,
+                        reportsTo: targetId,
+                        shift,
+                        ...(targetIsLeader ? { dept: targetNode.dept || '', subDept: targetNode.subDept || '' } : {})
+                    };
                     updates.push(updatedEmployee);
                     return updatedEmployee;
                 });
