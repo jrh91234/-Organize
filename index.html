@@ -1184,6 +1184,8 @@
             const [pendingSyncCount, setPendingSyncCount] = useState(safeInitialPendingSync.length);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
             const [sidebarWidth, setSidebarWidth] = useState(256);
+            const [pendingShiftDrop, setPendingShiftDrop] = useState(null);
+            const [pendingDropShifts, setPendingDropShifts] = useState({});
             const sidebarRef = useRef(null);
             const isResizing = useRef(false);
             const pendingSyncRef = useRef(safeInitialPendingSync);
@@ -1610,6 +1612,38 @@
                 updateStateFull(newData, [updatedEmp], []);
             }, [employees, updateStateFull]);
 
+            const applyDropReparent = useCallback((sourceIds, targetId, manualShifts = {}) => {
+                const targetNode = employees.find(e => e.id === targetId);
+                if (!targetNode) return;
+                const movableIds = sourceIds.filter(id => !isInChainAbove(employees, id, targetId));
+                if (movableIds.length < sourceIds.length) alert('ไม่สามารถย้ายหัวหน้าไปอยู่ใต้ลูกทีมของตัวเองได้');
+                if (movableIds.length === 0) return;
+
+                const targetIsLeader = String(targetNode.position || '').toLowerCase().includes('leader');
+                const leaderShift = ['A', 'B'].includes(String(targetNode.shift || '').trim().toUpperCase()) ? String(targetNode.shift).trim().toUpperCase() : '';
+                const employeesNeedingShift = targetIsLeader && !leaderShift
+                    ? employees.filter(employee => movableIds.includes(employee.id) && !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()))
+                    : [];
+                const missingManualChoices = employeesNeedingShift.filter(employee => !['A', 'B'].includes(String(manualShifts[employee.id] || '').trim().toUpperCase()));
+                if (missingManualChoices.length > 0) {
+                    setPendingShiftDrop({ sourceIds: movableIds, targetId });
+                    setPendingDropShifts(Object.fromEntries(employeesNeedingShift.map(employee => [employee.id, ''])));
+                    return;
+                }
+
+                const updates = [];
+                const newData = employees.map(employee => {
+                    if (!movableIds.includes(employee.id)) return employee;
+                    const employeeShift = ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '';
+                    const manualShift = ['A', 'B'].includes(String(manualShifts[employee.id] || '').trim().toUpperCase()) ? String(manualShifts[employee.id]).trim().toUpperCase() : '';
+                    const shift = targetIsLeader ? (employeeShift || leaderShift || manualShift) : employee.shift;
+                    const updatedEmployee = { ...employee, reportsTo: targetId, shift };
+                    updates.push(updatedEmployee);
+                    return updatedEmployee;
+                });
+                updateStateFull(newData, updates, []);
+            }, [employees, updateStateFull]);
+
             // [V8] Updated Drop Logic for Root Swapping
             const handleDropNode = useCallback((sourceIds, targetId) => {
                 const targetNode = employees.find(e => e.id === targetId);
@@ -1649,21 +1683,9 @@
 
                 } else {
                     // Standard: Reparent (skip moves that would make someone report to their own subordinate)
-                    const movableIds = sourceIds.filter(id => !isInChainAbove(employees, id, targetId));
-                    if (movableIds.length < sourceIds.length) alert('ไม่สามารถย้ายหัวหน้าไปอยู่ใต้ลูกทีมของตัวเองได้');
-                    if (movableIds.length === 0) return;
-                    const updates = []; 
-                    const newData = employees.map(e => { 
-                        if(movableIds.includes(e.id)) { 
-                            const u = {...e, reportsTo: targetId}; 
-                            updates.push(u); 
-                            return u; 
-                        } 
-                        return e; 
-                    }); 
-                    updateStateFull(newData, updates, []);
+                    applyDropReparent(sourceIds, targetId);
                 }
-            }, [employees, updateStateFull, currentDept]);
+            }, [employees, updateStateFull, currentDept, applyDropReparent]);
             
             // [V13 NEW] Save Logic with Validation & Cascading Update - Defined BEFORE passed to EmployeeForm
             const handleSave = useCallback((data) => { 
@@ -1976,6 +1998,30 @@
                     </div>
 
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
+
+                    {pendingShiftDrop && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="drop-shift-title">
+                        <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+                            <div className="border-b bg-slate-50 px-5 py-4">
+                                <h2 id="drop-shift-title" className="text-lg font-bold text-slate-900">กำหนดกะก่อนย้ายพนักงาน</h2>
+                                <p className="mt-1 text-sm text-slate-600">Leader {employees.find(employee => employee.id === pendingShiftDrop.targetId)?.name || ''} ยังไม่มีกะ กรุณาเลือกกะให้พนักงานแต่ละคน</p>
+                                <p className="mt-1 text-xs text-slate-500">พนักงานที่มีกะอยู่แล้วจะคงกะเดิมไว้</p>
+                            </div>
+                            <div className="max-h-[50vh] space-y-3 overflow-y-auto p-5">
+                                {employees.filter(employee => pendingShiftDrop.sourceIds.includes(employee.id) && !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase())).map(employee => (
+                                    <label key={employee.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+                                        <span className="min-w-0"><span className="block truncate font-semibold text-slate-900">{employee.name || employee.id}</span><span className="block text-xs text-slate-500">{employee.id}</span></span>
+                                        <select aria-label={`เลือกกะของ ${employee.name || employee.id}`} value={pendingDropShifts[employee.id] || ''} onChange={event => setPendingDropShifts(previous => ({ ...previous, [employee.id]: event.target.value }))} className="min-h-11 w-32 rounded-lg border border-slate-300 bg-white px-3 font-semibold text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                                            <option value="">เลือกกะ</option><option value="A">กะ A</option><option value="B">กะ B</option>
+                                        </select>
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="flex justify-end gap-2 border-t bg-slate-50 px-5 py-4">
+                                <button type="button" onClick={() => { setPendingShiftDrop(null); setPendingDropShifts({}); }} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100">ยกเลิก</button>
+                                <button type="button" disabled={employees.some(employee => pendingShiftDrop.sourceIds.includes(employee.id) && !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) && !['A', 'B'].includes(String(pendingDropShifts[employee.id] || '').trim().toUpperCase()))} onClick={() => { const pending = pendingShiftDrop; const shifts = pendingDropShifts; setPendingShiftDrop(null); setPendingDropShifts({}); applyDropReparent(pending.sourceIds, pending.targetId, shifts); }} className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">กำหนดกะและย้าย</button>
+                            </div>
+                        </div>
+                    </div>}
                     
                     {/* [V15] Admin Panel is now the central hub */}
                     {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} orgData={employees} onDataRecovered={(raw) => { const data = normalizeEmployees(raw); setEmployees(data); resetHistory(data); persistPendingSync([]); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
