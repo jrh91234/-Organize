@@ -865,6 +865,48 @@
             );
         };
 
+        const sortAttendanceByHierarchy = (employees) => {
+            const roster = Array.isArray(employees) ? employees : [];
+            const byId = new Map(roster.map(employee => [String(employee.id), employee]));
+            const originalIndex = new Map(roster.map((employee, index) => [String(employee.id), index]));
+            const compareSiblings = (a, b) => {
+                const isSubA = String(a.type || '').toLowerCase() === 'subcontract' ? 1 : 0;
+                const isSubB = String(b.type || '').toLowerCase() === 'subcontract' ? 1 : 0;
+                if (isSubA !== isSubB) return isSubA - isSubB;
+                const orderA = Number(a.order) || 0;
+                const orderB = Number(b.order) || 0;
+                if (orderA !== orderB) return orderA - orderB;
+                return (originalIndex.get(String(a.id)) || 0) - (originalIndex.get(String(b.id)) || 0);
+            };
+            const childrenByManager = new Map();
+            const roots = [];
+            roster.forEach(employee => {
+                const managerId = String(employee.reportsTo || '').trim();
+                if (!managerId || managerId === 'STAGING' || !byId.has(managerId)) {
+                    roots.push(employee);
+                    return;
+                }
+                if (!childrenByManager.has(managerId)) childrenByManager.set(managerId, []);
+                childrenByManager.get(managerId).push(employee);
+            });
+            roots.sort(compareSiblings);
+            childrenByManager.forEach(children => children.sort(compareSiblings));
+
+            const ordered = [];
+            const visited = new Set();
+            const visit = employee => {
+                const id = String(employee.id);
+                if (visited.has(id)) return;
+                visited.add(id);
+                ordered.push(employee);
+                (childrenByManager.get(id) || []).forEach(visit);
+            };
+            roots.forEach(visit);
+            // Keep malformed or cyclic reporting chains visible after the valid hierarchy.
+            roster.slice().sort(compareSiblings).forEach(visit);
+            return ordered;
+        };
+
         const AttendanceAvatar = ({ employee }) => {
             const [imageFailed, setImageFailed] = useState(false);
             const imageUrl = employee?.image ? formatDriveUrl(employee.image) : '';
@@ -961,6 +1003,7 @@
 
         const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onSaveBatch, onRefresh }) => {
             const employees = Array.isArray(data?.employees) ? data.employees : [];
+            const orderedEmployees = useMemo(() => sortAttendanceByHierarchy(employees), [employees]);
             const records = Array.isArray(data?.records) ? data.records : [];
             const isAdmin = currentUser?.role === 'admin';
             const userKey = currentUser ? `${currentUser.attendanceToken || currentUser.username || ''}|${currentUser.dept || ''}` : '';
@@ -1005,7 +1048,7 @@
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'วันนี้';
-            const scopedEmployees = employees.filter(employee => selectedDept === 'ALL' || (employee.dept || '__NO_DEPT__') === selectedDept);
+            const scopedEmployees = orderedEmployees.filter(employee => selectedDept === 'ALL' || (employee.dept || '__NO_DEPT__') === selectedDept);
             const subDeptOptions = Array.from(new Set(scopedEmployees.map(employee => String(employee.subDept || '').trim() || '__NO_SUB_DEPT__'))).sort((a, b) => a === '__NO_SUB_DEPT__' ? 1 : b === '__NO_SUB_DEPT__' ? -1 : a.localeCompare(b));
             const subDeptOptionsKey = subDeptOptions.join('|');
             useEffect(() => {
