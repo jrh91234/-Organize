@@ -913,19 +913,42 @@
             const employees = Array.isArray(data?.employees) ? data.employees : [];
             const records = Array.isArray(data?.records) ? data.records : [];
             const isAdmin = currentUser?.role === 'admin';
-            const [selectedDept, setSelectedDept] = useState(currentDept || '');
+            const userKey = currentUser ? `${currentUser.attendanceToken || currentUser.username || ''}|${currentUser.dept || ''}` : '';
+            const [selectedDept, setSelectedDept] = useState(() => currentUser?.dept || currentDept || '');
             const [selectedShift, setSelectedShift] = useState('ALL');
             const [searchTerm, setSearchTerm] = useState('');
             const [pendingActions, setPendingActions] = useState({});
             const [qrEmployee, setQrEmployee] = useState(null);
             const [scannerOpen, setScannerOpen] = useState(false);
             const [scanNotice, setScanNotice] = useState('');
+            const initializedForUser = useRef('');
             const deptOptions = Array.from(new Set(employees.map(employee => employee.dept || '__NO_DEPT__')));
             const deptOptionsKey = deptOptions.join('|');
+            const selfById = employees.find(employee => employee.id === String(data?.selfId || ''));
+            const selfByUsername = employees.find(employee => employee.id === String(currentUser?.username || ''));
+            const sameNameEmployees = currentUser?.name
+                ? employees.filter(employee => String(employee.name || '').trim().toLocaleLowerCase() === String(currentUser.name).trim().toLocaleLowerCase())
+                : [];
+            const selfEmployee = selfById || selfByUsername || (sameNameEmployees.length === 1 ? sameNameEmployees[0] : null);
             useEffect(() => {
+                if (employees.length === 0) return;
                 const allowed = selectedDept === 'ALL' && isAdmin || deptOptions.includes(selectedDept);
-                if (!allowed) setSelectedDept(isAdmin ? 'ALL' : (deptOptions[0] || ''));
-            }, [deptOptionsKey, isAdmin, selectedDept]);
+                if (!allowed) {
+                    const preferredDept = deptOptions.find(dept => dept.toLocaleLowerCase() === String(currentUser?.dept || '').trim().toLocaleLowerCase());
+                    setSelectedDept(isAdmin ? (preferredDept || 'ALL') : (preferredDept || deptOptions[0] || ''));
+                }
+            }, [deptOptionsKey, employees.length, isAdmin, selectedDept, currentUser?.dept]);
+            useEffect(() => {
+                if (!userKey || !currentUser?.username || String(data?.actorUsername || '') !== String(currentUser.username) || employees.length === 0 || initializedForUser.current === userKey) return;
+                initializedForUser.current = userKey;
+                const userDept = String(currentUser.dept || '').trim();
+                const preferredDept = deptOptions.find(dept => dept.toLocaleLowerCase() === userDept.toLocaleLowerCase());
+                setSelectedDept(isAdmin ? (preferredDept || 'ALL') : (preferredDept || deptOptions[0] || ''));
+                const shift = String(selfEmployee?.shift || '').trim().toUpperCase();
+                setSelectedShift(shift === 'A' || shift === 'B' ? shift : 'ALL');
+                setSearchTerm('');
+                setPendingActions({});
+            }, [userKey, currentUser?.username, currentUser?.dept, data?.actorUsername, data?.selfId, deptOptionsKey, employees.length, isAdmin, selfEmployee?.shift]);
 
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })

@@ -850,7 +850,8 @@ function getAttendance(data) {
 
   return createJSONOutput({
     status: 'success', date: today, mine: mine, records: visibleRecords,
-    employees: roster.employees, departments: roster.departments, rosterMessage: roster.message
+    employees: roster.employees, departments: roster.departments, rosterMessage: roster.message,
+    selfId: roster.selfId, actorUsername: actor.username
   });
 }
 
