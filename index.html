@@ -1998,15 +1998,10 @@
                 if (currentDept !== 'ALL') data = data.filter(e => e.dept === currentDept);
                 if (searchTerm) {
                     const lower = searchTerm.toLowerCase();
-                    data = data.filter(e => 
-                        (e.name || "").toLowerCase().includes(lower) ||
-                        String(e.id ?? "").toLowerCase().includes(lower) ||
-                        (e.position || "").toLowerCase().includes(lower) ||
-                        (e.dept || "").toLowerCase().includes(lower) ||
-                        (e.subDept || "").toLowerCase().includes(lower) ||
-                        (e.company || "").toLowerCase().includes(lower) ||
-                        (e.shift || "").toLowerCase().includes(lower)
-                    );
+                    data = data.filter(e => [
+                        e.name, e.id, e.position, e.dept, e.subDept, e.company, e.shift,
+                        e.type, e.status, e.phone, e.startDate, formatDate(e.startDate)
+                    ].some(value => String(value || '').toLowerCase().includes(lower)));
                 }
                 if (sortConfig.key) {
                     data.sort((a, b) => {
@@ -2103,9 +2098,16 @@
                                 </div>
                             ) : (
                                 <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border overflow-hidden">
-                                    <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                                    <div className="flex flex-col gap-3 border-b bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="text-sm font-bold text-gray-500">Showing {processedEmployees.length} employees</div>
-                                        <button onClick={exportCSV} className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700 shadow-sm"><Icons.FileSpreadsheet size={16}/> Export CSV</button>
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                            <label className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-gray-400 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:w-80">
+                                                <Icons.Search size={16}/>
+                                                <input value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder="ค้นหาชื่อ รหัส แผนก ตำแหน่ง..." aria-label="ค้นหาในตารางรายชื่อ" className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"/>
+                                                {searchTerm && <button type="button" onClick={()=>setSearchTerm('')} aria-label="ล้างคำค้นหา" className="text-gray-400 hover:text-gray-700"><Icons.X size={15}/></button>}
+                                            </label>
+                                            <button onClick={exportCSV} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"><Icons.FileSpreadsheet size={16}/> Export CSV</button>
+                                        </div>
                                     </div>
                                     <div className="overflow-auto flex-1">
                                         <table className="min-w-full divide-y">
@@ -2119,6 +2121,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y bg-white">
+                                                {processedEmployees.length === 0 && <tr><td colSpan={11} className="px-4 py-10 text-center text-sm text-gray-500">{searchTerm ? `ไม่พบรายชื่อที่ตรงกับ “${searchTerm}”` : 'ไม่พบพนักงานในแผนกนี้'}</td></tr>}
                                                 {processedEmployees.map(emp => (
                                                     <tr key={emp.id} className="hover:bg-blue-50 cursor-pointer transition-colors" onClick={()=>{setEditingEmployee({...emp, isNew:false}); setIsModalOpen(true);}}>
                                                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{emp.id}</td>
