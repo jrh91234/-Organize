@@ -437,6 +437,7 @@ function saveData(data) {
   } 
   if(data.orgPositions) updates['orgPositions'] = JSON.stringify(data.orgPositions);
   if(data.orgDepartments) updates['orgDepartments'] = JSON.stringify(data.orgDepartments);
+  if(data.orgSubDepartments) updates['orgSubDepartments'] = JSON.stringify(data.orgSubDepartments);
 
   // [FIX] อัปเดตแบบ Upsert ต่อ key พร้อมลบ row ซ้ำออก เพื่อไม่ให้ getData โดนทับค่าจาก row ล่าสุดแบบไม่ตั้งใจ
   for (let k in updates) {

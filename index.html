@@ -95,6 +95,22 @@
             subDept: String(e.subDept || '').trim(),
             shift: ['A', 'B'].includes(String(e.shift || '').trim().toUpperCase()) ? String(e.shift).trim().toUpperCase() : ''
         }));
+        const normalizeSubDepartmentCatalog = (catalog, employees = []) => {
+            const normalized = {};
+            const add = (dept, rawName) => {
+                const department = String(dept || '').trim();
+                const name = String(rawName || '').trim();
+                if (!department || !name) return;
+                if (!normalized[department]) normalized[department] = [];
+                if (!normalized[department].some(existing => existing.toLocaleLowerCase() === name.toLocaleLowerCase())) normalized[department].push(name);
+            };
+            if (catalog && typeof catalog === 'object' && !Array.isArray(catalog)) {
+                Object.entries(catalog).forEach(([dept, names]) => Array.isArray(names) && names.forEach(name => add(dept, name)));
+            }
+            (Array.isArray(employees) ? employees : []).forEach(employee => add(employee?.dept, employee?.subDept));
+            Object.values(normalized).forEach(names => names.sort((a, b) => a.localeCompare(b)));
+            return normalized;
+        };
         // True when `ancestorId` appears in the reporting chain above `nodeId` (or is the node itself).
         const isInChainAbove = (employees, ancestorId, nodeId) => {
             const byId = new Map(employees.map(e => [String(e.id), e]));
@@ -487,11 +503,12 @@
             );
         });
 
-        const EmployeeForm = ({ employee, supervisors, positions, depts, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
+        const EmployeeForm = ({ employee, supervisors, positions, depts, subDepartments, onAddSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
             const safeDepts = depts || [];
             const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info');
+            const [isAddingSubDept, setIsAddingSubDept] = useState(false); const [newSubDeptName, setNewSubDeptName] = useState('');
             const fileInputRef = useRef(null); 
             const isEditMode = employee && !employee.isNew;
             
@@ -517,7 +534,21 @@
             }, [supervisors, formData.id, formData.dept, formData.reportsTo, currentUser]);
 
             const tenureText = useMemo(() => calculateTenure(formData.startDate), [formData.startDate]);
-            const subDeptSuggestions = useMemo(() => Array.from(new Set((supervisors || []).filter(item => item.dept === formData.dept).map(item => String(item.subDept || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [supervisors, formData.dept]);
+            const subDeptOptions = useMemo(() => subDepartments?.[formData.dept] || [], [subDepartments, formData.dept]);
+            const addSubDepartment = () => {
+                const name = newSubDeptName.trim();
+                if (!formData.dept) return alert('กรุณาเลือกแผนกหลักก่อนเพิ่มแผนกย่อย');
+                if (!name) return;
+                const existing = subDeptOptions.find(item => item.toLocaleLowerCase() === name.toLocaleLowerCase());
+                if (existing) {
+                    setFormData(previous => ({ ...previous, subDept: existing }));
+                } else {
+                    const added = onAddSubDept(formData.dept, name);
+                    if (added) setFormData(previous => ({ ...previous, subDept: added }));
+                }
+                setNewSubDeptName('');
+                setIsAddingSubDept(false);
+            };
             if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">Access Denied</h2> <p className="text-gray-500 mt-2">คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
 
             return (
@@ -529,7 +560,21 @@
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">แผนกหลัก</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value, subDept: ''})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
-                            <div><label className="text-xs text-gray-500">แผนกย่อย / ทีม</label><input list="employee-sub-departments" value={formData.subDept || ''} onChange={e=>setFormData({...formData, subDept: e.target.value})} className="w-full border p-2 rounded" placeholder="เช่น H9 Team A, QC Line 1"/><datalist id="employee-sub-departments">{subDeptSuggestions.map(name=><option key={name} value={name}/>)}</datalist></div>
+                            <div>
+                                <label className="text-xs text-gray-500">แผนกย่อย / ทีม</label>
+                                <div className="flex gap-2">
+                                    <select value={formData.subDept || ''} onChange={e=>setFormData({...formData, subDept: e.target.value})} className="w-full min-w-0 border p-2 rounded bg-white" disabled={!formData.dept}>
+                                        <option value="">ไม่ระบุแผนกย่อย</option>
+                                        {subDeptOptions.map(name=><option key={name} value={name}>{name}</option>)}
+                                        {formData.subDept && !subDeptOptions.includes(formData.subDept) && <option value={formData.subDept}>{formData.subDept}</option>}
+                                    </select>
+                                    <button type="button" onClick={()=>{setIsAddingSubDept(value=>!value);setNewSubDeptName('');}} aria-label="เพิ่มแผนกย่อย" title="เพิ่มแผนกย่อย" className="shrink-0 rounded border border-blue-200 bg-blue-50 px-3 text-blue-700 hover:bg-blue-100"><Icons.Plus size={18}/></button>
+                                </div>
+                                {isAddingSubDept && <div className="mt-2 flex gap-2">
+                                    <input autoFocus value={newSubDeptName} onChange={e=>setNewSubDeptName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addSubDepartment();}}} className="min-w-0 flex-1 border p-2 rounded text-sm" placeholder={`เพิ่มแผนกย่อยใน ${formData.dept || 'แผนกหลัก'}`}/>
+                                    <button type="button" onClick={addSubDepartment} disabled={!newSubDeptName.trim() || !formData.dept} className="rounded bg-green-600 px-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">เพิ่ม</button>
+                                </div>}
+                            </div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
                             <div><label className="text-xs text-gray-500">กะทำงาน</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">ไม่มีกะ</option><option value="A">กะ A</option><option value="B">กะ B</option></select></div>
                             <div className="flex gap-2 items-end">
@@ -1147,10 +1192,12 @@
             const initialEmployees = normalizeEmployees(safeLocalLoad('orgData', []));
             const initialPendingSync = safeLocalLoad('pendingSync', []);
             const safeInitialPendingSync = Array.isArray(initialPendingSync) ? initialPendingSync : [];
+            const initialSubDepartmentCatalog = normalizeSubDepartmentCatalog(safeLocalLoad('orgSubDepartments', {}), initialEmployees);
             const [currentUser, setCurrentUser] = useState(() => safeLocalLoad('currentUser', null));
             const [employees, setEmployees] = useState(initialEmployees);
             const [positions, setPositions] = useState(() => safeLocalLoad('orgPositions', ["Manager", "Supervisor", "Engineer", "Leader", "Operator"]));
             const [departments, setDepartments] = useState(() => safeLocalLoad('orgDepartments', ["ASSEMBLY", "QC", "HR", "EXECUTIVE"]));
+            const [subDepartments, setSubDepartments] = useState(initialSubDepartmentCatalog);
             
             const [currentDept, setCurrentDept] = useState(departments[0] || "ASSEMBLY");
             const [driveUrl, setDriveUrl] = useState(() => safeLocalLoad('driveUrl', "https://script.google.com/macros/s/AKfycbxYxBWD4blG_bP9hdTm_W8RP9PtM9CLZovmSFQVVsQTcBl18uxcaAxrhW5lZKFmEj8H/exec"));
@@ -1393,6 +1440,10 @@
                                 }
                                 if (Array.isArray(res.data.orgPositions)) { setPositions(res.data.orgPositions); localStorage.setItem('orgPositions', JSON.stringify(res.data.orgPositions)); }
                                 if (Array.isArray(res.data.orgDepartments)) { setDepartments(res.data.orgDepartments); localStorage.setItem('orgDepartments', JSON.stringify(res.data.orgDepartments)); }
+                                const catalogEmployees = pendingSyncRef.current.length === 0 && Array.isArray(res.data.orgData) ? normalizeEmployees(res.data.orgData) : normalizeEmployees(safeLocalLoad('orgData', []));
+                                const catalog = normalizeSubDepartmentCatalog(res.data.orgSubDepartments, catalogEmployees);
+                                setSubDepartments(catalog);
+                                localStorage.setItem('orgSubDepartments', JSON.stringify(catalog));
                                 setCloudStatus('online');
                             }
                             setIsDataReady(true);
@@ -1515,6 +1566,22 @@
                 localStorage.setItem('orgDepartments', JSON.stringify(newDepts));
                 if (currentDept === dept) setCurrentDept(newDepts[0] || 'ALL');
                 saveSettingsToCloud({orgDepartments: newDepts});
+            };
+
+            const handleAddSubDepartment = (dept, rawName) => {
+                const department = String(dept || '').trim();
+                const name = String(rawName || '').trim();
+                if (!department || !name) return null;
+                const existing = (subDepartments[department] || []).find(item => item.toLocaleLowerCase() === name.toLocaleLowerCase());
+                if (existing) return existing;
+                const next = normalizeSubDepartmentCatalog({
+                    ...subDepartments,
+                    [department]: [...(subDepartments[department] || []), name]
+                });
+                setSubDepartments(next);
+                localStorage.setItem('orgSubDepartments', JSON.stringify(next));
+                saveSettingsToCloud({orgSubDepartments: next});
+                return name;
             };
 
             const handleAddPosition = (rawPos) => {
@@ -1997,7 +2064,7 @@
                         </main>
                     </div>
 
-                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
+                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
 
                     {pendingShiftDrop && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="drop-shift-title">
                         <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
