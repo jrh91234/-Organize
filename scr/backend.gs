@@ -33,7 +33,7 @@ function doPost(e) {
     }
 
     // [VERIFIED] Logging แบบใหม่ บันทึกละเอียดขึ้น ไม่บันทึกการ Read data
-    if (data.action !== 'getData' && data.action !== 'getUsers') {
+    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance') {
       let detailStr = data.logDetail || '';
       
       // กรณี Update/Delete ให้บันทึกรายละเอียดพนักงานที่ถูกแก้ไข (ชื่อ, รหัส, แผนก, ตำแหน่ง)
@@ -50,6 +50,8 @@ function doPost(e) {
         detailStr = `เพิ่ม/แก้ไขสิทธิ์: [User: ${data.user.username}, ชื่อ: ${data.user.name}, Role: ${data.user.role}, Dept: ${data.user.dept || 'ALL'}]`;
       } else if (data.action === 'deleteUser') {
         detailStr = `ลบสิทธิ์: [User: ${data.username}]`;
+      } else if (data.action === 'recordAttendance') {
+        detailStr = `เช็คชื่อ: ${data.type === 'ot' ? 'เริ่ม OT' : 'เข้างาน'}`;
       } else if (!detailStr && (data.user || data.updates)) {
         // Fallback ใส่รายละเอียดเท่าที่มี
         detailStr = JSON.stringify(data.user || data.updates || {});
@@ -67,6 +69,8 @@ function doPost(e) {
       case 'updateEmployees': return batchUpdateEmployees(data);
       case 'saveData': return saveData(data);
       case 'getData': return getData();
+      case 'getAttendance': return getAttendance(data);
+      case 'recordAttendance': return recordAttendance(data);
       case 'recoverOrgData': return recoverOrgData(data);
       default: return createJSONOutput({ status: 'error', message: 'Unknown action' });
     }
@@ -262,6 +266,7 @@ function getSheet(name) {
     if(name === 'Users') sheet.appendRow(['Username','Password','Name','Role','Department']); 
     if(name === 'Data') sheet.appendRow(['Key','Value']); 
     if(name === 'Logs') sheet.appendRow(['Timestamp','Username','Name','Role','Department','Action','Detail']);
+    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type']);
   } 
   return sheet; 
 }
@@ -282,12 +287,12 @@ function loginUser(data) {
 
       return createJSONOutput({
         status: 'success', 
-        user: { 
+        user: issueAttendanceSession_({
           username: String(rows[i][0]).trim(), 
           name: String(rows[i][2]).trim(), 
           role: rawRole, 
           dept: finalDept 
-        }
+        })
       }); 
     }
   } 
@@ -298,7 +303,7 @@ function loginUser(data) {
   if(!hasAdmin && data.username === 'admin' && data.password === 'password') {
     return createJSONOutput({
       status: 'success', 
-      user: { username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' }
+      user: issueAttendanceSession_({ username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' })
     });
   }
   return createJSONOutput({status:'error'}); 
@@ -634,4 +639,129 @@ function cleanupDuplicateDataKeys(sheet) {
 
 function createJSONOutput(obj) { 
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); 
+}
+
+function attendanceTokenSecret_() {
+  const properties = PropertiesService.getScriptProperties();
+  let secret = properties.getProperty('ATTENDANCE_TOKEN_SECRET');
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid().replace(/-/g, '');
+    properties.setProperty('ATTENDANCE_TOKEN_SECRET', secret);
+  }
+  return secret;
+}
+
+function signAttendancePayload_(payload) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, attendanceTokenSecret_()));
+}
+
+function issueAttendanceSession_(user) {
+  const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
+    username: String(user.username),
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    nonce: Utilities.getUuid()
+  }));
+  return Object.assign({}, user, { attendanceToken: payload + '.' + signAttendancePayload_(payload) });
+}
+
+function getAttendanceActor_(token) {
+  const parts = String(token || '').trim().split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const expectedSignature = signAttendancePayload_(parts[0]);
+  if (parts[1] !== expectedSignature) return null;
+
+  let session;
+  try {
+    session = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString('UTF-8'));
+  } catch (error) {
+    return null;
+  }
+  const username = String(session.username || '').trim();
+  if (!username || Number(session.expiresAt) < Date.now()) return null;
+
+  const rows = getSheet('Users').getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() !== username) continue;
+    const role = String(rows[i][3] || '').trim().toLowerCase();
+    return {
+      username: String(username),
+      name: String(rows[i][2] || username).trim(),
+      role: role,
+      dept: String(rows[i][4] || (role === 'admin' ? 'ALL' : 'ASSEMBLY')).trim()
+    };
+  }
+
+  const hasAdmin = rows.slice(1).some(row => String(row[3] || '').trim().toLowerCase() === 'admin');
+  if (!hasAdmin && username === 'admin') {
+    return { username: 'admin', name: 'System Admin', role: 'admin', dept: 'ALL' };
+  }
+  return null;
+}
+
+function getAttendanceDate_(date) {
+  return Utilities.formatDate(date || new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function attendanceRecordFromRow_(row) {
+  const timestamp = row[1] instanceof Date ? row[1] : new Date(row[1]);
+  const timezone = Session.getScriptTimeZone();
+  return {
+    date: String(row[0]),
+    timestamp: timestamp.toISOString(),
+    time: Utilities.formatDate(timestamp, timezone, 'HH:mm'),
+    username: String(row[2]),
+    name: String(row[3]),
+    dept: String(row[4] || ''),
+    type: String(row[5])
+  };
+}
+
+function getAttendance(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  if (!actor) return createJSONOutput({ status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' });
+
+  const sheet = getSheet('Attendance');
+  const today = getAttendanceDate_();
+  const records = sheet.getDataRange().getValues().slice(1)
+    .filter(row => String(row[0]) === today)
+    .map(attendanceRecordFromRow_)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const mine = {};
+  records.filter(record => record.username === actor.username).forEach(record => { mine[record.type] = record; });
+
+  let visibleRecords = records.filter(record => record.username === actor.username);
+  if (actor.role === 'admin') visibleRecords = records;
+  else if (actor.role === 'supervisor') visibleRecords = records.filter(record => record.dept === actor.dept);
+
+  return createJSONOutput({ status: 'success', date: today, mine: mine, records: visibleRecords });
+}
+
+function recordAttendance(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  if (!actor) return createJSONOutput({ status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' });
+
+  const type = String(data.type || '');
+  if (type !== 'work' && type !== 'ot') {
+    return createJSONOutput({ status: 'error', message: 'ประเภทการเช็คชื่อไม่ถูกต้อง' });
+  }
+
+  const sheet = getSheet('Attendance');
+  const today = getAttendanceDate_();
+  const rows = sheet.getDataRange().getValues().slice(1);
+  const todayRows = rows.filter(row => String(row[0]) === today && String(row[2]) === actor.username);
+  const mine = {};
+  todayRows.forEach(row => { mine[String(row[5])] = attendanceRecordFromRow_(row); });
+
+  if (type === 'ot' && !mine.work) {
+    return createJSONOutput({ status: 'error', code: 'work_required', message: 'กรุณาเช็คเข้างานก่อนเริ่ม OT' });
+  }
+  if (mine[type]) {
+    return createJSONOutput({ status: 'duplicate', date: today, record: mine[type], mine: mine, message: 'เช็คชื่อรายการนี้แล้ววันนี้' });
+  }
+
+  const timestamp = new Date();
+  sheet.appendRow([today, timestamp, actor.username, actor.name, actor.dept, type]);
+  const record = attendanceRecordFromRow_([today, timestamp, actor.username, actor.name, actor.dept, type]);
+  mine[type] = record;
+  return createJSONOutput({ status: 'success', date: today, record: record, mine: mine });
 }

@@ -793,6 +793,87 @@
             );
         };
 
+        const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onCheckIn, onRefresh }) => {
+            const mine = data?.mine || {};
+            const records = Array.isArray(data?.records) ? data.records : [];
+            const canReview = currentUser?.role === 'admin' || currentUser?.role === 'supervisor';
+            const reportRecords = currentDept === 'ALL' ? records : records.filter(record => record.dept === currentDept);
+            const dateLabel = data?.date
+                ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                : 'วันนี้';
+            const actions = [
+                { type: 'work', number: '1', title: 'เข้างาน', hint: 'แตะเมื่อเริ่มงานประจำวัน' },
+                { type: 'ot', number: '2', title: 'เริ่ม OT', hint: 'แตะเมื่อเริ่มทำงานล่วงเวลา' }
+            ];
+
+            return (
+                <section className="mx-auto w-full max-w-5xl space-y-5 pb-6">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-sm font-semibold text-blue-600">เช็คชื่อประจำวัน</div>
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{dateLabel}</h1>
+                            <p className="mt-1 text-sm text-gray-500">ลงชื่อเข้างานและเริ่ม OT ได้อย่างละ 1 ครั้งต่อวัน</p>
+                        </div>
+                        <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด…' : 'โหลดใหม่'}</button>
+                    </div>
+
+                    {notice && <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">{notice}</div>}
+                    {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                        {actions.map(action => {
+                            const saved = mine[action.type];
+                            const requiresWork = action.type === 'ot' && !mine.work;
+                            const disabled = loading || Boolean(savingType) || Boolean(saved) || requiresWork;
+                            return (
+                                <button key={action.type} type="button" onClick={() => onCheckIn(action.type)} disabled={disabled}
+                                    aria-label={`${action.title}${saved ? ` บันทึกแล้วเวลา ${saved.time}` : ''}`}
+                                    className={`touch-manipulation flex min-h-[142px] w-full items-center gap-4 rounded-2xl border p-5 text-left shadow-sm transition active:scale-[0.99] sm:min-h-[172px] sm:p-6 ${saved ? 'border-green-200 bg-green-50 text-green-900' : requiresWork ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-blue-200 bg-white text-gray-900 hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60'}`}>
+                                    <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-2xl font-extrabold ${saved ? 'bg-green-600 text-white' : requiresWork ? 'bg-gray-200 text-gray-400' : 'bg-blue-600 text-white'}`}>{saved ? <Icons.Check size={28}/> : action.number}</span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-2xl font-extrabold">{savingType === action.type ? 'กำลังบันทึก…' : saved ? 'บันทึกแล้ว' : action.title}</span>
+                                        <span className="mt-1 block text-sm font-medium opacity-75">{saved ? `เวลา ${saved.time} น.` : requiresWork ? 'เช็คเข้างานก่อนเพื่อเปิดรายการนี้' : action.hint}</span>
+                                    </span>
+                                    {saved && <span className="shrink-0 text-sm font-bold">{saved.time}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {canReview && (
+                        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-gray-50 px-4 py-3 sm:px-5">
+                                <div>
+                                    <h2 className="font-bold text-gray-900">สรุปการเช็คชื่อวันนี้</h2>
+                                    <p className="text-xs text-gray-500">{currentDept === 'ALL' ? 'ทุกแผนก' : currentDept}</p>
+                                </div>
+                                <div className="flex gap-2 text-xs font-bold">
+                                    <span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-800">เข้างาน {reportRecords.filter(record => record.type === 'work').length}</span>
+                                    <span className="rounded-full bg-violet-100 px-3 py-1.5 text-violet-800">OT {reportRecords.filter(record => record.type === 'ot').length}</span>
+                                </div>
+                            </div>
+                            {loading && <div className="p-5 text-sm text-gray-500">กำลังโหลดรายการ…</div>}
+                            {!loading && reportRecords.length === 0 && <div className="p-5 text-sm text-gray-500">ยังไม่มีรายการเช็คชื่อวันนี้</div>}
+                            {!loading && reportRecords.length > 0 && (
+                                <div className="divide-y">
+                                    {reportRecords.map(record => (
+                                        <div key={`${record.username}-${record.type}`} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${record.type === 'ot' ? 'bg-violet-500' : 'bg-blue-500'}`}></span>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate font-semibold text-gray-900">{record.name}</div>
+                                                <div className="text-xs text-gray-500">{record.dept || 'ไม่ระบุแผนก'} · {record.type === 'ot' ? 'เริ่ม OT' : 'เข้างาน'}</div>
+                                            </div>
+                                            <time className="shrink-0 text-sm font-bold tabular-nums text-gray-700">{record.time} น.</time>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </section>
+            );
+        };
+
         const App = () => {
             // [FIXED] ใช้ safeLocalLoad ป้องกัน JSON Parse Error (สาเหตุหลักจอขาว)
             const initialEmployees = normalizeEmployees(safeLocalLoad('orgData', []));
@@ -841,6 +922,11 @@
             const syncInFlightRef = useRef(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+            const [attendanceData, setAttendanceData] = useState({ date: '', mine: {}, records: [] });
+            const [attendanceLoading, setAttendanceLoading] = useState(false);
+            const [attendanceSavingType, setAttendanceSavingType] = useState('');
+            const [attendanceError, setAttendanceError] = useState('');
+            const [attendanceNotice, setAttendanceNotice] = useState('');
 
             const appApiCall = useCallback(async (url, action, payload = {}) => {
                 const executor = currentUser ? {
@@ -849,10 +935,14 @@
                     role: currentUser.role,
                     dept: currentUser.dept || 'ALL'
                 } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
+                const requestBody = { action, ...payload, executor };
+                if (action === 'getAttendance' || action === 'recordAttendance') {
+                    requestBody.attendanceToken = currentUser?.attendanceToken || '';
+                }
 
                 const res = await fetch(url, {
                     method: 'POST',
-                    body: JSON.stringify({ action, ...payload, executor })
+                    body: JSON.stringify(requestBody)
                 });
                 const raw = await res.text();
                 let result;
@@ -866,6 +956,61 @@
                 }
                 return result;
             }, [currentUser]);
+
+            const loadAttendance = useCallback(async () => {
+                if (!driveUrl) {
+                    setAttendanceError('ยังไม่ได้ตั้งค่า URL ของระบบ');
+                    return;
+                }
+                setAttendanceLoading(true);
+                setAttendanceError('');
+                try {
+                    const result = await appApiCall(driveUrl, 'getAttendance');
+                    if (result?.status !== 'success') throw new Error(result?.message || 'โหลดข้อมูลเช็คชื่อไม่สำเร็จ');
+                    setAttendanceData(result);
+                } catch (error) {
+                    setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ');
+                } finally {
+                    setAttendanceLoading(false);
+                }
+            }, [appApiCall, driveUrl]);
+
+            const handleAttendanceCheckIn = useCallback(async (type) => {
+                if (!driveUrl || attendanceSavingType) return;
+                setAttendanceSavingType(type);
+                setAttendanceError('');
+                setAttendanceNotice('');
+                try {
+                    const result = await appApiCall(driveUrl, 'recordAttendance', { type });
+                    if (result?.status !== 'success' && result?.status !== 'duplicate') {
+                        throw new Error(result?.message || 'บันทึกเช็คชื่อไม่สำเร็จ');
+                    }
+                    const record = result.record;
+                    setAttendanceData(previous => {
+                        const sameDate = previous.date === result.date;
+                        const previousRecords = sameDate ? (previous.records || []) : [];
+                        const previousMine = sameDate ? (previous.mine || {}) : {};
+                        return {
+                            ...previous,
+                            date: result.date || previous.date,
+                            mine: result.mine || { ...previousMine, [type]: record },
+                            records: [record, ...previousRecords.filter(item => !(item.username === record.username && item.type === record.type))]
+                        };
+                    });
+                    const label = type === 'ot' ? 'เริ่ม OT' : 'เข้างาน';
+                    setAttendanceNotice(result.status === 'duplicate'
+                        ? `${label} บันทึกไว้แล้วเวลา ${record.time} น.`
+                        : `เช็ค${label}สำเร็จ เวลา ${record.time} น.`);
+                } catch (error) {
+                    setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ กรุณาลองอีกครั้ง');
+                } finally {
+                    setAttendanceSavingType('');
+                }
+            }, [appApiCall, attendanceSavingType, driveUrl]);
+
+            useEffect(() => {
+                if (viewMode === 'attendance' && currentUser) void loadAttendance();
+            }, [viewMode, currentUser, loadAttendance]);
 
             const persistPendingSync = useCallback((queue) => {
                 const safeQueue = Array.isArray(queue) ? queue : [];
@@ -1436,11 +1581,13 @@
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
+                        <button onClick={()=>setViewMode('attendance')} className={`lg:hidden ml-auto flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm ${viewMode === 'attendance' ? 'bg-green-700 text-white' : 'bg-green-600 text-white hover:bg-green-700'}`}><Icons.Check size={18}/> เช็คชื่อ</button>
                         <div className="hidden lg:flex items-center gap-3">
                             <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
                             <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
                                 <button onClick={()=>setViewMode('chart')} className={`p-1 rounded ${viewMode==='chart'?'bg-white shadow-sm text-blue-600':'text-gray-500'}`}><Icons.Grid size={16}/></button>
                                 <button onClick={()=>setViewMode('list')} className={`p-1 rounded ${viewMode==='list'?'bg-white shadow-sm text-blue-600':'text-gray-500'}`}><Icons.List size={16}/></button>
+                                <button onClick={()=>setViewMode('attendance')} className={`rounded px-2 text-xs font-bold ${viewMode==='attendance'?'bg-white shadow-sm text-green-700':'text-gray-500'}`}>เช็คชื่อ</button>
                             </div>
                             
                             {/* [V23] Add Text Annotation Button */}
@@ -1457,7 +1604,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -1478,9 +1625,11 @@
                             </>
                         )}
 
-                        <main className="flex-1 bg-gray-100 overflow-auto relative p-8">
+                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
-                            {viewMode === 'chart' ? (
+                            {viewMode === 'attendance' ? (
+                                <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onCheckIn={handleAttendanceCheckIn} onRefresh={loadAttendance}/>
+                            ) : viewMode === 'chart' ? (
                                 <div className="flex flex-col items-center min-w-max" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                                     <DraggableLogo logo={logo} setLogo={setLogo} isLocked={isLocked} />
                                     {annotations.map(ann => <DraggableAnnotation key={ann.id} ann={ann} onUpdate={(id, up) => setAnnotations(prev=>prev.map(a=>a.id===id?{...a,...up}:a))} onDelete={(id)=>setAnnotations(prev=>prev.filter(a=>a.id!==id))} isLocked={isLocked} onLinkStart={setLinkStartId} />)}
