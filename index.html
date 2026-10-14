@@ -2040,7 +2040,6 @@
 
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
-                        <button onClick={()=>setViewMode('attendance')} className={`lg:hidden ml-auto flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm ${viewMode === 'attendance' ? 'bg-green-700 text-white' : 'bg-green-600 text-white hover:bg-green-700'}`}><Icons.Check size={18}/> เช็คชื่อ</button>
                         <div className="hidden lg:flex items-center gap-2">
                             <label className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-gray-400 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
                                 <Icons.Search size={15}/>
