@@ -812,6 +812,19 @@
             );
         };
 
+        const AttendanceAvatar = ({ employee }) => {
+            const [imageFailed, setImageFailed] = useState(false);
+            const imageUrl = employee?.image ? formatDriveUrl(employee.image) : '';
+            const initials = String(employee?.name || employee?.id || '?').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase();
+            return (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-blue-50 text-sm font-bold text-blue-700" aria-hidden="true">
+                    {imageUrl && !imageFailed
+                        ? <img src={imageUrl} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} className="h-full w-full object-cover" />
+                        : <span>{initials}</span>}
+                </div>
+            );
+        };
+
         const AttendanceQRCodeModal = ({ employee, onClose }) => {
             const qrRef = useRef(null);
             const [qrLoading, setQrLoading] = useState(true);
@@ -1038,10 +1051,13 @@
                             ];
                             return (
                                 <article key={employee.id} className="rounded-2xl border bg-white p-3 shadow-sm sm:flex sm:items-center sm:gap-4 sm:p-4">
-                                    <div className="mb-3 flex min-w-0 items-center justify-between gap-2 sm:mb-0 sm:flex-1">
+                                    <div className="mb-3 flex min-w-0 items-center justify-between gap-3 sm:mb-0 sm:flex-1">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <AttendanceAvatar employee={employee} />
                                         <div className="min-w-0">
                                             <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
                                             <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}</div>
+                                        </div>
                                         </div>
                                         {employee.qrEnabled !== false && <button type="button" aria-label={`แสดง QR ${employee.name}`} onClick={() => setQrEmployee(employee)} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">QR</button>}
                                     </div>
