@@ -95,6 +95,22 @@
             subDept: String(e.subDept || '').trim(),
             shift: ['A', 'B'].includes(String(e.shift || '').trim().toUpperCase()) ? String(e.shift).trim().toUpperCase() : ''
         }));
+        const isSubcontractEmployee = (employee) => String(employee?.type || '').trim().toLowerCase().replace(/[\s_-]/g, '').startsWith('subcontract');
+        const compareEmployeeCategoryOrder = (a, b) => {
+            const typeOrder = Number(isSubcontractEmployee(a)) - Number(isSubcontractEmployee(b));
+            if (typeOrder) return typeOrder;
+            if (isSubcontractEmployee(a)) {
+                const companyA = String(a.company || '').trim();
+                const companyB = String(b.company || '').trim();
+                if (!companyA && companyB) return 1;
+                if (companyA && !companyB) return -1;
+                const companyOrder = companyA.localeCompare(companyB, undefined, { sensitivity: 'base', numeric: true });
+                if (companyOrder) return companyOrder;
+            }
+            const orderA = Number(a.order) || 0;
+            const orderB = Number(b.order) || 0;
+            return orderA - orderB;
+        };
         const normalizeSubDepartmentCatalog = (catalog, employees = []) => {
             const normalized = {};
             const add = (dept, rawName) => {
@@ -348,7 +364,7 @@
         };
 
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser, isAllDepts }) => {
-            const isSub = employee.type === 'Subcontract';
+            const isSub = isSubcontractEmployee(employee);
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
             if (employee.customColor && THEMES[employee.customColor]) { const styles = THEMES[employee.customColor].lv0.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; } else if (className) { const styles = className.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; }
@@ -437,7 +453,7 @@
             if (!employee || visitedIds.has(employee.id)) return null;
             const newVisited = new Set(visitedIds).add(employee.id);
             
-            const subordinates = allEmployees.filter(e => e.reportsTo === employee.id && !newVisited.has(e.id)).sort((a, b) => { const isSubA = a.type === 'Subcontract' ? 1 : 0; const isSubB = b.type === 'Subcontract' ? 1 : 0; if (isSubA !== isSubB) return isSubA - isSubB; return (a.order || 0) - (b.order || 0); });
+            const subordinates = allEmployees.filter(e => e.reportsTo === employee.id && !newVisited.has(e.id)).sort(compareEmployeeCategoryOrder);
             
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
             const isMatch = searchTerm && (employee.name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -870,12 +886,8 @@
             const byId = new Map(roster.map(employee => [String(employee.id), employee]));
             const originalIndex = new Map(roster.map((employee, index) => [String(employee.id), index]));
             const compareSiblings = (a, b) => {
-                const isSubA = String(a.type || '').toLowerCase() === 'subcontract' ? 1 : 0;
-                const isSubB = String(b.type || '').toLowerCase() === 'subcontract' ? 1 : 0;
-                if (isSubA !== isSubB) return isSubA - isSubB;
-                const orderA = Number(a.order) || 0;
-                const orderB = Number(b.order) || 0;
-                if (orderA !== orderB) return orderA - orderB;
+                const categoryOrder = compareEmployeeCategoryOrder(a, b);
+                if (categoryOrder) return categoryOrder;
                 return (originalIndex.get(String(a.id)) || 0) - (originalIndex.get(String(b.id)) || 0);
             };
             const childrenByManager = new Map();
@@ -1200,7 +1212,10 @@
                                         <div className="flex min-w-0 items-center gap-3">
                                             <AttendanceAvatar employee={employee} />
                                             <div className="min-w-0">
-                                                <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
+                                                <div className="flex min-w-0 items-center gap-1.5">
+                                                    <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
+                                                    {isSubcontractEmployee(employee) && <span title={employee.company || 'Subcontract'} className="max-w-24 shrink-0 truncate rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">{employee.company || 'Subcontract'}</span>}
+                                                </div>
                                                 <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}{employee.subDept ? ` · ${employee.subDept}` : ''}{employee.shift ? ` · กะ ${employee.shift}` : ' · ไม่มีกะ'}</div>
                                             </div>
                                         </div>

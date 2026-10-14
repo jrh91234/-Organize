@@ -822,6 +822,7 @@ function getAttendanceRoster_(actor) {
     position: String(employee.position || ''),
     reportsTo: String(employee.reportsTo || '').trim(),
     type: String(employee.type || 'Permanent'),
+    company: String(employee.company || '').trim(),
     order: Number.isFinite(Number(employee.order)) ? Number(employee.order) : 0,
     image: String(employee.image || ''),
     shift: ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '',
