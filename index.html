@@ -503,7 +503,7 @@
             );
         });
 
-        const EmployeeForm = ({ employee, supervisors, positions, depts, subDepartments, onAddSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
+        const EmployeeForm = ({ employee, supervisors, positions, depts, subDepartments, onAddSubDept, onDeleteSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
             const safeDepts = depts || [];
             const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
@@ -569,6 +569,7 @@
                                         {formData.subDept && !subDeptOptions.includes(formData.subDept) && <option value={formData.subDept}>{formData.subDept}</option>}
                                     </select>
                                     <button type="button" onClick={()=>{setIsAddingSubDept(value=>!value);setNewSubDeptName('');}} aria-label="เพิ่มแผนกย่อย" title="เพิ่มแผนกย่อย" className="shrink-0 rounded border border-blue-200 bg-blue-50 px-3 text-blue-700 hover:bg-blue-100"><Icons.Plus size={18}/></button>
+                                    {formData.subDept && <button type="button" onClick={()=>{if(onDeleteSubDept(formData.dept, formData.subDept)) setFormData(previous=>({...previous, subDept: ''}));}} aria-label={`ลบแผนกย่อย ${formData.subDept}`} title="ลบแผนกย่อยที่เลือก" className="shrink-0 rounded border border-red-200 bg-red-50 px-3 text-red-600 hover:bg-red-100"><Icons.Trash2 size={17}/></button>}
                                 </div>
                                 {isAddingSubDept && <div className="mt-2 flex gap-2">
                                     <input autoFocus value={newSubDeptName} onChange={e=>setNewSubDeptName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addSubDepartment();}}} className="min-w-0 flex-1 border p-2 rounded text-sm" placeholder={`เพิ่มแผนกย่อยใน ${formData.dept || 'แผนกหลัก'}`}/>
@@ -1584,6 +1585,38 @@
                 return name;
             };
 
+            const handleDeleteSubDepartment = (dept, rawName) => {
+                const department = String(dept || '').trim();
+                const name = String(rawName || '').trim();
+                if (!department || !name) return false;
+                const assigned = employees.filter(employee => String(employee.dept || '').trim().toLocaleLowerCase() === department.toLocaleLowerCase() && String(employee.subDept || '').trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+                const confirmation = assigned.length
+                    ? `แผนกย่อย "${name}" มีพนักงาน ${assigned.length} คน หากลบ ระบบจะล้างค่าแผนกย่อยของพนักงานเหล่านั้น แต่ยังคงแผนกหลัก "${department}" ไว้\nยืนยันลบหรือไม่?`
+                    : `ยืนยันลบแผนกย่อย "${name}" จากแผนกหลัก "${department}" หรือไม่?`;
+                if (!confirm(confirmation)) return false;
+
+                if (assigned.length > 0) {
+                    const assignedIds = new Set(assigned.map(employee => String(employee.id)));
+                    const updates = [];
+                    const newData = employees.map(employee => {
+                        if (!assignedIds.has(String(employee.id))) return employee;
+                        const updatedEmployee = { ...employee, subDept: '' };
+                        updates.push(updatedEmployee);
+                        return updatedEmployee;
+                    });
+                    updateStateFull(newData, updates, []);
+                }
+
+                const next = { ...subDepartments };
+                const remaining = (next[department] || []).filter(item => String(item).toLocaleLowerCase() !== name.toLocaleLowerCase());
+                if (remaining.length > 0) next[department] = remaining;
+                else delete next[department];
+                setSubDepartments(next);
+                localStorage.setItem('orgSubDepartments', JSON.stringify(next));
+                saveSettingsToCloud({orgSubDepartments: next});
+                return true;
+            };
+
             const handleAddPosition = (rawPos) => {
                 const pos = String(rawPos || '').trim();
                 if (!pos) return;
@@ -2064,7 +2097,7 @@
                         </main>
                     </div>
 
-                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
+                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onDeleteSubDept={handleDeleteSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
 
                     {pendingShiftDrop && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="drop-shift-title">
                         <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
