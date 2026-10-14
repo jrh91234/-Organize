@@ -803,6 +803,7 @@ function getAttendanceRoster_(actor) {
     dept: String(employee.dept || ''),
     position: String(employee.position || ''),
     image: String(employee.image || ''),
+    shift: ['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) ? String(employee.shift).trim().toUpperCase() : '',
     qrEnabled: employee.qrEnabled !== false
   })).filter(employee => employee.id);
   const departments = Array.from(new Set(roster.map(employee => employee.dept).filter(Boolean))).sort();
