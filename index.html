@@ -56,6 +56,25 @@
 
     <script type="text/babel" data-type="module">
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        const attendanceLibraryLoads = {};
+        const loadAttendanceLibrary = (globalName, url) => {
+            if (window[globalName]) return Promise.resolve(window[globalName]);
+            if (attendanceLibraryLoads[globalName]) return attendanceLibraryLoads[globalName];
+            attendanceLibraryLoads[globalName] = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                const fail = message => {
+                    delete attendanceLibraryLoads[globalName];
+                    script.remove();
+                    reject(new Error(message));
+                };
+                script.onload = () => window[globalName] ? resolve(window[globalName]) : fail('Attendance library did not load');
+                script.onerror = () => fail('Attendance library request failed');
+                document.head.appendChild(script);
+            });
+            return attendanceLibraryLoads[globalName];
+        };
 
         // *** CONSTANTS ***
         const THEMES = { blue: { name: 'Blue', lv0: 'bg-blue-100 border-blue-600', lv1: 'bg-blue-50 border-blue-400', lvN: 'bg-white border-blue-200' }, teal: { name: 'Teal', lv0: 'bg-teal-100 border-teal-600', lv1: 'bg-teal-50 border-teal-400', lvN: 'bg-white border-teal-200' }, indigo: { name: 'Indigo', lv0: 'bg-indigo-100 border-indigo-600', lv1: 'bg-indigo-50 border-indigo-400', lvN: 'bg-white border-indigo-200' }, rose: { name: 'Rose', lv0: 'bg-rose-100 border-rose-600', lv1: 'bg-rose-50 border-rose-400', lvN: 'bg-white border-rose-200' }, slate: { name: 'Slate', lv0: 'bg-slate-200 border-slate-600', lv1: 'bg-slate-100 border-slate-400', lvN: 'bg-white border-slate-300' }, orange: { name: 'Orange', lv0: 'bg-orange-100 border-orange-600', lv1: 'bg-orange-50 border-orange-400', lvN: 'bg-white border-orange-200' } };
@@ -793,12 +812,105 @@
             );
         };
 
-        const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onCheckIn, onRefresh }) => {
+        const AttendanceQRCodeModal = ({ employee, onClose }) => {
+            const qrRef = useRef(null);
+            const [qrLoading, setQrLoading] = useState(true);
+            const [qrError, setQrError] = useState('');
+            const code = `HRATTEND1:${encodeURIComponent(String(employee.id))}`;
+            useEffect(() => {
+                let cancelled = false;
+                loadAttendanceLibrary('QRCode', 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js').then(QRCode => {
+                    if (cancelled || !qrRef.current) return;
+                    qrRef.current.innerHTML = '';
+                    new QRCode(qrRef.current, { text: code, width: 248, height: 248, correctLevel: QRCode.CorrectLevel.M });
+                    setQrLoading(false);
+                }).catch(() => {
+                    if (!cancelled) { setQrError('โหลด QR ไม่สำเร็จ กรุณาลองใหม่'); setQrLoading(false); }
+                });
+                return () => { cancelled = true; };
+            }, [code]);
+            return (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label={`QR code ${employee.name}`}>
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-2xl">
+                        <div className="flex items-start justify-between gap-3 text-left">
+                            <div><h2 className="font-bold text-gray-900">QR เช็คชื่อพนักงาน</h2><p className="mt-1 text-sm text-gray-500">{employee.name} · {employee.id}</p></div>
+                            <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-gray-500 hover:bg-gray-100">ปิด</button>
+                        </div>
+                        <div className="my-5 flex min-h-[264px] items-center justify-center rounded-xl border bg-white p-2"><div ref={qrRef}></div>{qrLoading && <span className="text-sm text-gray-500">กำลังสร้าง QR…</span>}{qrError && <span className="text-sm text-red-600">{qrError}</span>}</div>
+                        <p className="text-sm text-gray-600">ให้พนักงานแสดง QR นี้ แล้วสแกนจากหน้าเช็คชื่อ</p>
+                    </div>
+                </div>
+            );
+        };
+
+        const AttendanceQrScanner = ({ onScan, onClose, onSave, saving, queuedCount, scanMessage }) => {
+            const scannerRef = useRef(null);
+            const onScanRef = useRef(onScan);
+            const scanTypeRef = useRef('work');
+            const [scanType, setScanType] = useState('work');
+            const [cameraError, setCameraError] = useState('');
+            const [cameraReady, setCameraReady] = useState(false);
+            useEffect(() => { onScanRef.current = onScan; }, [onScan]);
+            useEffect(() => { scanTypeRef.current = scanType; }, [scanType]);
+            useEffect(() => {
+                let disposed = false;
+                let startPromise = null;
+                const startScanner = async () => {
+                    try {
+                        const Html5Qrcode = await loadAttendanceLibrary('Html5Qrcode', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js');
+                        if (disposed) return;
+                        const scanner = new Html5Qrcode('attendance-qr-reader', { verbose: false });
+                        scannerRef.current = scanner;
+                        startPromise = scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 }, text => { if (!disposed) onScanRef.current(text, scanTypeRef.current); }, () => {});
+                        await startPromise;
+                        if (!disposed) setCameraReady(true);
+                    } catch (error) {
+                        if (!disposed) setCameraError(window.Html5Qrcode ? 'เปิดกล้องไม่ได้ กรุณาอนุญาตใช้กล้องและเปิดหน้านี้ผ่าน HTTPS' : 'โหลดระบบสแกน QR ไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ');
+                    }
+                };
+                void startScanner();
+                return () => {
+                    disposed = true;
+                    const scanner = scannerRef.current;
+                    scannerRef.current = null;
+                    if (scanner) {
+                        Promise.resolve(startPromise).catch(() => {}).then(() => scanner.stop().catch(() => {})).then(() => scanner.clear()).catch(() => {});
+                    }
+                };
+            }, []);
+            return (
+                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="สแกน QR เช็คชื่อ">
+                    <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div><h2 className="text-lg font-bold text-gray-900">สแกน QR พนักงาน</h2><p className="mt-1 text-sm text-gray-500">สแกนต่อเนื่องได้ แล้วบันทึกทั้งหมดพร้อมกัน</p></div>
+                            <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-100">ปิด</button>
+                        </div>
+                        <label className="mt-4 block text-sm font-semibold text-gray-700">ประเภทเช็คชื่อ
+                            <select value={scanType} onChange={event => setScanType(event.target.value)} className="mt-1 min-h-12 w-full rounded-xl border bg-white px-3 text-base">
+                                <option value="work">เข้างาน</option><option value="ot">เริ่ม OT</option>
+                            </select>
+                        </label>
+                        <div id="attendance-qr-reader" className="mt-4 min-h-[280px] overflow-hidden rounded-xl bg-gray-950"></div>
+                        {!cameraReady && !cameraError && <p className="mt-3 text-center text-sm text-gray-500">กำลังเปิดกล้อง…</p>}
+                        {cameraError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{cameraError}</p>}
+                        {scanMessage && <p role="status" className="mt-3 rounded-xl bg-blue-50 p-3 text-center text-sm font-semibold text-blue-800">{scanMessage}</p>}
+                        <p className="mt-3 text-center text-sm font-semibold text-green-700">เข้าคิวแล้ว {queuedCount} รายการ</p>
+                        {queuedCount > 0 && <button type="button" onClick={onSave} disabled={saving} className="mt-3 min-h-12 w-full rounded-xl bg-blue-700 px-4 font-bold text-white disabled:opacity-60">{saving ? 'กำลังบันทึก…' : `บันทึกทั้งหมด ${queuedCount} รายการ`}</button>}
+                    </div>
+                </div>
+            );
+        };
+
+        const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onSaveBatch, onRefresh }) => {
             const employees = Array.isArray(data?.employees) ? data.employees : [];
             const records = Array.isArray(data?.records) ? data.records : [];
             const isAdmin = currentUser?.role === 'admin';
             const [selectedDept, setSelectedDept] = useState(currentDept || '');
             const [searchTerm, setSearchTerm] = useState('');
+            const [pendingActions, setPendingActions] = useState({});
+            const [qrEmployee, setQrEmployee] = useState(null);
+            const [scannerOpen, setScannerOpen] = useState(false);
+            const [scanNotice, setScanNotice] = useState('');
             const deptOptions = Array.from(new Set(employees.map(employee => employee.dept || '__NO_DEPT__')));
             const deptOptionsKey = deptOptions.join('|');
             useEffect(() => {
@@ -818,16 +930,70 @@
                 map[record.username] = existing;
                 return map;
             }, {});
+            const pendingList = Object.values(pendingActions);
             const workCount = scopedEmployees.filter(employee => recordsByEmployee[employee.id]?.work).length;
             const otCount = scopedEmployees.filter(employee => recordsByEmployee[employee.id]?.ot).length;
 
+            const toggleAction = (employeeId, type) => {
+                const key = `${employeeId}:${type}`;
+                setPendingActions(previous => {
+                    const next = { ...previous };
+                    if (next[key]) {
+                        delete next[key];
+                        if (type === 'work') delete next[`${employeeId}:ot`];
+                    } else {
+                        next[key] = { employeeId, type };
+                    }
+                    return next;
+                });
+            };
+
+            const handleQrScan = useCallback((rawCode, type) => {
+                const match = /^HRATTEND1:(.+)$/.exec(String(rawCode || '').trim());
+                if (!match) {
+                    setScanNotice('QR นี้ไม่ใช่รหัสเช็คชื่อของระบบ');
+                    return;
+                }
+                let employeeId = '';
+                try { employeeId = decodeURIComponent(match[1]); } catch (error) {}
+                const employee = employees.find(item => item.id === employeeId);
+                if (!employee) {
+                    setScanNotice('พนักงานรายนี้อยู่นอกทีมที่คุณมีสิทธิ์เช็คชื่อ');
+                    return;
+                }
+                const key = `${employee.id}:${type}`;
+                if (recordsByEmployee[employee.id]?.[type]) {
+                    setScanNotice(`${employee.name} เช็ค${type === 'ot' ? ' OT' : 'เข้างาน'}แล้ววันนี้`);
+                    return;
+                }
+                if (type === 'ot' && !recordsByEmployee[employee.id]?.work && !pendingActions[`${employee.id}:work`]) {
+                    setScanNotice(`${employee.name} ต้องเช็คเข้างานก่อนเริ่ม OT`);
+                    return;
+                }
+                if (pendingActions[key]) {
+                    setScanNotice(`${employee.name} อยู่ในคิวบันทึกแล้ว`);
+                    return;
+                }
+                setPendingActions(previous => ({ ...previous, [key]: { employeeId: employee.id, type } }));
+                setScanNotice(`เพิ่ม ${employee.name} ในคิวแล้ว`);
+                if (navigator.vibrate) navigator.vibrate(45);
+            }, [employees, recordsByEmployee, pendingActions]);
+
+            const saveBatch = async () => {
+                if (pendingList.length === 0 || savingType) return;
+                const results = await onSaveBatch(pendingList);
+                if (!Array.isArray(results)) return;
+                const completed = new Set(results.filter(item => item.status === 'success' || item.status === 'duplicate').map(item => `${item.employeeId}:${item.type}`));
+                setPendingActions(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => !completed.has(key))));
+            };
+
             return (
-                <section className="mx-auto w-full max-w-5xl space-y-4 pb-6">
+                <section className="mx-auto w-full max-w-5xl space-y-4 pb-28">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <div className="text-sm font-semibold text-blue-600">เช็คชื่อประจำวัน</div>
                             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{dateLabel}</h1>
-                            <p className="mt-1 text-sm text-gray-500">เลือกแผนก แล้วเช็คเข้างานและ OT ให้พนักงานได้อย่างละ 1 ครั้งต่อวัน</p>
+                            <p className="mt-1 text-sm text-gray-500">เลือกหลายคนหรือสแกน QR แล้วบันทึกทั้งหมดในครั้งเดียว</p>
                         </div>
                         <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด…' : 'โหลดใหม่'}</button>
                     </div>
@@ -835,6 +1001,7 @@
                     {notice && <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">{notice}</div>}
                     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
                     {data?.rosterMessage && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">{data.rosterMessage}</div>}
+                    {scanNotice && <div role="status" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">{scanNotice}</div>}
 
                     <div className="flex flex-col gap-3 rounded-2xl border bg-white p-3 shadow-sm sm:flex-row sm:items-end">
                         <label className="min-w-0 flex-1 text-sm font-semibold text-gray-700">
@@ -849,9 +1016,10 @@
                             ค้นหาพนักงาน
                             <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="ชื่อหรือรหัสพนักงาน" className="mt-1 min-h-12 w-full rounded-xl border border-gray-300 px-3 text-base font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                         </label>
-                        <div className="flex gap-2 text-xs font-bold sm:pb-1">
-                            <span className="rounded-full bg-blue-100 px-3 py-2 text-blue-800">เข้างาน {workCount}/{scopedEmployees.length}</span>
-                            <span className="rounded-full bg-violet-100 px-3 py-2 text-violet-800">OT {otCount}/{scopedEmployees.length}</span>
+                        <div className="flex flex-wrap gap-2 sm:pb-1">
+                            <span className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800">เข้างาน {workCount}/{scopedEmployees.length}</span>
+                            <span className="rounded-full bg-violet-100 px-3 py-2 text-xs font-bold text-violet-800">OT {otCount}/{scopedEmployees.length}</span>
+                            <button type="button" onClick={() => { setScanNotice(''); setScannerOpen(true); }} disabled={loading || employees.length === 0} className="min-h-10 rounded-xl bg-green-700 px-4 text-sm font-bold text-white hover:bg-green-800 disabled:opacity-50">สแกน QR</button>
                         </div>
                     </div>
 
@@ -863,24 +1031,26 @@
                             const employeeRecords = recordsByEmployee[employee.id] || {};
                             const work = employeeRecords.work;
                             const ot = employeeRecords.ot;
-                            const workSaving = savingType === `${employee.id}:work`;
-                            const otSaving = savingType === `${employee.id}:ot`;
+                            const workQueued = Boolean(pendingActions[`${employee.id}:work`]);
                             const buttons = [
-                                { type: 'work', title: 'เข้างาน', record: work, saving: workSaving, disabled: Boolean(work) },
-                                { type: 'ot', title: 'เริ่ม OT', record: ot, saving: otSaving, disabled: !work || Boolean(ot) }
+                                { type: 'work', title: 'เข้างาน', record: work, queued: workQueued, disabled: Boolean(work) },
+                                { type: 'ot', title: 'เริ่ม OT', record: ot, queued: Boolean(pendingActions[`${employee.id}:ot`]), disabled: !work && !workQueued || Boolean(ot) }
                             ];
                             return (
                                 <article key={employee.id} className="rounded-2xl border bg-white p-3 shadow-sm sm:flex sm:items-center sm:gap-4 sm:p-4">
-                                    <div className="mb-3 min-w-0 sm:mb-0 sm:flex-1">
-                                        <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
-                                        <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}</div>
+                                    <div className="mb-3 flex min-w-0 items-center justify-between gap-2 sm:mb-0 sm:flex-1">
+                                        <div className="min-w-0">
+                                            <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
+                                            <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}</div>
+                                        </div>
+                                        {employee.qrEnabled !== false && <button type="button" aria-label={`แสดง QR ${employee.name}`} onClick={() => setQrEmployee(employee)} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">QR</button>}
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 sm:w-[360px]">
                                         {buttons.map(button => (
                                             <button key={button.type} type="button" disabled={loading || Boolean(savingType) || button.disabled}
-                                                onClick={() => onCheckIn(button.type, employee.id)}
-                                                className={`touch-manipulation min-h-12 rounded-xl border px-3 py-2 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed ${button.record ? 'border-green-200 bg-green-50 text-green-800' : button.type === 'ot' && !work ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50'}`}>
-                                                {button.saving ? 'กำลังบันทึก…' : button.record ? `${button.title} ✓ ${button.record.time}` : button.type === 'ot' && !work ? 'เช็คเข้างานก่อน' : button.title}
+                                                onClick={() => toggleAction(employee.id, button.type)}
+                                                className={`touch-manipulation min-h-12 rounded-xl border px-3 py-2 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed ${button.record ? 'border-green-200 bg-green-50 text-green-800' : button.queued ? 'border-blue-300 bg-blue-100 text-blue-800 ring-2 ring-blue-200' : button.type === 'ot' && button.disabled ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50'}`}>
+                                                {button.record ? `${button.title} ✓ ${button.record.time}` : button.queued ? `เลือกแล้ว · ${button.title}` : button.type === 'ot' && button.disabled ? 'เลือกเข้างานก่อน' : button.title}
                                             </button>
                                         ))}
                                     </div>
@@ -888,6 +1058,14 @@
                             );
                         })}
                     </div>
+
+                    {pendingList.length > 0 && <div className="fixed inset-x-3 bottom-3 z-[60] mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:px-5">
+                        <div className="min-w-0"><div className="font-bold text-gray-900">รอบันทึก {pendingList.length} รายการ</div><div className="hidden text-xs text-gray-500 sm:block">ระบบจะส่งบันทึกทั้งหมดในครั้งเดียว</div></div>
+                        <div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPendingActions({})} disabled={Boolean(savingType)} className="min-h-11 rounded-xl border px-3 text-sm font-semibold text-gray-600">ล้าง</button><button type="button" onClick={saveBatch} disabled={Boolean(savingType)} className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-60">{savingType === 'batch' ? 'กำลังบันทึก…' : 'บันทึกทั้งหมด'}</button></div>
+                    </div>}
+
+                    {qrEmployee && <AttendanceQRCodeModal employee={qrEmployee} onClose={() => setQrEmployee(null)} />}
+                    {scannerOpen && <AttendanceQrScanner onScan={handleQrScan} onClose={() => setScannerOpen(false)} onSave={() => { setScannerOpen(false); void saveBatch(); }} saving={Boolean(savingType)} queuedCount={pendingList.length} scanMessage={scanNotice} />}
                 </section>
             );
         };
@@ -954,7 +1132,7 @@
                     dept: currentUser.dept || 'ALL'
                 } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
                 const requestBody = { action, ...payload, executor };
-                if (action === 'getAttendance' || action === 'recordAttendance') {
+                if (action === 'getAttendance' || action === 'recordAttendance' || action === 'recordAttendanceBatch') {
                     requestBody.attendanceToken = currentUser?.attendanceToken || '';
                 }
 
@@ -993,35 +1171,37 @@
                 }
             }, [appApiCall, driveUrl]);
 
-            const handleAttendanceCheckIn = useCallback(async (type, employeeId) => {
-                if (!driveUrl || attendanceSavingType) return;
-                const savingKey = `${employeeId}:${type}`;
-                setAttendanceSavingType(savingKey);
+            const handleAttendanceBatchSave = useCallback(async (items) => {
+                if (!driveUrl || attendanceSavingType || !Array.isArray(items) || items.length === 0) return null;
+                setAttendanceSavingType('batch');
                 setAttendanceError('');
                 setAttendanceNotice('');
                 try {
-                    const result = await appApiCall(driveUrl, 'recordAttendance', { type, employeeId });
-                    if (result?.status !== 'success' && result?.status !== 'duplicate') {
+                    const result = await appApiCall(driveUrl, 'recordAttendanceBatch', { items });
+                    if (result?.status !== 'success' || !Array.isArray(result.items)) {
                         throw new Error(result?.message || 'บันทึกเช็คชื่อไม่สำเร็จ');
                     }
-                    const record = result.record;
+                    const completed = result.items.filter(item => (item.status === 'success' || item.status === 'duplicate') && item.record);
                     setAttendanceData(previous => {
                         const sameDate = previous.date === result.date;
-                        const previousRecords = sameDate ? (previous.records || []) : [];
-                        const previousMine = sameDate ? (previous.mine || {}) : {};
-                        return {
-                            ...previous,
-                            date: result.date || previous.date,
-                            mine: result.mine || { ...previousMine, [type]: record },
-                            records: [record, ...previousRecords.filter(item => !(item.username === record.username && item.type === record.type))]
-                        };
+                        const mergedRecords = sameDate ? [...(previous.records || [])] : [];
+                        completed.forEach(item => {
+                            const record = item.record;
+                            const index = mergedRecords.findIndex(existing => existing.username === record.username && existing.type === record.type);
+                            if (index >= 0) mergedRecords[index] = record;
+                            else mergedRecords.unshift(record);
+                        });
+                        return { ...previous, date: result.date || previous.date, records: mergedRecords };
                     });
-                    const label = type === 'ot' ? 'เริ่ม OT' : 'เข้างาน';
-                    setAttendanceNotice(result.status === 'duplicate'
-                        ? `${record.name}: ${label} บันทึกไว้แล้วเวลา ${record.time} น.`
-                        : `เช็ค${label}ให้ ${record.name} สำเร็จ เวลา ${record.time} น.`);
+                    const savedCount = result.items.filter(item => item.status === 'success').length;
+                    const duplicateCount = result.items.filter(item => item.status === 'duplicate').length;
+                    const failed = result.items.filter(item => item.status !== 'success' && item.status !== 'duplicate');
+                    setAttendanceNotice(`บันทึกสำเร็จ ${savedCount} รายการ${duplicateCount ? ` · มีรายการบันทึกไว้แล้ว ${duplicateCount} รายการ` : ''}`);
+                    if (failed.length) setAttendanceError(failed.map(item => `${item.name || item.employeeId}: ${item.message || 'บันทึกไม่สำเร็จ'}`).join(' · '));
+                    return result.items;
                 } catch (error) {
                     setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ กรุณาลองอีกครั้ง');
+                    return null;
                 } finally {
                     setAttendanceSavingType('');
                 }
@@ -1647,7 +1827,7 @@
                         <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
                             {viewMode === 'attendance' ? (
-                                <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onCheckIn={handleAttendanceCheckIn} onRefresh={loadAttendance}/>
+                                <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onSaveBatch={handleAttendanceBatchSave} onRefresh={loadAttendance}/>
                             ) : viewMode === 'chart' ? (
                                 <div className="flex flex-col items-center min-w-max" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                                     <DraggableLogo logo={logo} setLogo={setLogo} isLocked={isLocked} />

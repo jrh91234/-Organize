@@ -71,6 +71,7 @@ function doPost(e) {
       case 'getData': return getData();
       case 'getAttendance': return getAttendance(data);
       case 'recordAttendance': return recordAttendance(data);
+      case 'recordAttendanceBatch': return recordAttendanceBatch(data);
       case 'recoverOrgData': return recoverOrgData(data);
       default: return createJSONOutput({ status: 'error', message: 'Unknown action' });
     }
@@ -792,14 +793,16 @@ function getAttendanceRoster_(actor) {
   } else if (self) {
     allowed = [self];
   } else {
-    allowed = [{ id: actor.username, name: actor.name, dept: actor.dept }];
+    allowed = [{ id: actor.username, name: actor.name, dept: actor.dept, qrEnabled: false }];
+    message = 'บัญชีนี้ยังไม่ตรงกับข้อมูลพนักงาน จึงใช้ QR ไม่ได้ กรุณาตั้ง User หรือชื่อให้ตรงกับผังองค์กร';
   }
 
   const roster = allowed.map(employee => ({
     id: attendanceEmployeeId_(employee),
     name: String(employee.name || employee.id || ''),
     dept: String(employee.dept || ''),
-    position: String(employee.position || '')
+    position: String(employee.position || ''),
+    qrEnabled: employee.qrEnabled !== false
   })).filter(employee => employee.id);
   const departments = Array.from(new Set(roster.map(employee => employee.dept).filter(Boolean))).sort();
   return { employees: roster, departments: departments, message: message, selfId: selfId };
@@ -835,43 +838,83 @@ function getAttendance(data) {
 }
 
 function recordAttendance(data) {
-  const actor = getAttendanceActor_(data && data.attendanceToken);
-  if (!actor) return createJSONOutput({ status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' });
+  const result = recordAttendanceItems_(data, [{ employeeId: data && data.employeeId, type: data && data.type }], true);
+  if (result.status !== 'success') return createJSONOutput(result);
+  const item = result.items[0];
+  return createJSONOutput({ status: item.status, date: result.date, record: item.record, mine: item.mine, message: item.message });
+}
 
-  const type = String(data.type || '');
-  if (type !== 'work' && type !== 'ot') {
-    return createJSONOutput({ status: 'error', message: 'ประเภทการเช็คชื่อไม่ถูกต้อง' });
-  }
+function recordAttendanceBatch(data) {
+  return createJSONOutput(recordAttendanceItems_(data, data && data.items));
+}
+
+function recordAttendanceItems_(data, items, allowSelfFallback) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  if (!actor) return { status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' };
+  if (!Array.isArray(items) || items.length === 0) return { status: 'error', message: 'ไม่มีรายการเช็คชื่อให้บันทึก' };
+  if (items.length > 500) return { status: 'error', message: 'บันทึกได้ไม่เกิน 500 รายการต่อครั้ง' };
 
   let roster;
   try {
     roster = getAttendanceRoster_(actor);
   } catch (error) {
-    return createJSONOutput({ status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' });
-  }
-  const targetId = String(data.employeeId || roster.selfId || actor.username).trim();
-  const target = roster.employees.find(employee => employee.id === targetId);
-  if (!target) {
-    return createJSONOutput({ status: 'error', code: 'not_allowed', message: 'ไม่มีสิทธิ์เช็คชื่อพนักงานรายนี้' });
+    return { status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' };
   }
 
   const sheet = getSheet('Attendance');
   const today = getAttendanceDate_();
   const rows = sheet.getDataRange().getValues().slice(1);
-  const todayRows = rows.filter(row => String(row[0]) === today && String(row[2]) === targetId);
-  const mine = {};
-  todayRows.forEach(row => { mine[String(row[5])] = attendanceRecordFromRow_(row); });
+  const todayRecords = rows.filter(row => String(row[0]) === today).map(attendanceRecordFromRow_);
+  const recordsByEmployee = new Map();
+  todayRecords.forEach(record => {
+    if (!recordsByEmployee.has(record.username)) recordsByEmployee.set(record.username, {});
+    recordsByEmployee.get(record.username)[record.type] = record;
+  });
 
-  if (type === 'ot' && !mine.work) {
-    return createJSONOutput({ status: 'error', code: 'work_required', message: 'กรุณาเช็คเข้างานก่อนเริ่ม OT' });
-  }
-  if (mine[type]) {
-    return createJSONOutput({ status: 'duplicate', date: today, record: mine[type], mine: mine, message: 'เช็คชื่อรายการนี้แล้ววันนี้' });
-  }
+  const allowedEmployees = new Map(roster.employees.map(employee => [employee.id, employee]));
+  const outcomes = new Array(items.length);
+  const writes = [];
+  const orderedItems = items.map((item, index) => ({ item: item && typeof item === 'object' ? item : {}, index }))
+    .sort((a, b) => (a.item.type === 'work' ? 0 : 1) - (b.item.type === 'work' ? 0 : 1));
 
-  const timestamp = new Date();
-  const record = attendanceRecordFromRow_([today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name]);
-  sheet.appendRow([today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name]);
-  mine[type] = record;
-  return createJSONOutput({ status: 'success', date: today, record: record, mine: mine });
+  orderedItems.forEach(entry => {
+    const type = String(entry.item.type || '');
+    const requestedId = entry.item.employeeId;
+    const targetId = String(requestedId === null || requestedId === undefined || requestedId === ''
+      ? (allowSelfFallback ? roster.selfId || actor.username : '')
+      : requestedId).trim();
+    const target = allowedEmployees.get(targetId);
+    if (type !== 'work' && type !== 'ot') {
+      outcomes[entry.index] = { employeeId: targetId, type: type, status: 'error', message: 'ประเภทการเช็คชื่อไม่ถูกต้อง' };
+      return;
+    }
+    if (!target) {
+      outcomes[entry.index] = { employeeId: targetId, type: type, status: 'error', message: 'ไม่มีสิทธิ์เช็คชื่อพนักงานรายนี้' };
+      return;
+    }
+
+    if (!recordsByEmployee.has(targetId)) recordsByEmployee.set(targetId, {});
+    const mine = recordsByEmployee.get(targetId);
+    if (mine[type]) {
+      outcomes[entry.index] = { employeeId: targetId, name: target.name, type: type, status: 'duplicate', record: mine[type], mine: mine, message: 'เช็คชื่อรายการนี้แล้ววันนี้' };
+      return;
+    }
+    if (type === 'ot' && !mine.work) {
+      outcomes[entry.index] = { employeeId: targetId, name: target.name, type: type, status: 'error', code: 'work_required', message: 'กรุณาเช็คเข้างานก่อนเริ่ม OT' };
+      return;
+    }
+
+    const timestamp = new Date();
+    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name];
+    const record = attendanceRecordFromRow_(row);
+    writes.push(row);
+    mine[type] = record;
+    outcomes[entry.index] = { employeeId: targetId, name: target.name, type: type, status: 'success', record: record, mine: mine };
+  });
+
+  if (writes.length > 0) {
+    const firstRow = sheet.getLastRow() + 1;
+    sheet.getRange(firstRow, 1, writes.length, 8).setValues(writes);
+  }
+  return { status: 'success', date: today, items: outcomes };
 }
