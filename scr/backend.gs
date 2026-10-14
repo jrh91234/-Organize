@@ -764,6 +764,7 @@ function attendanceEmployeeId_(employee) {
 
 function getAttendanceRoster_(actor) {
   const employees = getAttendanceOrgEmployees_();
+  const activeEmployees = employees.filter(employee => String(employee.status || '').trim().toLowerCase() !== 'resigned');
   const byId = new Map();
   const childrenByManager = new Map();
   employees.forEach(employee => {
@@ -776,19 +777,23 @@ function getAttendanceRoster_(actor) {
     }
   });
 
-  let self = byId.get(actor.username) || null;
-  if (!self && actor.name) {
+  let matchedSelf = byId.get(actor.username) || null;
+  if (!matchedSelf && actor.name) {
     const normalizedName = String(actor.name).trim().toLocaleLowerCase();
     const nameMatches = employees.filter(employee => String(employee.name || '').trim().toLocaleLowerCase() === normalizedName);
-    if (nameMatches.length === 1) self = nameMatches[0];
+    if (nameMatches.length === 1) matchedSelf = nameMatches[0];
   }
-  const selfId = self ? attendanceEmployeeId_(self) : actor.username;
+  const selfIsResigned = Boolean(matchedSelf && String(matchedSelf.status || '').trim().toLowerCase() === 'resigned');
+  const self = selfIsResigned ? null : matchedSelf;
+  const selfId = matchedSelf ? attendanceEmployeeId_(matchedSelf) : actor.username;
   let allowed = [];
   let message = '';
   if (actor.role === 'admin') {
-    allowed = employees;
+    allowed = activeEmployees;
+  } else if (selfIsResigned) {
+    message = 'บัญชีนี้เป็นพนักงานที่ลาออกแล้ว จึงไม่สามารถใช้ระบบเช็คชื่อได้';
   } else if (actor.role === 'supervisor') {
-    allowed = employees.filter(employee => String(employee.dept || '').trim() === actor.dept);
+    allowed = activeEmployees.filter(employee => String(employee.dept || '').trim() === actor.dept);
   } else if (actor.role === 'leader') {
     if (!self) {
       message = 'ไม่พบพนักงานที่ตรงกับบัญชีหัวหน้า กรุณาตรวจ User หรือชื่อในระบบให้ตรงกับข้อมูลพนักงาน';
@@ -805,7 +810,7 @@ function getAttendanceRoster_(actor) {
           }
         });
       }
-      allowed = employees.filter(employee => allowedIds.has(attendanceEmployeeId_(employee)));
+      allowed = activeEmployees.filter(employee => allowedIds.has(attendanceEmployeeId_(employee)));
     }
   } else if (self) {
     allowed = [self];

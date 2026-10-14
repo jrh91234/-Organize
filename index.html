@@ -85,6 +85,8 @@
         const compressImage = (file, targetSizeKB = 512) => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600; if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality); while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); } resolve(dataUrl); }; img.onerror = reject; }; reader.onerror = reject; }); };
         const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
         const formatDateTime = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
+        const getLocalDateValue = () => { const date = new Date(); const offset = date.getTimezoneOffset() * 60000; return new Date(date.getTime() - offset).toISOString().slice(0, 10); };
+        const isResignedEmployee = (employee) => String(employee?.status || '').trim().toLowerCase() === 'resigned';
         const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start.getTime())) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return "New"; return `${years} ปี ${months} ด.`; };
         const safeLocalLoad = (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch (e) { console.warn(`Error loading ${key}, using fallback.`, e); return fallback; } };
         // Imported/cloud data may carry numeric IDs; the UI compares IDs with ===, so keep them as strings.
@@ -522,7 +524,7 @@
         const EmployeeForm = ({ employee, supervisors, positions, depts, subDepartments, onAddSubDept, onDeleteSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
             const safeDepts = depts || [];
-            const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
+            const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', exitDate: '', exitDept: '', exitSubDept: '', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
             const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); const [isUploading, setIsUploading] = useState(false); const [tab, setTab] = useState('info');
             const [isAddingSubDept, setIsAddingSubDept] = useState(false); const [newSubDeptName, setNewSubDeptName] = useState('');
             const fileInputRef = useRef(null); 
@@ -530,12 +532,13 @@
             
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
             // Only reset when a different employee is opened; adding a position or department while the form is open must not wipe what was typed.
-            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', subDept: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, subDept: '', shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
+            useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', subDept: '', exitDate: '', exitDept: '', exitSubDept: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, subDept: '', shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', exitDate: '', exitDept: '', exitSubDept: '', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
             const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert('อัปโหลดรูปไม่สำเร็จ: ' + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
                 return supervisors.filter(s => { 
                     if (!s || s.id === formData.id) return false; 
+                    if (isResignedEmployee(s) && formData.reportsTo !== s.id) return false;
                     const isSameDept = s.dept === formData.dept;
                     const isAdmin = currentUser?.dept === 'ALL';
                     const isTopManagement = ['EXECUTIVE', 'MANAGEMENT', 'TOP MANAGEMENT'].includes((s.dept || '').toUpperCase()) || getPositionRank(s.position) >= 6;
@@ -598,13 +601,14 @@
                                 <div className="flex-1"><label className="text-xs text-gray-500 flex justify-between">Position</label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
                                 <button type="button" onClick={onManagePositions} className="p-2 border rounded bg-orange-50 text-orange-600 hover:bg-orange-100 mb-0.5" title="Manage Positions"><Icons.Settings size={18}/></button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">Reports To</label><select value={formData.reportsTo} onChange={e=>setFormData({...formData, reportsTo: e.target.value})} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">-- Waiting Area --</option><option value="">-- Top Management --</option>{filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position})</option>)}</select></div><div><label className="text-xs text-gray-500">Type</label><select value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})} className="w-full border p-2 rounded"><option value="Permanent">Permanent</option><option value="Subcontract">Subcontract</option></select></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">Reports To</label><select value={formData.reportsTo} onChange={e=>setFormData({...formData, reportsTo: e.target.value})} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">-- Waiting Area --</option><option value="">-- Top Management --</option>{filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position}){isResignedEmployee(s) ? ' · ลาออกแล้ว' : ''}</option>)}</select></div><div><label className="text-xs text-gray-500">Type</label><select value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})} className="w-full border p-2 rounded"><option value="Permanent">Permanent</option><option value="Subcontract">Subcontract</option></select></div></div>
                             {formData.type === 'Subcontract' && <div><label className="text-xs text-gray-500">Company Name</label><input value={formData.company} onChange={e=>setFormData({...formData, company: e.target.value})} className="w-full border p-2 rounded" placeholder="Subcontractor Company..."/></div>}
                             </>) : (<div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100"><div className="col-span-2"><label className="text-xs text-gray-500 flex items-center justify-between">Phone Number <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={formData.showPhone} onChange={e=>setFormData({...formData, showPhone: e.target.checked})}/><span className="text-[10px]">Show on card</span></label></label><input type="tel" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="0xx-xxx-xxxx"/></div><div><label className="text-xs text-gray-500">Start Date</label><input type="date" value={formData.startDate} onChange={e=>setFormData({...formData, startDate: e.target.value})} className="w-full border p-2 rounded text-sm"/></div><div className="flex flex-col justify-end"><div className="text-xs text-gray-500 mb-1">Tenure</div><div className="bg-white border px-2 py-2 rounded text-sm font-bold text-green-700 h-[38px] flex items-center">{tenureText || '-'}</div></div></div>
                                 <div><label className="text-xs text-gray-500 mb-2 block">Card Color Override</label><div className="grid grid-cols-5 gap-2"><button type="button" onClick={()=>setFormData({...formData, customColor: ''})} className={`h-8 rounded-lg border bg-white text-xs ${formData.customColor===''?'ring-2 ring-blue-500':''}`}>None</button>{Object.entries(THEMES).map(([k,t]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customColor: k})} className={`h-8 rounded-lg ${t.lv0} ${formData.customColor===k?'ring-2 ring-blue-500':''}`}></button>))}</div></div>
                                 <div><label className="text-xs text-gray-500 mb-2 block">Shape Override</label><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setFormData({...formData, customShape: ''})} className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customShape: k})} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div>
-                                <div><label className="text-xs text-gray-500">Employee Status</label><select value={formData.status} onChange={e=>setFormData({...formData, status: e.target.value})} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Resigned">Resigned</option></select></div>
+                                <div><label className="text-xs text-gray-500">Employee Status</label><select value={formData.status} onChange={e=>{const status=e.target.value;setFormData(previous=>status==='Resigned'&&previous.status!=='Resigned'?{...previous,status,exitDate:getLocalDateValue(),exitDept:previous.dept||'',exitSubDept:previous.subDept||''}:{...previous,status});}} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Resigned">Resigned</option></select></div>
+                                {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">วันสิ้นสุดการทำงาน</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/><p className="mt-1 text-xs text-amber-800">บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน</p></div>}
                             </div>)}
                         </form>
                         <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && currentUser?.role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
@@ -1298,6 +1302,7 @@
             const syncInFlightRef = useRef(false);
             const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
             const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+            const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
             const [attendanceData, setAttendanceData] = useState({ date: '', mine: {}, records: [], employees: [], departments: [] });
             const [attendanceLoading, setAttendanceLoading] = useState(false);
             const [attendanceSavingType, setAttendanceSavingType] = useState('');
@@ -1873,6 +1878,17 @@
                 // 2. Setup Context
                 const originalId = editingEmployee?.id;
                 const isNew = !originalId || !employees.some(e => String(e.id) === String(originalId)); // Check if we are editing an existing record
+                const existingEmployee = isNew ? null : employees.find(e => String(e.id) === String(originalId));
+                if (isResignedEmployee(data)) {
+                    if (!isResignedEmployee(existingEmployee)) {
+                        data.exitDate = data.exitDate || getLocalDateValue();
+                        data.exitDept = data.dept || '';
+                        data.exitSubDept = data.subDept || '';
+                    } else {
+                        data.exitDept = data.exitDept || existingEmployee?.dept || data.dept || '';
+                        data.exitSubDept = data.exitSubDept || existingEmployee?.subDept || data.subDept || '';
+                    }
+                }
                 if (data.reportsTo && data.reportsTo !== 'STAGING' && (String(data.reportsTo) === data.id || (!isNew && isInChainAbove(employees, originalId, data.reportsTo)))) {
                     alert("Error: ไม่สามารถให้พนักงานรายงานต่อตัวเองหรือลูกทีมของตัวเองได้");
                     return;
@@ -1940,10 +1956,10 @@
             };
 
             const exportCSV = () => {
-                const headers = ["ID", "Name", "Department", "Sub-department", "Shift", "Position", "Type", "Status", "Phone", "Start Date", "Company"];
+                const headers = ["ID", "Name", "Department", "Sub-department", "Shift", "Position", "Type", "Status", "Phone", "Start Date", "Company", "Exit Date"];
                 const csvRows = [headers.join(",")];
                 processedEmployees.forEach(e => {
-                    const row = [e.id, `"${e.name}"`, e.dept, `"${e.subDept || ''}"`, e.shift || '', e.position, e.type, e.status, `"${e.phone||''}"`, e.startDate, `"${e.company||''}"`];
+                    const row = [e.id, `"${e.name}"`, showEmployeeHistory ? (e.exitDept || e.dept) : e.dept, `"${(showEmployeeHistory ? (e.exitSubDept || e.subDept) : e.subDept) || ''}"`, e.shift || '', e.position, e.type, e.status, `"${e.phone||''}"`, e.startDate, `"${e.company||''}"`, e.exitDate || ''];
                     csvRows.push(row.join(","));
                 });
                 const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
@@ -1983,7 +1999,11 @@
 
             // *** FIXED ZONE: ALL HOOKS ARE ABOVE THIS LINE ***
 
-            const validEmployees = employees.filter(e => e.id);
+            const allEmployeesWithIds = employees.filter(e => e.id);
+            const resignedEmployees = allEmployeesWithIds.filter(isResignedEmployee);
+            const validEmployees = allEmployeesWithIds.filter(e => !isResignedEmployee(e));
+            const scopedActiveCount = validEmployees.filter(e => currentDept === 'ALL' || e.dept === currentDept).length;
+            const scopedHistoryCount = resignedEmployees.filter(e => currentDept === 'ALL' || (e.exitDept || e.dept) === currentDept).length;
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || (e.name || '').toLowerCase().includes(searchTerm.toLowerCase())));
             const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept));
             // [V9 Fix] Sort root nodes by order!
@@ -1994,13 +2014,13 @@
             const isLocked = currentUser?.role !== 'admin' && currentUser?.role !== 'supervisor';
 
             const processedEmployees = useMemo(() => {
-                let data = [...validEmployees];
-                if (currentDept !== 'ALL') data = data.filter(e => e.dept === currentDept);
+                let data = [...(showEmployeeHistory ? resignedEmployees : validEmployees)];
+                if (currentDept !== 'ALL') data = data.filter(e => (showEmployeeHistory ? (e.exitDept || e.dept) : e.dept) === currentDept);
                 if (searchTerm) {
                     const lower = searchTerm.toLowerCase();
                     data = data.filter(e => [
-                        e.name, e.id, e.position, e.dept, e.subDept, e.company, e.shift,
-                        e.type, e.status, e.phone, e.startDate, formatDate(e.startDate)
+                        e.name, e.id, e.position, e.dept, e.subDept, e.exitDept, e.exitSubDept, e.company, e.shift,
+                        e.type, e.status, e.phone, e.startDate, formatDate(e.startDate), e.exitDate, formatDate(e.exitDate)
                     ].some(value => String(value || '').toLowerCase().includes(lower)));
                 }
                 if (sortConfig.key) {
@@ -2013,7 +2033,7 @@
                     });
                 }
                 return data;
-            }, [validEmployees, currentDept, searchTerm, sortConfig]);
+            }, [validEmployees, resignedEmployees, currentDept, searchTerm, sortConfig, showEmployeeHistory]);
 
             // *** NOW IT IS SAFE TO RETURN ***
             
@@ -2099,7 +2119,11 @@
                             ) : (
                                 <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border overflow-hidden">
                                     <div className="flex flex-col gap-3 border-b bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                                        <div className="text-sm font-bold text-gray-500">Showing {processedEmployees.length} employees</div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button type="button" onClick={()=>setShowEmployeeHistory(false)} className={`rounded-lg px-3 py-2 text-sm font-bold ${!showEmployeeHistory ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>พนักงานปัจจุบัน ({scopedActiveCount})</button>
+                                            <button type="button" onClick={()=>setShowEmployeeHistory(true)} className={`rounded-lg px-3 py-2 text-sm font-bold ${showEmployeeHistory ? 'bg-slate-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>ประวัติลาออก ({scopedHistoryCount})</button>
+                                            <span className="text-xs text-gray-500">แสดง {processedEmployees.length} รายการ</span>
+                                        </div>
                                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                             <label className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-gray-400 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:w-80">
                                                 <Icons.Search size={16}/>
@@ -2113,8 +2137,8 @@
                                         <table className="min-w-full divide-y">
                                             <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                                 <tr>
-                                                    {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company'].map(h => (
-                                                        <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Sub-dept'?'subDept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':'company')}>
+                                                    {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company', ...(showEmployeeHistory ? ['Exit Date'] : [])].map(h => (
+                                                        <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Sub-dept'?'subDept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':h==='Exit Date'?'exitDate':'company')}>
                                                             <div className="flex items-center">{h} <Icons.Sort size={12} className="ml-1 opacity-50"/></div>
                                                         </th>
                                                     ))}
@@ -2126,8 +2150,8 @@
                                                     <tr key={emp.id} className="hover:bg-blue-50 cursor-pointer transition-colors" onClick={()=>{setEditingEmployee({...emp, isNew:false}); setIsModalOpen(true);}}>
                                                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{emp.id}</td>
                                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2"><img src={formatDriveUrl(emp.image)} className="w-6 h-6 rounded-full bg-gray-200"/>{emp.name}</td>
-                                                        <td className="px-4 py-3 text-sm text-gray-600"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs">{emp.dept}</span></td>
-                                                        <td className="px-4 py-3 text-sm text-gray-600">{emp.subDept || <span className="text-gray-400">ไม่ระบุ</span>}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs">{showEmployeeHistory ? (emp.exitDept || emp.dept) : emp.dept}</span></td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{(showEmployeeHistory ? (emp.exitSubDept || emp.subDept) : emp.subDept) || <span className="text-gray-400">ไม่ระบุ</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">ไม่มีกะ</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{emp.position}</td>
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 rounded-full text-xs font-bold ${emp.type==='Permanent'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}`}>{emp.type}</span></td>
@@ -2135,6 +2159,7 @@
                                                         <td className="px-4 py-3 text-sm text-gray-500">{emp.phone}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-500"><div>{formatDate(emp.startDate)}</div><div className="text-[10px] text-gray-400">{calculateTenure(emp.startDate)}</div></td>
                                                         <td className="px-4 py-3 text-sm text-gray-500">{emp.company}</td>
+                                                        {showEmployeeHistory && <td className="px-4 py-3 text-sm text-gray-500">{formatDate(emp.exitDate) || <span className="text-gray-400">ไม่ระบุ</span>}</td>}
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -2193,7 +2218,7 @@
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
-                    {isSummaryOpen && <SummaryDashboard employees={employees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
+                    {isSummaryOpen && <SummaryDashboard employees={validEmployees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
             );
         };
