@@ -1834,25 +1834,28 @@
                             {!isLocked && <button onClick={()=>setIsManageDeptsOpen(true)} className="p-1 text-blue-500 hover:text-blue-700" title="Manage Departments"><Icons.Settings size={14}/></button>}
                         </div>
                         <button onClick={()=>setViewMode('attendance')} className={`lg:hidden ml-auto flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold shadow-sm ${viewMode === 'attendance' ? 'bg-green-700 text-white' : 'bg-green-600 text-white hover:bg-green-700'}`}><Icons.Check size={18}/> เช็คชื่อ</button>
-                        <div className="hidden lg:flex items-center gap-3">
-                            <div className="hidden sm:flex items-center bg-gray-100 rounded-full px-3 py-1"><Icons.Search size={14} className="text-gray-400"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Search..." className="bg-transparent border-none text-xs ml-2 w-24 outline-none"/></div>
-                            <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
-                                <button onClick={()=>setViewMode('chart')} className={`p-1 rounded ${viewMode==='chart'?'bg-white shadow-sm text-blue-600':'text-gray-500'}`}><Icons.Grid size={16}/></button>
-                                <button onClick={()=>setViewMode('list')} className={`p-1 rounded ${viewMode==='list'?'bg-white shadow-sm text-blue-600':'text-gray-500'}`}><Icons.List size={16}/></button>
-                                <button onClick={()=>setViewMode('attendance')} className={`rounded px-2 text-xs font-bold ${viewMode==='attendance'?'bg-white shadow-sm text-green-700':'text-gray-500'}`}>เช็คชื่อ</button>
-                            </div>
-                            
-                            {/* [V23] Add Text Annotation Button */}
-                            {!isLocked && <button onClick={addAnnotation} className="p-2 text-gray-600 hover:bg-gray-100 rounded" title="Add Text Note"><Icons.Type size={20}/></button>}
+                        <div className="hidden lg:flex items-center gap-2">
+                            <label className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-gray-400 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+                                <Icons.Search size={15}/>
+                                <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="ค้นหา..." aria-label="ค้นหา" className="w-24 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400 xl:w-32"/>
+                            </label>
 
-                            {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} className={`p-1.5 rounded border ${selectionMode?'bg-purple-600 text-white':'text-gray-600'}`}><Icons.CheckSquare size={18}/></button>}
-                            <button onClick={()=>setIsSummaryOpen(true)} className="p-2 text-blue-600"><Icons.Chart size={20}/></button>
-                            <button onClick={()=>setShowRulers(!showRulers)} className={`p-2 rounded-full ${showRulers ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}><Icons.RulerIcon size={20}/></button>
-                            
-                            {/* Admin Panel Button Only */}
-                            {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} className="p-2 text-gray-700 hover:text-gray-900" title="Admin Panel"><Icons.Settings size={20}/></button>}
-                            
-                            <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="text-red-500 p-2"><Icons.LogOut size={20}/></button>
+                            <div className="flex h-9 items-center rounded-lg border border-gray-200 bg-gray-50 p-1" role="group" aria-label="มุมมอง">
+                                <button onClick={()=>setViewMode('chart')} aria-label="ผังองค์กร" title="ผังองค์กร" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='chart'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Grid size={15}/><span className="hidden 2xl:inline">ผังองค์กร</span></button>
+                                <button onClick={()=>setViewMode('list')} aria-label="รายชื่อ" title="รายชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='list'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.List size={15}/><span className="hidden 2xl:inline">รายชื่อ</span></button>
+                                <button onClick={()=>setViewMode('attendance')} aria-label="เช็คชื่อ" title="เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">เช็คชื่อ</span></button>
+                            </div>
+
+                            <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true"></div>
+                            <div className="flex h-9 items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+                                {!isLocked && <button onClick={addAnnotation} aria-label="เพิ่มข้อความบนผัง" title="เพิ่มข้อความบนผัง" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
+                                {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
+                                <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
+                                <button onClick={()=>setShowRulers(!showRulers)} aria-label={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} title={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showRulers?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.RulerIcon size={18}/></button>
+                                {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} aria-label="ตั้งค่าผู้ดูแล" title="ตั้งค่าผู้ดูแล" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Settings size={18}/></button>}
+                            </div>
+
+                            <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} aria-label="ออกจากระบบ" title="ออกจากระบบ" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition-colors hover:border-red-200 hover:bg-red-50"><Icons.LogOut size={18}/></button>
                         </div>
                     </nav>
 
