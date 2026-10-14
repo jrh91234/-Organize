@@ -527,7 +527,7 @@
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">Department</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
                             <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
-                            <div><label className="text-xs text-gray-500">กะทำงาน</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">ไม่ระบุกะ</option><option value="A">กะ A</option><option value="B">กะ B</option></select></div>
+                            <div><label className="text-xs text-gray-500">กะทำงาน</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">ไม่มีกะ</option><option value="A">กะ A</option><option value="B">กะ B</option></select></div>
                             <div className="flex gap-2 items-end">
                                 <div className="flex-1"><label className="text-xs text-gray-500 flex justify-between">Position</label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
                                 <button type="button" onClick={onManagePositions} className="p-2 border rounded bg-orange-50 text-orange-600 hover:bg-orange-100 mb-0.5" title="Manage Positions"><Icons.Settings size={18}/></button>
@@ -1035,7 +1035,7 @@
                                 <option value="ALL">ทุกกะ</option>
                                 <option value="A">กะ A</option>
                                 <option value="B">กะ B</option>
-                                <option value="UNASSIGNED">ไม่ระบุกะ</option>
+                                <option value="UNASSIGNED">ไม่มีกะ</option>
                             </select>
                         </label>
                         <label className="min-w-0 flex-[2] text-sm font-semibold text-gray-700">
@@ -1051,7 +1051,7 @@
 
                     {loading && employees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">กำลังโหลดรายชื่อ…</div>}
                     {!loading && employees.length === 0 && !data?.rosterMessage && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">ไม่มีรายชื่อพนักงานที่เข้าถึงได้</div>}
-                    {employees.length > 0 && visibleEmployees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">ไม่พบพนักงานใน{selectedShift === 'ALL' ? 'แผนกนี้' : `กะ ${selectedShift === 'UNASSIGNED' ? 'ที่ยังไม่ระบุ' : selectedShift}`}</div>}
+                    {employees.length > 0 && visibleEmployees.length === 0 && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">{selectedShift === 'UNASSIGNED' ? 'ไม่พบพนักงานที่ไม่มีกะ' : `ไม่พบพนักงานใน${selectedShift === 'ALL' ? 'แผนกนี้' : `กะ ${selectedShift}`}`}</div>}
                     <div className="space-y-3">
                         {visibleEmployees.map(employee => {
                             const employeeRecords = recordsByEmployee[employee.id] || {};
@@ -1069,7 +1069,7 @@
                                             <AttendanceAvatar employee={employee} />
                                             <div className="min-w-0">
                                                 <div className="truncate font-bold text-gray-900">{employee.name || employee.id}</div>
-                                                <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''} · กะ {employee.shift || 'ไม่ระบุ'}</div>
+                                                <div className="truncate text-xs text-gray-500">{employee.id}{employee.position ? ` · ${employee.position}` : ''}{employee.dept ? ` · ${employee.dept}` : ''}{employee.shift ? ` · กะ ${employee.shift}` : ' · ไม่มีกะ'}</div>
                                             </div>
                                         </div>
                                         {employee.qrEnabled !== false && <button type="button" aria-label={`แสดง QR ${employee.name}`} onClick={() => setQrEmployee(employee)} className="shrink-0 rounded-lg border px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50">QR</button>}
@@ -1892,7 +1892,7 @@
                                                         <td className="px-4 py-3 text-sm font-mono text-gray-500">{emp.id}</td>
                                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2"><img src={formatDriveUrl(emp.image)} className="w-6 h-6 rounded-full bg-gray-200"/>{emp.name}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs">{emp.dept}</span></td>
-                                                        <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">ไม่ระบุ</span>}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">ไม่มีกะ</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{emp.position}</td>
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 rounded-full text-xs font-bold ${emp.type==='Permanent'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}`}>{emp.type}</span></td>
                                                         <td className="px-4 py-3 text-sm"><span className={`w-2 h-2 rounded-full inline-block mr-2 ${emp.status==='Active'?'bg-green-500':'bg-red-500'}`}></span>{emp.status}</td>
