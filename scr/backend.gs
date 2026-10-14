@@ -706,7 +706,21 @@ function getAttendanceActor_(token) {
 }
 
 function getAttendanceDate_(date) {
-  return Utilities.formatDate(date || new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const reference = date ? new Date(date) : new Date();
+  const shifted = new Date(reference.getTime() - 8 * 60 * 60 * 1000);
+  return Utilities.formatDate(shifted, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function getAttendanceWindow_(date) {
+  const timezone = Session.getScriptTimeZone();
+  const workDate = getAttendanceDate_(date);
+  const start = Utilities.parseDate(workDate + ' 08:00:00', timezone, 'yyyy-MM-dd HH:mm:ss');
+  return { date: workDate, start: start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
+}
+
+function isAttendanceTimestampInWindow_(value, window) {
+  const timestamp = value instanceof Date ? value : new Date(value);
+  return !isNaN(timestamp.getTime()) && timestamp >= window.start && timestamp < window.end;
 }
 
 function attendanceRecordFromRow_(row) {
@@ -822,9 +836,10 @@ function getAttendance(data) {
   }
 
   const sheet = getSheet('Attendance');
-  const today = getAttendanceDate_();
+  const window = getAttendanceWindow_(new Date());
+  const today = window.date;
   const records = sheet.getDataRange().getValues().slice(1)
-    .filter(row => String(row[0]) === today)
+    .filter(row => isAttendanceTimestampInWindow_(row[1], window))
     .map(attendanceRecordFromRow_)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const mine = {};
@@ -864,9 +879,10 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
   }
 
   const sheet = getSheet('Attendance');
-  const today = getAttendanceDate_();
+  const window = getAttendanceWindow_(new Date());
+  const today = window.date;
   const rows = sheet.getDataRange().getValues().slice(1);
-  const todayRecords = rows.filter(row => String(row[0]) === today).map(attendanceRecordFromRow_);
+  const todayRecords = rows.filter(row => isAttendanceTimestampInWindow_(row[1], window)).map(attendanceRecordFromRow_);
   const recordsByEmployee = new Map();
   todayRecords.forEach(record => {
     if (!recordsByEmployee.has(record.username)) recordsByEmployee.set(record.username, {});
@@ -898,7 +914,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
     if (!recordsByEmployee.has(targetId)) recordsByEmployee.set(targetId, {});
     const mine = recordsByEmployee.get(targetId);
     if (mine[type]) {
-      outcomes[entry.index] = { employeeId: targetId, name: target.name, type: type, status: 'duplicate', record: mine[type], mine: mine, message: 'เช็คชื่อรายการนี้แล้ววันนี้' };
+      outcomes[entry.index] = { employeeId: targetId, name: target.name, type: type, status: 'duplicate', record: mine[type], mine: mine, message: 'เช็คชื่อรายการนี้แล้วในรอบนี้' };
       return;
     }
     if (type === 'ot' && !mine.work) {

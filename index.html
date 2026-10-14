@@ -862,12 +862,9 @@
         const AttendanceQrScanner = ({ onScan, onClose, onSave, saving, queuedCount, scanMessage }) => {
             const scannerRef = useRef(null);
             const onScanRef = useRef(onScan);
-            const scanTypeRef = useRef('work');
-            const [scanType, setScanType] = useState('work');
             const [cameraError, setCameraError] = useState('');
             const [cameraReady, setCameraReady] = useState(false);
             useEffect(() => { onScanRef.current = onScan; }, [onScan]);
-            useEffect(() => { scanTypeRef.current = scanType; }, [scanType]);
             useEffect(() => {
                 let disposed = false;
                 let startPromise = null;
@@ -877,7 +874,7 @@
                         if (disposed) return;
                         const scanner = new Html5Qrcode('attendance-qr-reader', { verbose: false });
                         scannerRef.current = scanner;
-                        startPromise = scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 }, text => { if (!disposed) onScanRef.current(text, scanTypeRef.current); }, () => {});
+                        startPromise = scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 }, aspectRatio: 1 }, text => { if (!disposed) onScanRef.current(text); }, () => {});
                         await startPromise;
                         if (!disposed) setCameraReady(true);
                     } catch (error) {
@@ -898,14 +895,9 @@
                 <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-3 sm:p-5" role="dialog" aria-modal="true" aria-label="สแกน QR เช็คชื่อ">
                     <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
                         <div className="flex items-start justify-between gap-3">
-                            <div><h2 className="text-lg font-bold text-gray-900">สแกน QR พนักงาน</h2><p className="mt-1 text-sm text-gray-500">สแกนต่อเนื่องได้ แล้วบันทึกทั้งหมดพร้อมกัน</p></div>
+                            <div><h2 className="text-lg font-bold text-gray-900">สแกน QR พนักงาน</h2><p className="mt-1 text-sm text-gray-500">ระบบเลือกเข้างานหรือ OT ให้อัตโนมัติตามรายการรอบนี้</p></div>
                             <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-100">ปิด</button>
                         </div>
-                        <label className="mt-4 block text-sm font-semibold text-gray-700">ประเภทเช็คชื่อ
-                            <select value={scanType} onChange={event => setScanType(event.target.value)} className="mt-1 min-h-12 w-full rounded-xl border bg-white px-3 text-base">
-                                <option value="work">เข้างาน</option><option value="ot">เริ่ม OT</option>
-                            </select>
-                        </label>
                         <div id="attendance-qr-reader" className="mt-4 min-h-[280px] overflow-hidden rounded-xl bg-gray-950"></div>
                         {!cameraReady && !cameraError && <p className="mt-3 text-center text-sm text-gray-500">กำลังเปิดกล้อง…</p>}
                         {cameraError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{cameraError}</p>}
@@ -966,7 +958,7 @@
                 });
             };
 
-            const handleQrScan = useCallback((rawCode, type) => {
+            const handleQrScan = useCallback(rawCode => {
                 const match = /^HRATTEND1:(.+)$/.exec(String(rawCode || '').trim());
                 if (!match) {
                     setScanNotice('QR นี้ไม่ใช่รหัสเช็คชื่อของระบบ');
@@ -983,21 +975,23 @@
                     setScanNotice(`พนักงาน ${employee.name} ไม่อยู่ในแผนกหรือกะที่เลือก`);
                     return;
                 }
+                const employeeRecords = recordsByEmployee[employee.id] || {};
+                if (employeeRecords.ot) {
+                    setScanNotice(`${employee.name} เช็คเข้างานและ OT ครบแล้วในรอบนี้`);
+                    return;
+                }
+                if (!employeeRecords.work && pendingActions[`${employee.id}:work`]) {
+                    setScanNotice(`${employee.name} อยู่ในคิวเข้างานแล้ว กรุณาบันทึกก่อนสแกน OT`);
+                    return;
+                }
+                const type = employeeRecords.work ? 'ot' : 'work';
                 const key = `${employee.id}:${type}`;
-                if (recordsByEmployee[employee.id]?.[type]) {
-                    setScanNotice(`${employee.name} เช็ค${type === 'ot' ? ' OT' : 'เข้างาน'}แล้ววันนี้`);
-                    return;
-                }
-                if (type === 'ot' && !recordsByEmployee[employee.id]?.work && !pendingActions[`${employee.id}:work`]) {
-                    setScanNotice(`${employee.name} ต้องเช็คเข้างานก่อนเริ่ม OT`);
-                    return;
-                }
                 if (pendingActions[key]) {
                     setScanNotice(`${employee.name} อยู่ในคิวบันทึกแล้ว`);
                     return;
                 }
                 setPendingActions(previous => ({ ...previous, [key]: { employeeId: employee.id, type } }));
-                setScanNotice(`เพิ่ม ${employee.name} ในคิวแล้ว`);
+                setScanNotice(`เพิ่ม ${employee.name} ในคิว${type === 'ot' ? ' OT' : 'เข้างาน'}แล้ว`);
                 if (navigator.vibrate) navigator.vibrate(45);
             }, [employees, shiftScopedEmployees, recordsByEmployee, pendingActions]);
 
@@ -1015,7 +1009,7 @@
                         <div>
                             <div className="text-sm font-semibold text-blue-600">เช็คชื่อประจำวัน</div>
                             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{dateLabel}</h1>
-                            <p className="mt-1 text-sm text-gray-500">เลือกหลายคนหรือสแกน QR แล้วบันทึกทั้งหมดในครั้งเดียว</p>
+                            <p className="mt-1 text-sm text-gray-500">เลือกหลายคนหรือสแกน QR เพื่อบันทึกพร้อมกัน · รอบวัน 08:00–07:59 วันถัดไป</p>
                         </div>
                         <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด…' : 'โหลดใหม่'}</button>
                     </div>
@@ -1066,7 +1060,7 @@
                             const workQueued = Boolean(pendingActions[`${employee.id}:work`]);
                             const buttons = [
                                 { type: 'work', title: 'เข้างาน', record: work, queued: workQueued, disabled: Boolean(work) },
-                                { type: 'ot', title: 'เริ่ม OT', record: ot, queued: Boolean(pendingActions[`${employee.id}:ot`]), disabled: !work && !workQueued || Boolean(ot) }
+                                { type: 'ot', title: 'OT', record: ot, queued: Boolean(pendingActions[`${employee.id}:ot`]), disabled: !work && !workQueued || Boolean(ot) }
                             ];
                             return (
                                 <article key={employee.id} className="rounded-2xl border bg-white p-3 shadow-sm sm:flex sm:items-center sm:gap-4 sm:p-4">
