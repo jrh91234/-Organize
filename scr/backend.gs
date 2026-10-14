@@ -266,8 +266,14 @@ function getSheet(name) {
     if(name === 'Users') sheet.appendRow(['Username','Password','Name','Role','Department']); 
     if(name === 'Data') sheet.appendRow(['Key','Value']); 
     if(name === 'Logs') sheet.appendRow(['Timestamp','Username','Name','Role','Department','Action','Detail']);
-    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type']);
+    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName']);
   } 
+  if (name === 'Attendance') {
+    if (sheet.getMaxColumns() < 8) sheet.insertColumnsAfter(sheet.getMaxColumns(), 8 - sheet.getMaxColumns());
+    if (sheet.getRange(1, 7, 1, 2).getValues()[0].join('|') !== 'CheckedByUsername|CheckedByName') {
+      sheet.getRange(1, 7, 1, 2).setValues([['CheckedByUsername', 'CheckedByName']]);
+    }
+  }
   return sheet; 
 }
 
@@ -712,13 +718,103 @@ function attendanceRecordFromRow_(row) {
     username: String(row[2]),
     name: String(row[3]),
     dept: String(row[4] || ''),
-    type: String(row[5])
+    type: String(row[5]),
+    checkedByUsername: String(row[6] || ''),
+    checkedByName: String(row[7] || '')
   };
+}
+
+function getAttendanceOrgEmployees_() {
+  const value = getLatestDataKeyValue(getSheet('Data'), 'orgData');
+  if (value === null || value === undefined || value === '') return [];
+  try {
+    const content = String(value).indexOf('FILE_ID:') === 0
+      ? DriveApp.getFileById(String(value).slice('FILE_ID:'.length)).getBlob().getDataAsString()
+      : String(value);
+    const employees = JSON.parse(content);
+    return Array.isArray(employees) ? employees.filter(employee => employee && typeof employee === 'object') : [];
+  } catch (error) {
+    throw new Error('อ่านรายชื่อพนักงานสำหรับเช็คชื่อไม่สำเร็จ');
+  }
+}
+
+function attendanceEmployeeId_(employee) {
+  return employee && employee.id !== null && employee.id !== undefined
+    ? String(employee.id).trim()
+    : '';
+}
+
+function getAttendanceRoster_(actor) {
+  const employees = getAttendanceOrgEmployees_();
+  const byId = new Map();
+  const childrenByManager = new Map();
+  employees.forEach(employee => {
+    const id = attendanceEmployeeId_(employee);
+    if (id) byId.set(id, employee);
+    const managerId = String(employee.reportsTo || '').trim();
+    if (id && managerId && managerId !== 'STAGING') {
+      if (!childrenByManager.has(managerId)) childrenByManager.set(managerId, []);
+      childrenByManager.get(managerId).push(employee);
+    }
+  });
+
+  let self = byId.get(actor.username) || null;
+  if (!self && actor.name) {
+    const normalizedName = String(actor.name).trim().toLocaleLowerCase();
+    const nameMatches = employees.filter(employee => String(employee.name || '').trim().toLocaleLowerCase() === normalizedName);
+    if (nameMatches.length === 1) self = nameMatches[0];
+  }
+  const selfId = self ? attendanceEmployeeId_(self) : actor.username;
+  let allowed = [];
+  let message = '';
+  if (actor.role === 'admin') {
+    allowed = employees;
+  } else if (actor.role === 'supervisor') {
+    allowed = employees.filter(employee => String(employee.dept || '').trim() === actor.dept);
+  } else if (actor.role === 'leader') {
+    if (!self) {
+      message = 'ไม่พบพนักงานที่ตรงกับบัญชีหัวหน้า กรุณาตรวจ User หรือชื่อในระบบให้ตรงกับข้อมูลพนักงาน';
+    } else {
+      const allowedIds = new Set([selfId]);
+      const queue = [selfId];
+      for (let cursor = 0; cursor < queue.length; cursor++) {
+        const managerId = queue[cursor];
+        (childrenByManager.get(managerId) || []).forEach(employee => {
+          const id = attendanceEmployeeId_(employee);
+          if (id && !allowedIds.has(id)) {
+            allowedIds.add(id);
+            queue.push(id);
+          }
+        });
+      }
+      allowed = employees.filter(employee => allowedIds.has(attendanceEmployeeId_(employee)));
+    }
+  } else if (self) {
+    allowed = [self];
+  } else {
+    allowed = [{ id: actor.username, name: actor.name, dept: actor.dept }];
+  }
+
+  const roster = allowed.map(employee => ({
+    id: attendanceEmployeeId_(employee),
+    name: String(employee.name || employee.id || ''),
+    dept: String(employee.dept || ''),
+    position: String(employee.position || '')
+  })).filter(employee => employee.id);
+  const departments = Array.from(new Set(roster.map(employee => employee.dept).filter(Boolean))).sort();
+  return { employees: roster, departments: departments, message: message, selfId: selfId };
 }
 
 function getAttendance(data) {
   const actor = getAttendanceActor_(data && data.attendanceToken);
   if (!actor) return createJSONOutput({ status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' });
+
+  let roster;
+  try {
+    roster = getAttendanceRoster_(actor);
+  } catch (error) {
+    return createJSONOutput({ status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' });
+  }
 
   const sheet = getSheet('Attendance');
   const today = getAttendanceDate_();
@@ -727,13 +823,15 @@ function getAttendance(data) {
     .map(attendanceRecordFromRow_)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const mine = {};
-  records.filter(record => record.username === actor.username).forEach(record => { mine[record.type] = record; });
+  records.filter(record => record.username === roster.selfId || record.username === actor.username).forEach(record => { mine[record.type] = record; });
 
-  let visibleRecords = records.filter(record => record.username === actor.username);
-  if (actor.role === 'admin') visibleRecords = records;
-  else if (actor.role === 'supervisor') visibleRecords = records.filter(record => record.dept === actor.dept);
+  const allowedIds = new Set(roster.employees.map(employee => employee.id));
+  let visibleRecords = records.filter(record => allowedIds.has(record.username) || record.username === actor.username);
 
-  return createJSONOutput({ status: 'success', date: today, mine: mine, records: visibleRecords });
+  return createJSONOutput({
+    status: 'success', date: today, mine: mine, records: visibleRecords,
+    employees: roster.employees, departments: roster.departments, rosterMessage: roster.message
+  });
 }
 
 function recordAttendance(data) {
@@ -745,10 +843,22 @@ function recordAttendance(data) {
     return createJSONOutput({ status: 'error', message: 'ประเภทการเช็คชื่อไม่ถูกต้อง' });
   }
 
+  let roster;
+  try {
+    roster = getAttendanceRoster_(actor);
+  } catch (error) {
+    return createJSONOutput({ status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' });
+  }
+  const targetId = String(data.employeeId || roster.selfId || actor.username).trim();
+  const target = roster.employees.find(employee => employee.id === targetId);
+  if (!target) {
+    return createJSONOutput({ status: 'error', code: 'not_allowed', message: 'ไม่มีสิทธิ์เช็คชื่อพนักงานรายนี้' });
+  }
+
   const sheet = getSheet('Attendance');
   const today = getAttendanceDate_();
   const rows = sheet.getDataRange().getValues().slice(1);
-  const todayRows = rows.filter(row => String(row[0]) === today && String(row[2]) === actor.username);
+  const todayRows = rows.filter(row => String(row[0]) === today && String(row[2]) === targetId);
   const mine = {};
   todayRows.forEach(row => { mine[String(row[5])] = attendanceRecordFromRow_(row); });
 
@@ -760,8 +870,8 @@ function recordAttendance(data) {
   }
 
   const timestamp = new Date();
-  sheet.appendRow([today, timestamp, actor.username, actor.name, actor.dept, type]);
-  const record = attendanceRecordFromRow_([today, timestamp, actor.username, actor.name, actor.dept, type]);
+  const record = attendanceRecordFromRow_([today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name]);
+  sheet.appendRow([today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name]);
   mine[type] = record;
   return createJSONOutput({ status: 'success', date: today, record: record, mine: mine });
 }
