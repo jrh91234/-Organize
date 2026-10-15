@@ -6,6 +6,13 @@ const CONFIG = {
   FOLDER_ID: "1K8g9ta30-ERitMBt_tGT2wr1ubtrv3df"
 };
 
+// Copy of the employee roster for the Department P&L Database (repo: department-pl-business-plan).
+// Leave SPREADSHEET_ID empty to switch the copy off. See docs/pl-sheet-sync.md.
+const PL_SYNC = {
+  SPREADSHEET_ID: "1ZZKFLPCjv06TxUmtcMlZ7pvVZvyDpkZmM8FIWNq3xZQ",
+  SHEET_NAME: "Employees"
+};
+
 function doPost(e) {
   const lock = LockService.getScriptLock();
   // ป้องกันการยิงซ้ำซ้อนภายใน 30 วินาที
@@ -231,7 +238,129 @@ function batchUpdateEmployees(data) {
     upsertDataKey(sheet, 'orgData', 'FILE_ID:' + file.getId());
     normalizeOrgDataFileNames_(file.getId());
   }
-  return createJSONOutput({ status: 'success', message: 'Synced' });
+  // The save above is already final; the P&L copy must never turn it into an error.
+  const plSync = syncEmployeesToPlSheetSafely_(() => syncEmployeesToPlSheet_(updates, deletes, renames));
+  return createJSONOutput({ status: 'success', message: 'Synced', plSync });
+}
+
+// --- Employee roster copy for the Department P&L Database ---
+// One row per employee id in the "Employees" tab, kept in step with every add / edit / resign / delete / rename.
+// Phone numbers, photos, colours and reporting lines are deliberately left out.
+const PL_EMPLOYEE_HEADERS = ['รหัส','ชื่อ','แผนก','แผนกย่อย','กะ','ตำแหน่ง','ประเภท','บริษัท','สถานะ','วันที่เริ่มงาน','วันที่ออก','ซิงก์ล่าสุด'];
+const PL_STATUS_COL = 9;
+const PL_SYNCED_COL = 12;
+
+function syncEmployeesToPlSheetSafely_(work) {
+  if (!PL_SYNC.SPREADSHEET_ID) return 'off';
+  try {
+    work();
+    return 'ok';
+  } catch (e) {
+    console.error('P&L employee sync failed: ' + e.toString());
+    try { saveLog({ username: 'System', name: '-', role: '-', dept: '-' }, 'plSyncFailed', e.toString()); } catch (ignore) {}
+    return 'failed: ' + e.toString();
+  }
+}
+
+function getPlEmployeeSheet_() {
+  const ss = SpreadsheetApp.openById(PL_SYNC.SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(PL_SYNC.SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(PL_SYNC.SHEET_NAME);
+    sheet.getRange(1, 1, 1, PL_EMPLOYEE_HEADERS.length).setValues([PL_EMPLOYEE_HEADERS]);
+    sheet.setFrozenRows(1);
+  }
+  const header = sheet.getRange(1, 1, 1, PL_EMPLOYEE_HEADERS.length).getValues()[0];
+  if (header.join('|') !== PL_EMPLOYEE_HEADERS.join('|')) {
+    // A tab with another layout is somebody's data: stop instead of overwriting it.
+    throw new Error('Tab "' + PL_SYNC.SHEET_NAME + '" has a different header row; refusing to write');
+  }
+  return sheet;
+}
+
+function plEmployeeRow_(emp, syncedAt) {
+  const text = (v) => (v === null || v === undefined ? '' : String(v));
+  return [
+    text(emp.id), text(emp.name), text(emp.dept), text(emp.subDept), text(emp.shift), text(emp.position),
+    text(emp.type), text(emp.company), text(emp.status), text(emp.startDate), text(emp.exitDate), syncedAt
+  ];
+}
+
+// upserts: employee objects to add or update; deleteIds: ids removed from the org chart; renames: [{fromId, toId}].
+// Deleted employees stay in the sheet with status "Deleted" so headcount history is not lost.
+function syncEmployeesToPlSheet_(upserts, deleteIds, renames) {
+  const adds = (Array.isArray(upserts) ? upserts : []).filter(e => e && e.id !== null && e.id !== undefined);
+  const dels = (Array.isArray(deleteIds) ? deleteIds : []).map(String);
+  const moves = (Array.isArray(renames) ? renames : []).filter(r => r && r.fromId !== null && r.fromId !== undefined && r.toId !== null && r.toId !== undefined);
+  if (!adds.length && !dels.length && !moves.length) return;
+
+  const sheet = getPlEmployeeSheet_();
+  const cols = PL_EMPLOYEE_HEADERS.length;
+  const syncedAt = new Date();
+  const lastRow = sheet.getLastRow();
+  const rowById = new Map();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, 1).setNumberFormat('@');
+    sheet.getRange(2, 1, lastRow - 1, 1).getValues().forEach((r, i) => { if (String(r[0]) !== '') rowById.set(String(r[0]), i + 2); });
+  }
+
+  // A renamed employee keeps their row: change the id first so the upsert below updates it in place.
+  moves.forEach(m => {
+    const from = String(m.fromId), to = String(m.toId), row = rowById.get(from);
+    if (row && !rowById.has(to)) {
+      sheet.getRange(row, 1).setNumberFormat('@').setValue(to);
+      rowById.delete(from);
+      rowById.set(to, row);
+    }
+  });
+
+  const appended = [];
+  adds.forEach(emp => {
+    const values = plEmployeeRow_(emp, syncedAt), row = rowById.get(String(emp.id));
+    if (row) sheet.getRange(row, 1, 1, cols).setNumberFormat('@').setValues([values]);
+    else appended.push(values);
+  });
+  if (appended.length) {
+    const start = sheet.getLastRow() + 1;
+    sheet.getRange(start, 1, appended.length, 1).setNumberFormat('@');
+    sheet.getRange(start, 1, appended.length, cols).setValues(appended);
+  }
+
+  dels.forEach(id => {
+    const row = rowById.get(id);
+    if (!row) return;
+    sheet.getRange(row, PL_STATUS_COL).setValue('Deleted');
+    sheet.getRange(row, PL_SYNCED_COL).setValue(syncedAt);
+  });
+}
+
+// Whole-roster sync for imports and the first fill. Employees missing from the list are marked "Deleted".
+function syncAllEmployeesToPlSheet_(employees) {
+  const list = Array.isArray(employees) ? employees : [];
+  const ids = new Set(list.map(e => String(e && e.id)));
+  const sheet = getPlEmployeeSheet_();
+  const lastRow = sheet.getLastRow();
+  const missing = [];
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, PL_STATUS_COL).getValues().forEach(r => {
+      if (String(r[0]) !== '' && !ids.has(String(r[0])) && r[PL_STATUS_COL - 1] !== 'Deleted') missing.push(String(r[0]));
+    });
+  }
+  syncEmployeesToPlSheet_(list, missing, []);
+}
+
+// Run once from the Apps Script editor to copy every current employee into the P&L sheet.
+function backfillEmployeesToPlSheet() {
+  const sheet = getSheet('Data');
+  const rows = sheet.getDataRange().getValues();
+  let fileId = null;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === 'orgData' && String(rows[i][1]).startsWith('FILE_ID:')) fileId = String(rows[i][1]).split('FILE_ID:')[1];
+  }
+  if (!fileId) throw new Error('orgData file not found');
+  const employees = JSON.parse(DriveApp.getFileById(fileId).getBlob().getDataAsString());
+  syncAllEmployeesToPlSheet_(employees);
+  return 'Synced ' + employees.length + ' employees';
 }
 
 function normalizeVersion_(value) {
@@ -443,8 +572,10 @@ function saveData(data) {
   for (let k in updates) {
     upsertDataKey(sheet, k, updates[k]);
   }
-  
-  return createJSONOutput({status:'success'}); 
+
+  // A full import replaces the roster, so mirror the whole list to the P&L sheet as well.
+  const plSync = Array.isArray(data.orgData) ? syncEmployeesToPlSheetSafely_(() => syncAllEmployeesToPlSheet_(data.orgData)) : undefined;
+  return createJSONOutput({status:'success', plSync}); 
 }
 
 function getData() { 
