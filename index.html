@@ -9,6 +9,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -1973,6 +1974,44 @@
                 document.body.removeChild(a);
             };
 
+            // Render the table as an off-screen HTML node so the browser draws the Thai glyphs, then save it as a landscape A4 PDF.
+            const exportPDF = async () => {
+                if (!window.html2pdf) { alert('ไม่สามารถโหลดตัวสร้าง PDF ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'); return; }
+                const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const headers = ['ID', 'ชื่อ', 'แผนก', 'แผนกย่อย', 'กะ', 'ตำแหน่ง', 'ประเภท', 'สถานะ', 'โทรศัพท์', 'วันที่เริ่มงาน', 'บริษัท', ...(showEmployeeHistory ? ['วันที่ลาออก'] : [])];
+                const rows = processedEmployees.map(e => [
+                    e.id, e.name, showEmployeeHistory ? (e.exitDept || e.dept) : e.dept, (showEmployeeHistory ? (e.exitSubDept || e.subDept) : e.subDept) || '',
+                    e.shift || '', e.position, e.type, e.status, e.phone || '', formatDate(e.startDate), e.company || '',
+                    ...(showEmployeeHistory ? [formatDate(e.exitDate) || ''] : [])
+                ]);
+                const title = `${showEmployeeHistory ? 'ประวัติลาออก' : 'รายชื่อพนักงาน'} - ${currentDept}`;
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:1060px;padding:16px;background:#fff;font-family:Sarabun,sans-serif;color:#111827;';
+                wrap.innerHTML = `<h2 style="font-size:20px;font-weight:700;margin:0 0 4px">${esc(title)}</h2>
+                    <div style="font-size:12px;color:#6b7280;margin-bottom:10px">ทั้งหมด ${rows.length} รายการ · พิมพ์เมื่อ ${esc(new Date().toLocaleString('th-TH'))}</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:11px">
+                        <thead><tr>${headers.map(h => `<th style="background:#f3f4f6;border:1px solid #d1d5db;padding:5px 6px;text-align:left">${esc(h)}</th>`).join('')}</tr></thead>
+                        <tbody>${rows.map(r => `<tr style="page-break-inside:avoid">${r.map(c => `<td style="border:1px solid #e5e7eb;padding:4px 6px">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+                    </table>`;
+                document.body.appendChild(wrap);
+                try {
+                    if (document.fonts?.ready) await document.fonts.ready;
+                    await window.html2pdf().set({
+                        margin: 8,
+                        filename: `employees_${currentDept}_${new Date().toISOString().slice(0,10)}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                        pagebreak: { mode: ['css', 'legacy'] }
+                    }).from(wrap).save();
+                } catch (err) {
+                    console.error(err);
+                    alert('สร้าง PDF ไม่สำเร็จ: ' + (err?.message || err));
+                } finally {
+                    document.body.removeChild(wrap);
+                }
+            };
+
             // [Fix] SummaryDashboard Logic with Dept Updates Fix
             const deptUpdates = useMemo(() => {
                 const updates = {};
@@ -2131,6 +2170,7 @@
                                                 {searchTerm && <button type="button" onClick={()=>setSearchTerm('')} aria-label="ล้างคำค้นหา" className="text-gray-400 hover:text-gray-700"><Icons.X size={15}/></button>}
                                             </label>
                                             <button onClick={exportCSV} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"><Icons.FileSpreadsheet size={16}/> Export CSV</button>
+                                            <button onClick={exportPDF} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-sm text-white shadow-sm hover:bg-red-700"><Icons.FileSpreadsheet size={16}/> Export PDF</button>
                                         </div>
                                     </div>
                                     <div className="overflow-auto flex-1">
