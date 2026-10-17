@@ -613,7 +613,7 @@
                                 {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">วันสิ้นสุดการทำงาน</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/><p className="mt-1 text-xs text-amber-800">บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน</p></div>}
                             </div>)}
                         </form>
-                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && currentUser?.role!=='leader' && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
+                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
                     </div>
                 </div>
             );
@@ -1876,6 +1876,11 @@
                     alert("Error: Employee position is required!");
                     return;
                 }
+                // Leaders can only add people below their own rank, in their own department.
+                if (currentUser?.role === 'leader' && !employees.some(e => String(e.id) === String(editingEmployee?.id)) && !canEditEmployee(currentUser, data)) {
+                    alert('Leader เพิ่มได้เฉพาะพนักงานที่ตำแหน่งต่ำกว่าตัวเองในแผนกเดียวกัน');
+                    return;
+                }
 
                 // 2. Setup Context
                 const originalId = editingEmployee?.id;
@@ -1939,10 +1944,10 @@
                 const renames = idChanged ? [{ fromId: String(originalId), toId: String(data.id) }] : [];
                 updateStateFull(newData, updates, deletes, {}, renames);
                 setIsModalOpen(false); 
-            }, [employees, editingEmployee, updateStateFull]);
+            }, [employees, editingEmployee, updateStateFull, currentUser]);
 
             // Delete by the ID the record was opened with, even if the ID field was edited in the form.
-            const handleDelete = useCallback((formId) => { const id = editingEmployee?.id ?? formId; const newData = employees.filter(e => String(e.id) !== String(id)); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, editingEmployee, updateStateFull]);
+            const handleDelete = useCallback((formId) => { const id = editingEmployee?.id ?? formId; const target = employees.find(e => String(e.id) === String(id)); if (currentUser?.role === 'leader' && !(target && canEditEmployee(currentUser, target))) { alert('Leader ลบได้เฉพาะพนักงานที่ตำแหน่งต่ำกว่าตัวเองในแผนกเดียวกัน'); return; } const newData = employees.filter(e => String(e.id) !== String(id)); updateStateFull(newData, [], [id]); setIsModalOpen(false); }, [employees, editingEmployee, updateStateFull, currentUser]);
 
             const resize = useCallback((e) => { if (isResizing.current) { let w = e.clientX; if (w > 150 && w < 500) setSidebarWidth(w); } }, []);
             const stopResizing = useCallback(() => { isResizing.current = false; }, []);
@@ -2109,6 +2114,8 @@
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
 
             const isLocked = currentUser?.role !== 'admin' && currentUser?.role !== 'supervisor';
+            // Leaders may add people to their own team; canEditEmployee still limits what they can add or delete.
+            const canAddEmployee = !isLocked || currentUser?.role === 'leader';
 
             const processedEmployees = useMemo(() => {
                 let data = [...(showEmployeeHistory ? resignedEmployees : validEmployees)];
@@ -2178,7 +2185,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -2186,7 +2193,7 @@
                             <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r transform transition-transform duration-300 pt-14 lg:pt-0 ${isSidebarOpen?'translate-x-0':'-translate-x-full'} ${isSidebarCollapsed?'w-0 overflow-hidden':''} lg:relative lg:translate-x-0`} style={{ width: isSidebarCollapsed?'0px':(window.innerWidth>1024?`${sidebarWidth}px`:'16rem') }}>
                                 <div className="p-4 flex justify-between items-center shrink-0">
                                     <h2 className="font-bold text-xs text-gray-400 uppercase">Waiting Area ({stagingEmployees.length})</h2>
-                                    {!isLocked && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo:'STAGING', dept: currentDept}); setIsModalOpen(true);}}><Icons.Plus size={18} className="text-blue-600"/></button>}
+                                    {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo:'STAGING', dept: currentDept}); setIsModalOpen(true);}}><Icons.Plus size={18} className="text-blue-600"/></button>}
                                     <button onClick={()=>setIsSidebarOpen(false)} className="lg:hidden text-gray-400 hover:text-red-500"><Icons.X size={18}/></button>
                                 </div>
                                 <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-20">
