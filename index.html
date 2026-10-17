@@ -776,27 +776,48 @@
                             {/* Production vs Support */}
                             {stats.total > 0 && (
                                 <div className="bg-white rounded-xl shadow-sm p-6 border mb-6">
-                                    <h3 className="font-bold text-gray-800 mb-1 border-b pb-2 flex items-center gap-2"><Icons.Users size={18} className="text-blue-600"/> ฝ่ายผลิต / ฝ่าย Support ({activeTab})</h3>
+                                    <h3 className="font-bold text-gray-800 mb-1 flex items-center gap-2"><Icons.Users size={18} className="text-blue-600"/> ฝ่ายผลิต / ฝ่าย Support ({activeTab})</h3>
                                     <p className="text-xs text-gray-500 mb-4">ฝ่ายผลิต = Leader และทุกคนที่อยู่ใต้ Leader ลงไป ส่วนที่เหลือนับเป็นฝ่าย Support</p>
-                                    <div className="mb-4 flex h-3 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`ฝ่ายผลิต ${stats.groups.production.total} คน ฝ่าย Support ${stats.groups.support.total} คน`}>
-                                        <div className="bg-blue-500" style={{ width: `${(stats.groups.production.total / stats.total) * 100}%` }}></div>
-                                        <div className="bg-slate-400" style={{ width: `${(stats.groups.support.total / stats.total) * 100}%` }}></div>
+                                    <div className="flex h-3 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`ฝ่ายผลิต ${stats.groups.production.total} คน ฝ่าย Support ${stats.groups.support.total} คน`}>
+                                        {stats.groups.production.total > 0 && <div className="bg-blue-500" style={{ width: `${(stats.groups.production.total / stats.total) * 100}%` }}></div>}
+                                        {stats.groups.support.total > 0 && <div className="bg-slate-400" style={{ width: `${(stats.groups.support.total / stats.total) * 100}%`, minWidth: '6px' }}></div>}
                                     </div>
-                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                        {[{ key: 'production', label: 'ฝ่ายผลิต', sub: 'Leader ลงไป', accent: 'border-blue-500', text: 'text-blue-700' }, { key: 'support', label: 'ฝ่าย Support', sub: 'นอกเหนือจากฝ่ายผลิต', accent: 'border-slate-400', text: 'text-slate-700' }].map(({ key, label, sub, accent, text }) => {
+                                    <div className="mt-2 mb-5 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-600">
+                                        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>ฝ่ายผลิต <b>{stats.groups.production.total}</b> คน ({Math.round((stats.groups.production.total / stats.total) * 100)}%)</span>
+                                        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>ฝ่าย Support <b>{stats.groups.support.total}</b> คน ({Math.round((stats.groups.support.total / stats.total) * 100)}%)</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        {[{ key: 'production', label: 'ฝ่ายผลิต', sub: 'Leader ลงไป', top: 'border-t-blue-500', text: 'text-blue-700' }, { key: 'support', label: 'ฝ่าย Support', sub: 'นอกเหนือจากฝ่ายผลิต', top: 'border-t-slate-400', text: 'text-slate-700' }].map(({ key, label, sub, top, text }) => {
                                             const g = stats.groups[key];
                                             const positions = Object.entries(g.positions).sort((a, b) => b[1] - a[1]);
+                                            const shown = positions.slice(0, 5);
+                                            const rest = positions.slice(5);
+                                            const restCount = rest.reduce((sum, [, n]) => sum + n, 0);
+                                            const permPct = g.total > 0 ? Math.round((g.perm / g.total) * 100) : 0;
                                             return (
-                                                <div key={key} className={`rounded-lg border-l-4 ${accent} bg-gray-50 p-4`}>
-                                                    <div className="flex items-baseline justify-between gap-2">
-                                                        <div><div className={`font-bold ${text}`}>{label}</div><div className="text-[11px] text-gray-500">{sub}</div></div>
-                                                        <div className="text-right"><div className="text-3xl font-bold text-gray-800">{g.total}</div><div className="text-[11px] text-gray-500">{Math.round((g.total / stats.total) * 100)}% ของทั้งหมด</div></div>
+                                                <div key={key} className={`flex flex-col rounded-lg border border-t-4 ${top} bg-white p-4`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div><div className={`text-base font-bold ${text}`}>{label}</div><div className="text-xs text-gray-500">{sub}</div></div>
+                                                        <div className="text-right"><div className="text-3xl font-bold leading-none text-gray-800">{g.total}</div><div className="mt-1 text-xs text-gray-500">คน</div></div>
                                                     </div>
-                                                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 font-bold text-green-700">Permanent {g.perm}</span>
-                                                        <span className="rounded-full bg-orange-100 px-2.5 py-0.5 font-bold text-orange-700">Subcontract {g.sub}</span>
+                                                    <div className="mt-4">
+                                                        <div className="flex h-2 overflow-hidden rounded-full bg-gray-100">
+                                                            {g.perm > 0 && <div className="bg-green-500" style={{ width: `${(g.perm / g.total) * 100}%` }}></div>}
+                                                            {g.sub > 0 && <div className="bg-orange-400" style={{ width: `${(g.sub / g.total) * 100}%` }}></div>}
+                                                        </div>
+                                                        <div className="mt-1.5 flex justify-between text-xs">
+                                                            <span className="font-semibold text-green-700">Permanent {g.perm} ({g.total > 0 ? permPct : 0}%)</span>
+                                                            <span className="font-semibold text-orange-700">Subcontract {g.sub} ({g.total > 0 ? 100 - permPct : 0}%)</span>
+                                                        </div>
                                                     </div>
-                                                    {positions.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-gray-600">{positions.slice(0, key === 'support' ? 12 : 6).map(([pos, n]) => <span key={pos} className="rounded bg-white px-2 py-0.5 border">{pos} <b>{n}</b></span>)}{positions.length > (key === 'support' ? 12 : 6) && <span className="px-1 py-0.5 text-gray-400">+{positions.length - (key === 'support' ? 12 : 6)}</span>}</div>}
+                                                    <div className="mt-4 border-t pt-3">
+                                                        <div className="mb-1.5 flex justify-between text-[11px] font-bold uppercase tracking-wide text-gray-400"><span>ตำแหน่ง</span><span>คน</span></div>
+                                                        {shown.length === 0 && <div className="py-1 text-sm text-gray-400">ไม่มีข้อมูล</div>}
+                                                        {shown.map(([pos, n]) => (
+                                                            <div key={pos} className="flex items-center justify-between gap-3 py-1 text-sm text-gray-700"><span className="min-w-0 truncate">{pos}</span><span className="font-bold text-gray-800">{n}</span></div>
+                                                        ))}
+                                                        {rest.length > 0 && <div className="flex items-center justify-between gap-3 py-1 text-sm text-gray-400"><span>อื่น ๆ อีก {rest.length} ตำแหน่ง</span><span className="font-bold">{restCount}</span></div>}
+                                                    </div>
                                                 </div>
                                             );
                                         })}
