@@ -2038,6 +2038,9 @@
                     if (el.classList.contains('overflow-x-auto')) { el.style.overflow = 'visible'; el.style.maxWidth = 'none'; }
                     el.classList.remove('flash-active', 'drop-target-hover', 'animate-pulse');
                     el.style.animation = 'none';
+                    // html2canvas draws Sarabun lower than the browser does, so `truncate` (overflow:hidden) lines get their bottoms cut off.
+                    // Grow the clip box vertically with padding and cancel it with margin so the layout does not move.
+                    if (el.classList.contains('truncate')) { el.style.paddingTop = '0.4em'; el.style.paddingBottom = '0.4em'; el.style.marginTop = '-0.4em'; el.style.marginBottom = '-0.4em'; }
                     // html2canvas paints box-shadows by drawing the casting shape off-canvas; on wide charts that leaves solid ghost cards behind.
                     el.style.boxShadow = 'none';
                 });
