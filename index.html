@@ -683,6 +683,29 @@
                         ? `${Math.round((opsSub / totalOps) * 100)}% (${opsSub} : ${opsPerm})`
                         : "No Data";
 
+                    // Production = every leader plus everyone who reports (directly or indirectly) to one; everyone else is Support.
+                    // Follow the reporting chain over all employees so a team is still found when the dashboard is filtered to one department.
+                    const childrenOf = {};
+                    safeEmps.forEach(e => { const m = String(e.reportsTo ?? ''); if (m) (childrenOf[m] = childrenOf[m] || []).push(e); });
+                    const productionIds = new Set();
+                    const pending = safeEmps.filter(e => (e.position || '').toLowerCase().includes('leader'));
+                    while (pending.length) {
+                        const e = pending.pop();
+                        const id = String(e.id);
+                        if (productionIds.has(id)) continue;
+                        productionIds.add(id);
+                        (childrenOf[id] || []).forEach(c => pending.push(c));
+                    }
+                    const makeGroup = () => ({ total: 0, perm: 0, sub: 0, positions: {} });
+                    const groups = { production: makeGroup(), support: makeGroup() };
+                    targetEmps.forEach(e => {
+                        const g = productionIds.has(String(e.id)) ? groups.production : groups.support;
+                        g.total++;
+                        if (e.type === 'Permanent') g.perm++; else g.sub++;
+                        const pos = e.position || 'Unknown';
+                        g.positions[pos] = (g.positions[pos] || 0) + 1;
+                    });
+
                     // Leader Team Summary
                     const leaderSummary = targetEmps
                         .filter(e => (e.position || '').toLowerCase().includes('leader'))
@@ -696,10 +719,10 @@
                         })
                         .sort((a, b) => b.total - a.total);
 
-                    return { total, byType, byPosition, avgTenure, opsRatioText, leaderSummary };
+                    return { total, byType, byPosition, avgTenure, opsRatioText, leaderSummary, groups };
                 } catch (error) {
                     console.error("Dashboard calculation error:", error);
-                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-", leaderSummary: [] };
+                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-", leaderSummary: [], groups: { production: { total: 0, perm: 0, sub: 0, positions: {} }, support: { total: 0, perm: 0, sub: 0, positions: {} } } };
                 }
             }, [employees, activeTab]);
 
@@ -743,6 +766,37 @@
                                 </div>
                             </div> 
                             
+                            {/* Production vs Support */}
+                            {stats.total > 0 && (
+                                <div className="bg-white rounded-xl shadow-sm p-6 border mb-6">
+                                    <h3 className="font-bold text-gray-800 mb-1 border-b pb-2 flex items-center gap-2"><Icons.Users size={18} className="text-blue-600"/> ฝ่ายผลิต / ฝ่าย Support ({activeTab})</h3>
+                                    <p className="text-xs text-gray-500 mb-4">ฝ่ายผลิต = Leader และทุกคนที่อยู่ใต้ Leader ลงไป ส่วนที่เหลือนับเป็นฝ่าย Support</p>
+                                    <div className="mb-4 flex h-3 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`ฝ่ายผลิต ${stats.groups.production.total} คน ฝ่าย Support ${stats.groups.support.total} คน`}>
+                                        <div className="bg-blue-500" style={{ width: `${(stats.groups.production.total / stats.total) * 100}%` }}></div>
+                                        <div className="bg-slate-400" style={{ width: `${(stats.groups.support.total / stats.total) * 100}%` }}></div>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        {[{ key: 'production', label: 'ฝ่ายผลิต', sub: 'Leader ลงไป', accent: 'border-blue-500', text: 'text-blue-700' }, { key: 'support', label: 'ฝ่าย Support', sub: 'นอกเหนือจากฝ่ายผลิต', accent: 'border-slate-400', text: 'text-slate-700' }].map(({ key, label, sub, accent, text }) => {
+                                            const g = stats.groups[key];
+                                            const positions = Object.entries(g.positions).sort((a, b) => b[1] - a[1]);
+                                            return (
+                                                <div key={key} className={`rounded-lg border-l-4 ${accent} bg-gray-50 p-4`}>
+                                                    <div className="flex items-baseline justify-between gap-2">
+                                                        <div><div className={`font-bold ${text}`}>{label}</div><div className="text-[11px] text-gray-500">{sub}</div></div>
+                                                        <div className="text-right"><div className="text-3xl font-bold text-gray-800">{g.total}</div><div className="text-[11px] text-gray-500">{Math.round((g.total / stats.total) * 100)}% ของทั้งหมด</div></div>
+                                                    </div>
+                                                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                                                        <span className="rounded-full bg-green-100 px-2.5 py-0.5 font-bold text-green-700">Permanent {g.perm}</span>
+                                                        <span className="rounded-full bg-orange-100 px-2.5 py-0.5 font-bold text-orange-700">Subcontract {g.sub}</span>
+                                                    </div>
+                                                    {positions.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-gray-600">{positions.slice(0, key === 'support' ? 12 : 6).map(([pos, n]) => <span key={pos} className="rounded bg-white px-2 py-0.5 border">{pos} <b>{n}</b></span>)}{positions.length > (key === 'support' ? 12 : 6) && <span className="px-1 py-0.5 text-gray-400">+{positions.length - (key === 'support' ? 12 : 6)}</span>}</div>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Leader Team Summary */}
                             {stats.leaderSummary.length > 0 && (
                                 <div className="bg-white rounded-xl shadow-sm p-6 border mb-6">
