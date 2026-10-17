@@ -523,7 +523,7 @@
             );
         });
 
-        const EmployeeForm = ({ employee, supervisors, positions, depts, subDepartments, onAddSubDept, onDeleteSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
+        const EmployeeForm = ({ employee, supervisors, positions, positionRename, depts, subDepartments, onAddSubDept, onDeleteSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
             const safeDepts = depts || [];
             const [formData, setFormData] = useState({ id: '', name: '', position: '', dept: '', subDept: '', shift: '', reportsTo: '', image: null, status: 'Active', exitDate: '', exitDept: '', exitSubDept: '', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true });
@@ -535,6 +535,8 @@
             const hasPermission = useMemo(() => { if (!currentUser) return false; return !isEditMode || canEditEmployee(currentUser, employee); }, [currentUser, isEditMode, employee]);
             // Only reset when a different employee is opened; adding a position or department while the form is open must not wipe what was typed.
             useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', subDept: '', exitDate: '', exitDept: '', exitSubDept: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, subDept: '', shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', exitDate: '', exitDept: '', exitSubDept: '', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
+            // Keep the form on the new name when a position is renamed from the gear button while this form is open.
+            useEffect(() => { if (positionRename) setFormData(previous => previous.position === positionRename.from ? { ...previous, position: positionRename.to } : previous); }, [positionRename]);
             const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert('อัปโหลดรูปไม่สำเร็จ: ' + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
@@ -893,8 +895,10 @@
             );
         };
 
-        const ManagePositionsModal = ({ positions, onAdd, onDelete, onClose }) => { const [newPos, setNewPos] = useState("");
-            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Briefcase className="mr-2"/> Manage Positions</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newPos} onChange={e=>setNewPos(e.target.value)} placeholder="New Position..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newPos){onAdd(newPos);setNewPos('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{positions.map(p => (<div key={p} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{p}</span><button onClick={()=>onDelete(p)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
+        const ManagePositionsModal = ({ positions, onAdd, onDelete, onRename, canRename, onClose }) => { const [newPos, setNewPos] = useState("");
+            const [editing, setEditing] = useState(null); const [draft, setDraft] = useState("");
+            const commitRename = () => { if (editing === null) return; if (onRename(editing, draft) !== false) setEditing(null); };
+            return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Briefcase className="mr-2"/> Manage Positions</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newPos} onChange={e=>setNewPos(e.target.value)} placeholder="New Position..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newPos){onAdd(newPos);setNewPos('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{positions.map(p => (editing === p ? (<div key={p} className="flex items-center gap-2 p-2 bg-blue-50 rounded text-sm"><input autoFocus value={draft} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{ if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setEditing(null); }} aria-label={`แก้ชื่อตำแหน่ง ${p}`} className="min-w-0 flex-1 border p-1.5 rounded text-sm"/><button onClick={commitRename} aria-label="บันทึกชื่อตำแหน่ง" className="p-1.5 rounded bg-blue-600 text-white"><Icons.Check size={16}/></button><button onClick={()=>setEditing(null)} aria-label="ยกเลิก" className="p-1.5 rounded text-gray-500 hover:bg-gray-200"><Icons.X size={16}/></button></div>) : (<div key={p} className="flex justify-between items-center gap-2 p-2 bg-gray-50 rounded text-sm group"><span className="min-w-0 truncate">{p}</span><span className="flex shrink-0 items-center gap-1">{canRename && <button onClick={()=>{setEditing(p); setDraft(p);}} aria-label={`แก้ชื่อตำแหน่ง ${p}`} title="แก้ชื่อตำแหน่ง" className="p-1 text-blue-500 hover:text-blue-700"><Icons.Edit size={16}/></button>}<button onClick={()=>onDelete(p)} aria-label={`ลบตำแหน่ง ${p}`} className="p-1 text-red-400 hover:text-red-600"><Icons.Trash2 size={16}/></button></span></div>)))}</div> </div> </div> );
         };
         const LoginScreen = ({ onLogin, driveUrl, apiCall }) => { const [creds, setCreds] = useState({ username: '', password: '' });
             const [loading, setLoading] = useState(false); const handleSubmit = async (e) => { e.preventDefault(); setLoading(true);
@@ -1781,6 +1785,23 @@
                 saveSettingsToCloud({orgPositions: np});
             };
 
+            // Renaming a position also renames it on every employee that holds it, so nobody is left on a name that is no longer in the list.
+            const [positionRename, setPositionRename] = useState(null);
+            const handleRenamePosition = (oldPos, rawNew) => {
+                const next = String(rawNew || '').trim();
+                if (!next || next === oldPos) return true;
+                if (positions.some(p => p !== oldPos && p.toLowerCase() === next.toLowerCase())) { alert(`ตำแหน่ง "${next}" มีอยู่แล้ว`); return false; }
+                const np = positions.map(p => p === oldPos ? next : p);
+                setPositions(np);
+                localStorage.setItem('orgPositions', JSON.stringify(np));
+                saveSettingsToCloud({orgPositions: np});
+                const updates = [];
+                const newData = employees.map(e => { if (e.position === oldPos) { const u = { ...e, position: next }; updates.push(u); return u; } return e; });
+                if (updates.length > 0) updateStateFull(newData, updates, []);
+                setPositionRename({ from: oldPos, to: next });
+                return true;
+            };
+
             // [V23 Add Annotation Function]
             const addAnnotation = () => {
                 const newAnn = { id: Date.now(), x: 200, y: 200, text: 'พิมพ์ข้อความ...', bg: '#fff7ed', color: '#1f2937' };
@@ -2378,7 +2399,7 @@
                         </main>
                     </div>
 
-                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onDeleteSubDept={handleDeleteSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
+                    {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} positionRename={positionRename} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onDeleteSubDept={handleDeleteSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
 
                     {pendingShiftDrop && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="drop-shift-title">
                         <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -2407,7 +2428,7 @@
                     {/* [V15] Admin Panel is now the central hub */}
                     {isAdminPanelOpen && <AdminPanel onClose={()=>setIsAdminPanelOpen(false)} driveUrl={driveUrl} setDriveUrl={setDriveUrl} apiCall={appApiCall} depts={departments} onAddDept={handleAddDept} onDeleteDept={handleDeleteDept} currentUser={currentUser} orgData={employees} onDataRecovered={(raw) => { const data = normalizeEmployees(raw); setEmployees(data); resetHistory(data); persistPendingSync([]); localStorage.setItem('orgData', JSON.stringify(data)); }}/>}
                     
-                    {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onClose={()=>setIsManagePositionsOpen(false)} />}
+                    {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onRename={handleRenamePosition} canRename={currentUser?.role !== 'leader'} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={validEmployees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
