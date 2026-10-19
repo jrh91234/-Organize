@@ -666,7 +666,8 @@ function signAttendancePayload_(payload) {
 
 function issueAttendanceSession_(user) {
   const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
-    username: String(user.username),
+    // ASCII-only payload: Thai usernames are percent-encoded so the base64 round trip can't corrupt them.
+    username: encodeURIComponent(String(user.username)),
     expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     nonce: Utilities.getUuid()
   }));
@@ -685,12 +686,14 @@ function getAttendanceActor_(token) {
   } catch (error) {
     return null;
   }
-  const username = String(session.username || '').trim();
+  let username = String(session.username || '').trim();
+  try { username = decodeURIComponent(username); } catch (error) {}
+  username = username.normalize('NFC');
   if (!username || Number(session.expiresAt) < Date.now()) return null;
 
   const rows = getSheet('Users').getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() !== username) continue;
+    if (String(rows[i][0]).trim().normalize('NFC') !== username) continue;
     const role = String(rows[i][3] || '').trim().toLowerCase();
     return {
       username: String(username),
