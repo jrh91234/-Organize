@@ -2210,6 +2210,37 @@
                     ]);
                     if (document.fonts?.ready) await document.fonts.ready;
                     await Promise.all([...clone.querySelectorAll('img')].map(img => img.complete ? null : new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 4000); })));
+                    // html2canvas ignores `object-fit: cover` and squashes non-square photos into the avatar circle, so crop each photo to a square ourselves.
+                    // The photo is re-requested with CORS (same requirement html2canvas has); if that fails the original is left untouched.
+                    const squareCache = new Map();
+                    const toSquareDataUrl = (src) => {
+                        if (!squareCache.has(src)) squareCache.set(src, new Promise((resolve, reject) => {
+                            const probe = new Image();
+                            probe.crossOrigin = 'anonymous';
+                            probe.referrerPolicy = 'no-referrer';
+                            probe.onload = () => {
+                                try {
+                                    const side = Math.min(probe.naturalWidth, probe.naturalHeight, 192);
+                                    const c = document.createElement('canvas');
+                                    c.width = c.height = side;
+                                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight);
+                                    c.getContext('2d').drawImage(probe, (probe.naturalWidth - crop) / 2, (probe.naturalHeight - crop) / 2, crop, crop, 0, 0, side, side);
+                                    resolve(c.toDataURL('image/jpeg', 0.92));
+                                } catch (error) { reject(error); }
+                            };
+                            probe.onerror = reject;
+                            probe.src = src;
+                        }));
+                        return squareCache.get(src);
+                    };
+                    await Promise.all([...clone.querySelectorAll('img')].map(async img => {
+                        if (!img.naturalWidth || getComputedStyle(img).objectFit !== 'cover') return;
+                        try {
+                            img.src = await toSquareDataUrl(img.currentSrc || img.src);
+                            img.style.objectFit = 'fill';
+                            await img.decode().catch(() => {});
+                        } catch (error) { /* keep the original photo */ }
+                    }));
                     // Measure every descendant too: anything that still overflows the wrapper must be inside the capture box.
                     const viewportWidth = getViewportWidth();
                     const box = clone.getBoundingClientRect();
