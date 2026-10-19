@@ -30,3 +30,18 @@
 > `CLASPRC_JSON` ให้สิทธิ์เข้าถึง Apps Script/Drive ของบัญชีนั้น
 > - ห้ามแชร์หรือ commit ลง repo
 > - ถ้าหลุด ให้เพิกถอนสิทธิ์ที่ https://myaccount.google.com/permissions (รายการ *clasp*)
+
+## ยอดรวมเช็คชื่อสำหรับ dashboard ฝ่ายผลิต
+
+Backend เปิด action `getAttendanceCounts` สำหรับอ่านจำนวนผู้เช็คเข้างานในรอบวันผลิตปัจจุบัน (08:00–08:00)
+ตอบกลับเฉพาะยอดรวมตามแผนก/แผนกย่อย/กะ ไม่ส่งชื่อ รหัสพนักงาน หรือรายการเช็คชื่อรายคน
+นับเฉพาะรายการประเภท `work`; รายการ OT ไม่นับซ้ำเป็นคนอีกคน
+Action นี้เรียกได้โดยไม่ต้องมี attendance token เพราะข้อมูลตอบกลับเป็นยอดรวมเท่านั้น
+
+ตัวอย่างเรียกผ่าน POST `text/plain`:
+
+```json
+{"action":"getAttendanceCounts"}
+```
+
+การแก้ `scr/backend.gs` จะเปิด Auto deploy ที่ `/exec` เดิมตาม workflow ด้านบน

@@ -33,7 +33,7 @@ function doPost(e) {
     }
 
     // [VERIFIED] Logging แบบใหม่ บันทึกละเอียดขึ้น ไม่บันทึกการ Read data
-    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance') {
+    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance' && data.action !== 'getAttendanceCounts') {
       let detailStr = data.logDetail || '';
       
       // กรณี Update/Delete ให้บันทึกรายละเอียดพนักงานที่ถูกแก้ไข (ชื่อ, รหัส, แผนก, ตำแหน่ง)
@@ -70,6 +70,7 @@ function doPost(e) {
       case 'saveData': return saveData(data);
       case 'getData': return getData();
       case 'getAttendance': return getAttendance(data);
+      case 'getAttendanceCounts': return getAttendanceCounts();
       case 'recordAttendance': return recordAttendance(data);
       case 'recordAttendanceBatch': return recordAttendanceBatch(data);
       case 'recoverOrgData': return recoverOrgData(data);
@@ -849,6 +850,42 @@ function getAttendanceRoster_(actor) {
   })).filter(employee => employee.id);
   const departments = Array.from(new Set(roster.map(employee => employee.dept).filter(Boolean))).sort();
   return { employees: roster, departments: departments, message: message, selfId: selfId };
+}
+
+// Public, aggregate-only attendance endpoint for the production dashboard.
+// It exposes no employee names, IDs, or individual attendance rows.
+function getAttendanceCounts() {
+  try {
+    const window = getAttendanceWindow_(new Date());
+    const employees = getAttendanceOrgEmployees_().filter(employee => String(employee.status || '').trim().toLowerCase() !== 'resigned');
+    const employeesById = new Map(employees.map(employee => [attendanceEmployeeId_(employee), employee]));
+    const rows = getSheet('Attendance').getDataRange().getValues().slice(1);
+    const checkedIn = new Set();
+    const groups = new Map();
+    rows.forEach(row => {
+      const id = String(row[2] || '').trim();
+      const timestamp = row[1] instanceof Date ? row[1] : new Date(row[1]);
+      if (String(row[5] || '').trim() !== 'work' || !id || isNaN(timestamp.getTime()) ||
+          timestamp < window.start || timestamp >= window.end || checkedIn.has(id)) return;
+      const employee = employeesById.get(id);
+      if (!employee) return;
+      checkedIn.add(id);
+      const dept = String(employee.dept || row[4] || '').trim();
+      const subDept = String(employee.subDept || row[8] || '').trim();
+      const rawShift = String(employee.shift || '').trim().toUpperCase();
+      const shift = rawShift === 'A' || rawShift === 'B' ? rawShift : 'Unassigned';
+      const key = [dept, subDept, shift].join('\u0000');
+      if (!groups.has(key)) groups.set(key, { department: dept, team: subDept, shift: shift, count: 0 });
+      groups.get(key).count++;
+    });
+    return createJSONOutput({
+      status: 'success', date: window.date,
+      updatedAt: new Date().toISOString(), total: checkedIn.size,
+      groups: Array.from(groups.values()).sort((a, b) => a.department.localeCompare(b.department) || a.team.localeCompare(b.team) || a.shift.localeCompare(b.shift))
+    });
+  } catch (error) {
+    return createJSONOutput({ status: 'error', message: 'อ่านยอดรวมการเข้างานไม่สำเร็จ' });
+  }
 }
 
 function getAttendance(data) {
