@@ -634,17 +634,16 @@
             return ( <div className={`ruler-container ${orientation==='horizontal'?'ruler-h':'ruler-v'}`} style={{position: 'absolute'}}> <div className="relative w-full h-full"> {ticks} {markers} </div> </div> ); };
         
         // [FIXED] SummaryDashboard with Department Updates
-        const SummaryDashboard = ({ employees, onClose, departments }) => { 
-            const [activeTab, setActiveTab] = useState('Overview');
-            // Permanent : Subcontract as whole percents that always add up to 100.
-            const formatSplitPercent = (perm, sub) => {
-                const total = perm + sub;
-                if (total <= 0) return '-';
-                const permPct = Math.round((perm / total) * 100);
-                return `${permPct}% : ${100 - permPct}%`;
-            };
-            
-            const stats = useMemo(() => {
+        // Permanent : Subcontract as whole percents that always add up to 100.
+        const formatSplitPercent = (perm, sub) => {
+            const total = perm + sub;
+            if (total <= 0) return '-';
+            const permPct = Math.round((perm / total) * 100);
+            return `${permPct}% : ${100 - permPct}%`;
+        };
+
+        // Shared by the Dashboard modal and the PDF export so both always show the same numbers.
+        const computeDashboardStats = (employees, activeTab) => {
                 try {
                     const safeEmps = Array.isArray(employees) ? employees : [];
                     const targetEmps = activeTab === 'Overview' ? safeEmps : safeEmps.filter(e => e.dept === activeTab);
@@ -733,32 +732,10 @@
                     console.error("Dashboard calculation error:", error);
                     return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-", leaderSummary: [], groups: { production: { total: 0, perm: 0, sub: 0, positions: {} }, support: { total: 0, perm: 0, sub: 0, positions: {} } } };
                 }
-            }, [employees, activeTab]);
+        };
 
-            // [V12 FIX] Filter out ghost departments
-            const deptUpdates = useMemo(() => {
-                const updates = {};
-                // Initialize only valid departments
-                departments.forEach(d => updates[d] = null);
-                
-                (employees || []).forEach(e => {
-                    // Check if department is valid before updating timestamp
-                    if (e.dept && e.lastModified && updates.hasOwnProperty(e.dept)) {
-                        const t = new Date(e.lastModified).getTime();
-                        if (!updates[e.dept] || t > updates[e.dept]) {
-                            updates[e.dept] = t;
-                        }
-                    }
-                });
-                return updates;
-            }, [employees, departments]);
-
-            return ( 
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] animate-in fade-in"> 
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"> 
-                        <div className="flex shrink-0 justify-between items-center p-6 border-b bg-gray-50"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><Icons.Chart className="mr-2 text-blue-600"/> Dashboard</h2><button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><Icons.X/></button></div>
-                        <div className="flex shrink-0 overflow-x-auto p-4 gap-2 border-b bg-white"><button onClick={()=>setActiveTab('Overview')} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ${activeTab==='Overview'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Overview</button>{departments.map(d => (<button key={d} onClick={()=>setActiveTab(d)} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ${activeTab===d?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{d}</button>))}</div>
-                        <div className="p-6 overflow-y-auto bg-gray-50 flex-1">
+        const DashboardContent = ({ stats, activeTab, deptUpdates, printMode = false }) => (
+            <>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"> 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Total Employees</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.total}</p></div> 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Permanent</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.byType.Permanent}</p></div> 
@@ -869,13 +846,14 @@
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className={`grid grid-cols-1 gap-6 ${printMode ? '' : 'lg:grid-cols-2'}`}>
                                 <div className="bg-white rounded-xl shadow-sm p-6 border">
                                     <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Position Breakdown ({activeTab})</h3>
-                                    <div className="space-y-4 max-h-60 overflow-y-auto pr-2">{Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (<div key={pos} className="flex items-center group"><div className="w-40 text-sm font-medium text-gray-600 truncate pr-2 group-hover:text-blue-600">{pos}</div><div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{width: `${(count/stats.total)*100}%`}}></div></div><div className="w-12 text-right text-sm font-bold text-gray-800">{count}</div><div className="w-12 text-right text-xs text-gray-400">({Math.round((count/stats.total)*100)}%)</div></div>))}</div>
+                                    <div className={`space-y-4 pr-2 ${printMode ? '' : 'max-h-60 overflow-y-auto'}`}>{Object.entries(stats.byPosition).sort((a,b)=>b[1]-a[1]).map(([pos, count]) => (<div key={pos} className="flex items-center group"><div className="w-40 text-sm font-medium text-gray-600 truncate pr-2 group-hover:text-blue-600">{pos}</div><div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden"><div className="bg-blue-500 h-full rounded-full transition-all duration-500" style={{width: `${(count/stats.total)*100}%`}}></div></div><div className="w-12 text-right text-sm font-bold text-gray-800">{count}</div><div className="w-12 text-right text-xs text-gray-400">({Math.round((count/stats.total)*100)}%)</div></div>))}</div>
                                 </div>
                                 
                                 {/* [NEW] Department Updates Table */}
+                                {!printMode && (
                                 <div className="bg-white rounded-xl shadow-sm p-6 border">
                                     <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Last Updates by Department</h3>
                                     <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -889,7 +867,41 @@
                                         ))}
                                     </div>
                                 </div>
+                                )}
                             </div>
+            </>
+        );
+
+        const SummaryDashboard = ({ employees, onClose, departments }) => { 
+            const [activeTab, setActiveTab] = useState('Overview');
+            
+            const stats = useMemo(() => computeDashboardStats(employees, activeTab), [employees, activeTab]);
+
+            // [V12 FIX] Filter out ghost departments
+            const deptUpdates = useMemo(() => {
+                const updates = {};
+                // Initialize only valid departments
+                departments.forEach(d => updates[d] = null);
+                
+                (employees || []).forEach(e => {
+                    // Check if department is valid before updating timestamp
+                    if (e.dept && e.lastModified && updates.hasOwnProperty(e.dept)) {
+                        const t = new Date(e.lastModified).getTime();
+                        if (!updates[e.dept] || t > updates[e.dept]) {
+                            updates[e.dept] = t;
+                        }
+                    }
+                });
+                return updates;
+            }, [employees, departments]);
+
+            return ( 
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80] animate-in fade-in"> 
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"> 
+                        <div className="flex shrink-0 justify-between items-center p-6 border-b bg-gray-50"><h2 className="text-2xl font-bold text-gray-800 flex items-center"><Icons.Chart className="mr-2 text-blue-600"/> Dashboard</h2><button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full"><Icons.X/></button></div>
+                        <div className="flex shrink-0 overflow-x-auto p-4 gap-2 border-b bg-white"><button onClick={()=>setActiveTab('Overview')} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ${activeTab==='Overview'?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Overview</button>{departments.map(d => (<button key={d} onClick={()=>setActiveTab(d)} className={`shrink-0 px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap ${activeTab===d?'bg-blue-600 text-white':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{d}</button>))}</div>
+                        <div className="p-6 overflow-y-auto bg-gray-50 flex-1">
+                            <DashboardContent stats={stats} activeTab={activeTab} deptUpdates={deptUpdates} />
                         </div> 
                     </div> </div> 
             );
@@ -2123,6 +2135,43 @@
 
             // Capture the live chart off-screen at 100% size (not the zoomed/scrolled view) so nothing is scaled, clipped or cut across pages.
             const [isExportingChartPdf, setIsExportingChartPdf] = useState(false);
+            // html2canvas lays the copy out in its own iframe; give it the real viewport width so responsive classes (sm:, lg:) resolve the same way as when we measured.
+            const getViewportWidth = () => document.documentElement.clientWidth || window.innerWidth;
+            // Paint the department's Dashboard summary off-screen with the same component the modal uses, so the PDF matches what people see on screen.
+            const renderSummaryCanvas = async (html2canvas, deptTab) => {
+                const viewportWidth = getViewportWidth();
+                const host = document.createElement('div');
+                host.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;overflow:hidden;z-index:-1;';
+                const inner = document.createElement('div');
+                inner.style.cssText = 'position:absolute;left:0;top:0;width:1000px;background:#f9fafb;padding:24px;box-sizing:border-box;';
+                host.appendChild(inner);
+                document.body.appendChild(host);
+                const root = ReactDOM.createRoot(inner);
+                try {
+                    const stats = computeDashboardStats(validEmployees, deptTab);
+                    ReactDOM.flushSync(() => root.render(
+                        <div>
+                            <div className="mb-5 flex items-end justify-between border-b pb-3">
+                                <h1 className="text-2xl font-bold text-gray-800">สรุปข้อมูล {deptTab === 'Overview' ? 'ทุกแผนก' : `แผนก ${deptTab}`}</h1>
+                                <span className="text-sm text-gray-500">{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                            </div>
+                            <DashboardContent stats={stats} activeTab={deptTab} printMode />
+                        </div>
+                    ));
+                    inner.querySelectorAll('*').forEach(el => {
+                        el.style.animation = 'none';
+                        el.style.boxShadow = 'none';
+                        if (el.classList.contains('truncate')) { el.style.paddingTop = '0.4em'; el.style.paddingBottom = '0.4em'; el.style.marginTop = '-0.4em'; el.style.marginBottom = '-0.4em'; }
+                    });
+                    if (document.fonts?.ready) await document.fonts.ready;
+                    const w = 1000, h = Math.ceil(inner.scrollHeight);
+                    const canvas = await html2canvas(inner, { scale: 2, useCORS: true, backgroundColor: '#f9fafb', logging: false, width: w, height: h, windowWidth: viewportWidth, windowHeight: window.innerHeight, scrollX: 0, scrollY: 0 });
+                    return { canvas, w, h };
+                } finally {
+                    root.unmount();
+                    document.body.removeChild(host);
+                }
+            };
             const exportChartPDF = async () => {
                 const source = document.getElementById('org-chart-full-view');
                 if (!source) return;
@@ -2159,17 +2208,32 @@
                     if (document.fonts?.ready) await document.fonts.ready;
                     await Promise.all([...clone.querySelectorAll('img')].map(img => img.complete ? null : new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 4000); })));
                     // Measure every descendant too: anything that still overflows the wrapper must be inside the capture box.
+                    const viewportWidth = getViewportWidth();
                     const box = clone.getBoundingClientRect();
                     let w = Math.ceil(box.width), h = Math.ceil(box.height);
                     clone.querySelectorAll('*').forEach(el => { const r = el.getBoundingClientRect(); w = Math.max(w, Math.ceil(r.right - box.left)); h = Math.max(h, Math.ceil(r.bottom - box.top)); });
                     clone.style.width = `${w}px`; clone.style.height = `${h}px`;
                     // Browsers cap canvas size (about 16k px a side, ~150M px in total); stay under it and trade sharpness only for very large charts.
                     const scale = Math.max(0.3, Math.min(2, 16000 / w, 16000 / h, Math.sqrt(150e6 / (w * h))));
-                    const canvas = await html2canvas(clone, { scale, useCORS: true, backgroundColor: '#ffffff', logging: false, width: w, height: h, windowWidth: w, windowHeight: h, scrollX: 0, scrollY: 0 });
+                    const canvas = await html2canvas(clone, { scale, useCORS: true, backgroundColor: '#ffffff', logging: false, width: w, height: h, windowWidth: viewportWidth, windowHeight: window.innerHeight, scrollX: 0, scrollY: 0 });
                     // One page whose proportions match the chart, so no branch is ever split across pages. Small charts print at A3-ish size, big ones grow (PDF viewers zoom) up to the 5000mm page limit.
                     const margin = 8, mmPerPx = Math.min(5000 / Math.max(w, h), Math.max(400 / Math.max(w, h), 0.1));
                     const innerW = w * mmPerPx, innerH = h * mmPerPx;
-                    const pdf = new jsPDF({ unit: 'mm', format: [innerW + margin * 2, innerH + margin * 2], orientation: innerW >= innerH ? 'landscape' : 'portrait', compress: true });
+                    const chartPage = [innerW + margin * 2, innerH + margin * 2];
+                    const orient = (page) => page[0] >= page[1] ? 'landscape' : 'portrait';
+                    // Page 1: the Dashboard summary for the department being exported. A failure here must not lose the chart.
+                    let summary = null;
+                    try { summary = await renderSummaryCanvas(html2canvas, currentDept === 'ALL' ? 'Overview' : currentDept); } catch (summaryError) { console.warn('Summary page skipped', summaryError); }
+                    let pdf;
+                    if (summary) {
+                        const sumInnerW = 190, sumInnerH = summary.h * (sumInnerW / summary.w);
+                        const sumPage = [sumInnerW + 20, sumInnerH + 20];
+                        pdf = new jsPDF({ unit: 'mm', format: sumPage, orientation: orient(sumPage), compress: true });
+                        pdf.addImage(summary.canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, 10, sumInnerW, sumInnerH);
+                        pdf.addPage(chartPage, orient(chartPage));
+                    } else {
+                        pdf = new jsPDF({ unit: 'mm', format: chartPage, orientation: orient(chartPage), compress: true });
+                    }
                     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, innerW, innerH);
                     pdf.save(`orgchart_${currentDept}_${new Date().toISOString().slice(0,10)}.pdf`);
                 } catch (err) {
@@ -2291,7 +2355,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
