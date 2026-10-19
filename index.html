@@ -1157,7 +1157,7 @@
                 const userDept = String(currentUser.dept || '').trim();
                 const preferredDept = deptOptions.find(dept => dept.toLocaleLowerCase() === userDept.toLocaleLowerCase());
                 setSelectedDept(isAdmin ? (preferredDept || 'ALL') : (preferredDept || deptOptions[0] || ''));
-                setSelectedSubDept(String(selfEmployee?.subDept || '').trim() || 'ALL');
+                setSelectedSubDept(String(selfEmployee?.subDept || '').trim() ? attendanceSubDeptKey(selfEmployee.subDept) : 'ALL');
                 const shift = String(selfEmployee?.shift || '').trim().toUpperCase();
                 setSelectedShift(shift === 'A' || shift === 'B' ? shift : 'ALL');
                 setSearchTerm('');
@@ -1167,13 +1167,21 @@
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'วันนี้';
+            // H1, Coil winding and Lug&Screw are shown as one combined sub-department in the attendance filter.
+            const mergedSubDeptLabel = 'H1 / Coil winding / Lug&Screw';
+            const mergedSubDeptNames = ['h1', 'coilwinding', 'lugscrew'];
+            const attendanceSubDeptKey = value => {
+                const name = String(value || '').trim();
+                if (!name) return '__NO_SUB_DEPT__';
+                return mergedSubDeptNames.includes(name.toLowerCase().replace(/[^a-z0-9]/g, '')) ? mergedSubDeptLabel : name;
+            };
             const scopedEmployees = orderedEmployees.filter(employee => selectedDept === 'ALL' || (employee.dept || '__NO_DEPT__') === selectedDept);
-            const subDeptOptions = Array.from(new Set(scopedEmployees.map(employee => String(employee.subDept || '').trim() || '__NO_SUB_DEPT__'))).sort((a, b) => a === '__NO_SUB_DEPT__' ? 1 : b === '__NO_SUB_DEPT__' ? -1 : a.localeCompare(b));
+            const subDeptOptions = Array.from(new Set(scopedEmployees.map(employee => attendanceSubDeptKey(employee.subDept)))).sort((a, b) => a === '__NO_SUB_DEPT__' ? 1 : b === '__NO_SUB_DEPT__' ? -1 : a.localeCompare(b));
             const subDeptOptionsKey = subDeptOptions.join('|');
             useEffect(() => {
                 if (selectedSubDept !== 'ALL' && !subDeptOptions.includes(selectedSubDept)) setSelectedSubDept('ALL');
             }, [selectedSubDept, subDeptOptionsKey]);
-            const subDeptScopedEmployees = scopedEmployees.filter(employee => selectedSubDept === 'ALL' || (String(employee.subDept || '').trim() || '__NO_SUB_DEPT__') === selectedSubDept);
+            const subDeptScopedEmployees = scopedEmployees.filter(employee => selectedSubDept === 'ALL' || attendanceSubDeptKey(employee.subDept) === selectedSubDept);
             const shiftScopedEmployees = subDeptScopedEmployees.filter(employee => selectedShift === 'ALL' || (selectedShift === 'UNASSIGNED' ? !['A', 'B'].includes(String(employee.shift || '').trim().toUpperCase()) : String(employee.shift || '').trim().toUpperCase() === selectedShift));
             const query = searchTerm.trim().toLowerCase();
             const visibleEmployees = shiftScopedEmployees.filter(employee => !query || `${employee.name} ${employee.id} ${employee.dept || ''} ${employee.subDept || ''} ${employee.position || ''} ${employee.shift || ''}`.toLowerCase().includes(query));

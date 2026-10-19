@@ -267,14 +267,15 @@ function getSheet(name) {
     if(name === 'Users') sheet.appendRow(['Username','Password','Name','Role','Department']); 
     if(name === 'Data') sheet.appendRow(['Key','Value']); 
     if(name === 'Logs') sheet.appendRow(['Timestamp','Username','Name','Role','Department','Action','Detail']);
-    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName','SubDepartment']);
+    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName','SubDepartment','Position']);
   } 
   if (name === 'Attendance') {
-    if (sheet.getMaxColumns() < 9) sheet.insertColumnsAfter(sheet.getMaxColumns(), 9 - sheet.getMaxColumns());
+    if (sheet.getMaxColumns() < 10) sheet.insertColumnsAfter(sheet.getMaxColumns(), 10 - sheet.getMaxColumns());
     if (sheet.getRange(1, 7, 1, 2).getValues()[0].join('|') !== 'CheckedByUsername|CheckedByName') {
       sheet.getRange(1, 7, 1, 2).setValues([['CheckedByUsername', 'CheckedByName']]);
     }
     if (sheet.getRange(1, 9).getValue() !== 'SubDepartment') sheet.getRange(1, 9).setValue('SubDepartment');
+    if (sheet.getRange(1, 10).getValue() !== 'Position') sheet.getRange(1, 10).setValue('Position');
   }
   return sheet; 
 }
@@ -666,7 +667,8 @@ function signAttendancePayload_(payload) {
 
 function issueAttendanceSession_(user) {
   const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
-    username: String(user.username),
+    // ASCII-only payload: Thai usernames are percent-encoded so the base64 round trip can't corrupt them.
+    username: encodeURIComponent(String(user.username)),
     expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     nonce: Utilities.getUuid()
   }));
@@ -685,12 +687,14 @@ function getAttendanceActor_(token) {
   } catch (error) {
     return null;
   }
-  const username = String(session.username || '').trim();
+  let username = String(session.username || '').trim();
+  try { username = decodeURIComponent(username); } catch (error) {}
+  username = username.normalize('NFC');
   if (!username || Number(session.expiresAt) < Date.now()) return null;
 
   const rows = getSheet('Users').getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() !== username) continue;
+    if (String(rows[i][0]).trim().normalize('NFC') !== username) continue;
     const role = String(rows[i][3] || '').trim().toLowerCase();
     return {
       username: String(username),
@@ -738,7 +742,8 @@ function attendanceRecordFromRow_(row) {
     type: String(row[5]),
     checkedByUsername: String(row[6] || ''),
     checkedByName: String(row[7] || ''),
-    subDept: String(row[8] || '')
+    subDept: String(row[8] || ''),
+    position: String(row[9] || '')
   };
 }
 
@@ -946,7 +951,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
     }
 
     const timestamp = new Date();
-    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name, target.subDept || ''];
+    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name, target.subDept || '', target.position || ''];
     const record = attendanceRecordFromRow_(row);
     writes.push(row);
     mine[type] = record;
@@ -955,7 +960,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
 
   if (writes.length > 0) {
     const firstRow = sheet.getLastRow() + 1;
-    sheet.getRange(firstRow, 1, writes.length, 9).setValues(writes);
+    sheet.getRange(firstRow, 1, writes.length, 10).setValues(writes);
   }
   return { status: 'success', date: today, items: outcomes };
 }
