@@ -777,12 +777,21 @@ function getAttendanceRoster_(actor) {
     }
   });
 
-  let matchedSelf = byId.get(actor.username) || null;
-  if (!matchedSelf && actor.name) {
-    const normalizedName = String(actor.name).trim().toLocaleLowerCase();
-    const nameMatches = employees.filter(employee => String(employee.name || '').trim().toLocaleLowerCase() === normalizedName);
+  // Match the login account to the org chart by Name first (ignoring case and any whitespace),
+  // then fall back to Username = employee id.
+  const normalizeName = value => String(value || '').replace(/\s+/g, '').toLocaleLowerCase();
+  let matchedSelf = null;
+  if (actor.name) {
+    const normalizedName = normalizeName(actor.name);
+    const nameMatches = normalizedName
+      ? employees.filter(employee => normalizeName(employee.name) === normalizedName)
+      : [];
     if (nameMatches.length === 1) matchedSelf = nameMatches[0];
+    else if (nameMatches.length > 1) {
+      matchedSelf = nameMatches.find(employee => attendanceEmployeeId_(employee) === actor.username) || null;
+    }
   }
+  if (!matchedSelf) matchedSelf = byId.get(actor.username) || null;
   const selfIsResigned = Boolean(matchedSelf && String(matchedSelf.status || '').trim().toLowerCase() === 'resigned');
   const self = selfIsResigned ? null : matchedSelf;
   const selfId = matchedSelf ? attendanceEmployeeId_(matchedSelf) : actor.username;
@@ -796,7 +805,7 @@ function getAttendanceRoster_(actor) {
     allowed = activeEmployees.filter(employee => String(employee.dept || '').trim() === actor.dept);
   } else if (actor.role === 'leader') {
     if (!self) {
-      message = 'ไม่พบพนักงานที่ตรงกับบัญชีหัวหน้า กรุณาตรวจ User หรือชื่อในระบบให้ตรงกับข้อมูลพนักงาน';
+      message = 'ไม่พบพนักงานที่ตรงกับบัญชีหัวหน้า กรุณาตรวจชื่อ (Name) ในชีต Users ให้ตรงกับชื่อพนักงานในผังองค์กร';
     } else {
       const allowedIds = new Set([selfId]);
       const queue = [selfId];
