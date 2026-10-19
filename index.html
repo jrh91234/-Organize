@@ -687,9 +687,7 @@
 
                     // [V11] Ratio Formatting
                     const totalOps = opsSub + opsPerm;
-                    const opsRatioText = totalOps > 0
-                        ? `${Math.round((opsSub / totalOps) * 100)}% (${opsSub} : ${opsPerm})`
-                        : "No Data";
+                    const opsRatio = totalOps > 0 ? { pct: Math.round((opsSub / totalOps) * 100), sub: opsSub, perm: opsPerm } : null;
 
                     // Production = every leader plus everyone who reports (directly or indirectly) to one; everyone else is Support.
                     // Follow the reporting chain over all employees so a team is still found when the dashboard is filtered to one department.
@@ -727,10 +725,10 @@
                         })
                         .sort((a, b) => b.total - a.total);
 
-                    return { total, byType, byPosition, avgTenure, opsRatioText, leaderSummary, groups };
+                    return { total, byType, byPosition, avgTenure, opsRatio, leaderSummary, groups };
                 } catch (error) {
                     console.error("Dashboard calculation error:", error);
-                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatioText: "-", leaderSummary: [], groups: { production: { total: 0, perm: 0, sub: 0, positions: {} }, support: { total: 0, perm: 0, sub: 0, positions: {} } } };
+                    return { total: 0, byType: {Permanent:0, Subcontract:0}, byPosition: {}, avgTenure: 0, opsRatio: null, leaderSummary: [], groups: { production: { total: 0, perm: 0, sub: 0, positions: {} }, support: { total: 0, perm: 0, sub: 0, positions: {} } } };
                 }
         };
 
@@ -742,13 +740,18 @@
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-orange-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Subcontract</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.byType.Subcontract}</p></div> 
                                 <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500"><h3 className="text-gray-500 text-xs font-bold uppercase">Avg Tenure (Years)</h3><p className="text-4xl font-bold text-gray-800 mt-2">{stats.avgTenure}</p></div> 
                                 
-                                {/* [V11] New Operational Ratio Card */}
-                                <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 relative group md:col-span-2 lg:col-span-4 xl:col-span-1">
-                                    <h3 className="text-gray-500 text-xs font-bold uppercase flex items-center gap-1">Ops. Sub Ratio <Icons.Alert size={10} className="text-gray-400"/></h3>
-                                    <p className="text-4xl font-bold text-gray-800 mt-2">{stats.opsRatioText}</p>
-                                    <div className="absolute top-full left-0 mt-1 hidden group-hover:block bg-black text-white text-[10px] p-2 rounded w-48 z-10 shadow-lg">
-                                        * สัดส่วน Subcontract ในระดับปฏิบัติการ (ไม่รวม Engineer, Supervisor, Manager)
+                                {/* [V11] Operational Ratio Card */}
+                                <div className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-purple-500 md:col-span-2 lg:col-span-4">
+                                    <h3 className="text-gray-500 text-xs font-bold uppercase">Operations Subcontract Ratio</h3>
+                                    <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-1">
+                                        {stats.opsRatio ? (
+                                            <>
+                                                <p className="text-4xl font-bold leading-none text-gray-800">{stats.opsRatio.pct}%</p>
+                                                <p className="text-sm font-semibold text-gray-600">{stats.opsRatio.sub} Subcontract : {stats.opsRatio.perm} Permanent</p>
+                                            </>
+                                        ) : <p className="text-2xl font-bold text-gray-400">No data</p>}
                                     </div>
+                                    <p className="mt-2 text-xs text-gray-400">Share of Subcontract staff among operational-level employees (excludes Engineer, Supervisor and Manager).</p>
                                 </div>
                             </div> 
                             
@@ -818,7 +821,7 @@
                                                     <th className="pb-2 pr-2 text-center">Total</th>
                                                     <th className="pb-2 pr-2 text-center text-green-600">Permanent</th>
                                                     <th className="pb-2 pr-2 text-center text-orange-600">Subcontract</th>
-                                                    <th className="pb-2 text-center">Ratio (P:S %)</th>
+                                                    <th className="pb-2 text-center">Permanent : Subcontract (%)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -2152,8 +2155,8 @@
                     ReactDOM.flushSync(() => root.render(
                         <div>
                             <div className="mb-5 flex items-end justify-between border-b pb-3">
-                                <h1 className="text-2xl font-bold text-gray-800">สรุปข้อมูล {deptTab === 'Overview' ? 'ทุกแผนก' : `แผนก ${deptTab}`}</h1>
-                                <span className="text-sm text-gray-500">{new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                <h1 className="text-2xl font-bold text-gray-800">{deptTab === 'Overview' ? 'Summary — All Departments' : `Department Summary — ${deptTab}`}</h1>
+                                <span className="text-sm text-gray-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                             </div>
                             <DashboardContent stats={stats} activeTab={deptTab} printMode />
                         </div>
