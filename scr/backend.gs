@@ -857,7 +857,11 @@ function getAttendanceRoster_(actor) {
 function getAttendanceCounts() {
   try {
     const window = getAttendanceWindow_(new Date());
-    const employees = getAttendanceOrgEmployees_().filter(employee => String(employee.status || '').trim().toLowerCase() !== 'resigned');
+    const employees = getAttendanceOrgEmployees_().filter(employee =>
+      String(employee.status || '').trim().toLowerCase() !== 'resigned' &&
+      String(employee.dept || '').trim().toLowerCase() === 'assembly' &&
+      String(employee.subDept || '').trim().toLowerCase() === 'h9'
+    );
     const employeesById = new Map(employees.map(employee => [attendanceEmployeeId_(employee), employee]));
     const rows = getSheet('Attendance').getDataRange().getValues().slice(1);
     const checkedIn = new Set();
@@ -879,7 +883,7 @@ function getAttendanceCounts() {
       groups.get(key).count++;
     });
     return createJSONOutput({
-      status: 'success', date: window.date,
+      status: 'success', date: window.date, scope: { department: 'Assembly', team: 'H9' },
       updatedAt: new Date().toISOString(), total: checkedIn.size,
       groups: Array.from(groups.values()).sort((a, b) => a.department.localeCompare(b.department) || a.team.localeCompare(b.team) || a.shift.localeCompare(b.shift))
     });
