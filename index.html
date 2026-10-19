@@ -1450,6 +1450,11 @@
                 setAttendanceError('');
                 try {
                     const result = await appApiCall(driveUrl, 'getAttendance');
+                    if (result?.code === 'session_expired') {
+                        localStorage.removeItem('currentUser');
+                        setCurrentUser(null);
+                        return;
+                    }
                     if (result?.status !== 'success') throw new Error(result?.message || 'โหลดข้อมูลเช็คชื่อไม่สำเร็จ');
                     setAttendanceData(result);
                 } catch (error) {
@@ -1466,6 +1471,11 @@
                 setAttendanceNotice('');
                 try {
                     const result = await appApiCall(driveUrl, 'recordAttendanceBatch', { items });
+                    if (result?.code === 'session_expired') {
+                        localStorage.removeItem('currentUser');
+                        setCurrentUser(null);
+                        return null;
+                    }
                     if (result?.status !== 'success' || !Array.isArray(result.items)) {
                         throw new Error(result?.message || 'บันทึกเช็คชื่อไม่สำเร็จ');
                     }

@@ -667,7 +667,7 @@ function signAttendancePayload_(payload) {
 function issueAttendanceSession_(user) {
   const payload = Utilities.base64EncodeWebSafe(JSON.stringify({
     username: String(user.username),
-    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     nonce: Utilities.getUuid()
   }));
   return Object.assign({}, user, { attendanceToken: payload + '.' + signAttendancePayload_(payload) });
@@ -848,7 +848,7 @@ function getAttendanceRoster_(actor) {
 
 function getAttendance(data) {
   const actor = getAttendanceActor_(data && data.attendanceToken);
-  if (!actor) return createJSONOutput({ status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' });
+  if (!actor) return createJSONOutput({ status: 'error', code: 'session_expired', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
 
   let roster;
   try {
@@ -890,7 +890,7 @@ function recordAttendanceBatch(data) {
 
 function recordAttendanceItems_(data, items, allowSelfFallback) {
   const actor = getAttendanceActor_(data && data.attendanceToken);
-  if (!actor) return { status: 'error', message: 'เซสชันหมดอายุ กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' };
+  if (!actor) return { status: 'error', code: 'session_expired', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' };
   if (!Array.isArray(items) || items.length === 0) return { status: 'error', message: 'ไม่มีรายการเช็คชื่อให้บันทึก' };
   if (items.length > 500) return { status: 'error', message: 'บันทึกได้ไม่เกิน 500 รายการต่อครั้ง' };
 
