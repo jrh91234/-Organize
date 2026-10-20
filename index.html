@@ -1010,11 +1010,16 @@
                 return map;
             }, {});
             const scoped = employees.filter(employee => shiftFilter === 'ALL' || String(employee.shift || '').trim().toUpperCase() === shiftFilter);
-            const blank = () => ({ total: 0, work: 0, ot: 0 });
+            const shiftKeys = ['A', 'B', 'NONE'];
+            const shiftLabels = { A: 'กะ A', B: 'กะ B', NONE: 'ไม่ระบุกะ' };
+            const shiftOf = employee => { const shift = String(employee.shift || '').trim().toUpperCase(); return shift === 'A' || shift === 'B' ? shift : 'NONE'; };
+            const blank = () => ({ total: 0, work: 0, ot: 0, shifts: { A: { total: 0, work: 0 }, B: { total: 0, work: 0 }, NONE: { total: 0, work: 0 } } });
             const add = (bucket, employee) => {
                 const status = statusById[employee.id] || {};
+                const shift = bucket.shifts[shiftOf(employee)];
                 bucket.total++;
-                if (status.work) bucket.work++;
+                shift.total++;
+                if (status.work) { bucket.work++; shift.work++; }
                 if (status.ot) bucket.ot++;
             };
             const overall = blank();
@@ -1073,8 +1078,9 @@
                         <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all ${tone(pct(overall.work, overall.total))}`} style={{ width: `${pct(overall.work, overall.total)}%` }}></div></div>
                     </div>
 
+                    <p className="text-xs text-gray-500">กะ A/B เป็นเพียงป้ายกำกับ ไม่ได้บอกว่าใครควรเข้างานช่วงไหน การ์ดแต่ละแผนกจึงแสดงยอดเข้างานแยกตามกะให้เห็นพร้อมกัน ส่วน "ยังไม่เข้างาน" นับทุกคนที่ยังไม่ได้เช็คในรอบนี้</p>
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-600">กะ:</span>
+                        <span className="text-sm font-semibold text-gray-600">กรองตามกะ:</span>
                         {[['ALL', 'ทุกกะ'], ['A', 'กะ A'], ['B', 'กะ B']].map(([value, label]) => (
                             <button key={value} type="button" onClick={() => setShiftFilter(value)} className={`rounded-full border px-3 py-1 text-xs font-bold ${shiftFilter === value ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
                         ))}
@@ -1101,12 +1107,15 @@
                                             <span className={dept.total - dept.work > 0 ? 'text-red-600' : 'text-gray-400'}>ยังไม่เข้า {dept.total - dept.work}</span>
                                             <span className="ml-auto text-gray-400">{isOpen ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'}</span>
                                         </div>
+                                        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-600">
+                                            {shiftKeys.filter(key => dept.shifts[key].total > 0).map(key => <span key={key} className="rounded-full bg-gray-100 px-2 py-0.5">{shiftLabels[key]} {dept.shifts[key].work}/{dept.shifts[key].total}</span>)}
+                                        </div>
                                     </button>
                                     {isOpen && (
                                         <div className="mt-3 space-y-3 border-t pt-3">
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-xs">
-                                                    <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">เข้างาน</th><th className="px-2 text-right">OT</th><th className="pl-2 text-right">%</th></tr></thead>
+                                                    <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">เข้างาน</th><th className="px-2 text-right">OT</th><th className="px-2 text-right">กะ A</th><th className="px-2 text-right">กะ B</th><th className="px-2 text-right">ไม่ระบุ</th><th className="pl-2 text-right">%</th></tr></thead>
                                                     <tbody>
                                                         {Array.from(dept.subs.values()).sort((a, b) => a.name.localeCompare(b.name)).map(sub => (
                                                             <tr key={sub.name} className="border-t">
@@ -1114,6 +1123,7 @@
                                                                 <td className="px-2 text-right">{sub.total}</td>
                                                                 <td className="px-2 text-right text-green-700">{sub.work}</td>
                                                                 <td className="px-2 text-right text-purple-700">{sub.ot}</td>
+                                                                {shiftKeys.map(key => <td key={key} className="px-2 text-right text-gray-600">{sub.shifts[key].total > 0 ? `${sub.shifts[key].work}/${sub.shifts[key].total}` : '-'}</td>)}
                                                                 <td className="pl-2 text-right font-bold">{pct(sub.work, sub.total)}%</td>
                                                             </tr>
                                                         ))}
@@ -1124,7 +1134,7 @@
                                                 <div className="mb-1 text-xs font-bold text-gray-600">ยังไม่เช็คเข้างาน ({dept.pending.length})</div>
                                                 {dept.pending.length === 0
                                                     ? <div className="text-xs font-semibold text-green-700">เข้างานครบทุกคนแล้ว</div>
-                                                    : <div className="flex flex-wrap gap-1.5">{dept.pending.map(employee => <span key={employee.id} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={`${employee.id} · ${employee.position || ''}`}>{employee.name}</span>)}</div>}
+                                                    : <div className="flex flex-wrap gap-1.5">{dept.pending.map(employee => <span key={employee.id} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={`${employee.id} · ${employee.position || ''}`}>{employee.name}{shiftOf(employee) !== 'NONE' ? ` (${shiftOf(employee)})` : ''}</span>)}</div>}
                                             </div>
                                         </div>
                                     )}
