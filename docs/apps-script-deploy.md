@@ -45,3 +45,19 @@ Action นี้เรียกได้โดยไม่ต้องมี att
 ```
 
 การแก้ `scr/backend.gs` จะเปิด Auto deploy ที่ `/exec` เดิมตาม workflow ด้านบน
+
+## Assembly Super App SSO (login ครั้งเดียวจาก Super App)
+
+ผู้ใช้ที่ login ที่ [Assembly Super App](https://jrh91234.github.io/Assembly-super-app/) และได้รับสิทธิ์แอป **Organize (HR)**
+จะเข้าระบบได้เลยโดยไม่ต้องกรอก Username/Password (action `ssoLogin` ใน `scr/backend.gs`)
+
+- Username ของ Super App = Username ในชีต `Users` ถ้ายังไม่มีจะสร้างแถวให้ (รหัสผ่านสุ่ม = login ด้วยรหัสผ่านไม่ได้จนกว่า admin จะตั้งให้)
+  ถ้ามีอยู่แล้ว ชื่อ, Role และแผนกจะอัปเดตตามที่ตั้งใน Super App ทุกครั้งที่ SSO login
+- Role ที่รับ: `admin`, `supervisor`, `leader`, `viewer` และแผนกตั้งได้ในหน้า Admin ของ Super App
+- login ด้วย Username/Password แบบเดิมยังใช้ได้
+
+ตั้งค่าครั้งเดียวหลัง deploy:
+1. Apps Script → Project Settings → Script Properties เพิ่ม `SUPERAPP_AUTH_URL` = URL `/exec` ของ auth กลาง
+2. SSO ใช้ `UrlFetchApp` (scope `script.external_request`) เจ้าของสคริปต์ต้องเปิด Apps Script editor
+   แล้วรันฟังก์ชัน `authorizeSuperAppSso` หนึ่งครั้งเพื่อกดอนุญาต
+   ถ้า `appsscript.json` ในโปรเจกต์กำหนด `oauthScopes` ไว้เอง ต้องเพิ่ม `https://www.googleapis.com/auth/script.external_request` ด้วย
