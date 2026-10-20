@@ -988,6 +988,154 @@
             );
         };
 
+        // H1, Coil winding and Lug&Screw are shown as one combined sub-department in attendance views.
+        const mergedSubDeptLabel = 'H1 / Coil winding / Lug&Screw';
+        const mergedSubDeptNames = ['h1', 'coilwinding', 'lugscrew'];
+        const attendanceSubDeptKey = value => {
+            const name = String(value || '').trim();
+            if (!name) return '__NO_SUB_DEPT__';
+            return mergedSubDeptNames.includes(name.toLowerCase().replace(/[^a-z0-9]/g, '')) ? mergedSubDeptLabel : name;
+        };
+
+        const AttendanceMonitor = ({ data, loading, error, onRefresh, lastUpdated }) => {
+            const employees = Array.isArray(data?.employees) ? data.employees : [];
+            const records = Array.isArray(data?.records) ? data.records : [];
+            const [openDept, setOpenDept] = useState('');
+            const [shiftFilter, setShiftFilter] = useState('ALL');
+            const [showPendingOnly, setShowPendingOnly] = useState(false);
+            const statusById = records.reduce((map, record) => {
+                const entry = map[record.username] || {};
+                entry[record.type] = record;
+                map[record.username] = entry;
+                return map;
+            }, {});
+            const scoped = employees.filter(employee => shiftFilter === 'ALL' || String(employee.shift || '').trim().toUpperCase() === shiftFilter);
+            const blank = () => ({ total: 0, work: 0, ot: 0 });
+            const add = (bucket, employee) => {
+                const status = statusById[employee.id] || {};
+                bucket.total++;
+                if (status.work) bucket.work++;
+                if (status.ot) bucket.ot++;
+            };
+            const overall = blank();
+            const deptMap = new Map();
+            scoped.forEach(employee => {
+                add(overall, employee);
+                const dept = employee.dept || 'ไม่ระบุแผนก';
+                if (!deptMap.has(dept)) deptMap.set(dept, { name: dept, ...blank(), subs: new Map(), pending: [] });
+                const group = deptMap.get(dept);
+                add(group, employee);
+                const subKey = attendanceSubDeptKey(employee.subDept);
+                if (!group.subs.has(subKey)) group.subs.set(subKey, { name: subKey === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : subKey, ...blank() });
+                add(group.subs.get(subKey), employee);
+                if (!(statusById[employee.id] || {}).work) group.pending.push(employee);
+            });
+            const departments = Array.from(deptMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+            const pct = (done, total) => total > 0 ? Math.round((done / total) * 100) : 0;
+            const tone = percent => percent >= 90 ? 'bg-green-500' : percent >= 60 ? 'bg-amber-400' : 'bg-red-400';
+            const dateLabel = data?.date
+                ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                : 'วันนี้';
+            const timeLabel = lastUpdated ? new Date(lastUpdated).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
+            const cards = [
+                { label: 'พนักงานทั้งหมด', value: overall.total, cls: 'text-gray-900' },
+                { label: 'เข้างานแล้ว', value: overall.work, cls: 'text-green-700' },
+                { label: 'ยังไม่เข้างาน', value: overall.total - overall.work, cls: overall.total - overall.work > 0 ? 'text-red-600' : 'text-gray-400' },
+                { label: 'OT', value: overall.ot, cls: 'text-purple-700' }
+            ];
+            return (
+                <section className="mx-auto w-full max-w-6xl space-y-4 pb-10">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <div className="text-sm font-semibold text-blue-600">Monitor การเช็คชื่อ</div>
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{dateLabel}</h1>
+                            <p className="mt-1 text-sm text-gray-500">รอบวัน 08:00–07:59 วันถัดไป · อัปเดตอัตโนมัติทุก 60 วินาที · ล่าสุด {timeLabel}</p>
+                        </div>
+                        <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด...' : 'โหลดใหม่'}</button>
+                    </div>
+                    {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
+                    {data?.message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{data.message}</div>}
+
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                        {cards.map(card => (
+                            <div key={card.label} className="rounded-2xl border bg-white p-4 shadow-sm">
+                                <div className="text-xs font-semibold text-gray-500">{card.label}</div>
+                                <div className={`mt-1 text-3xl font-extrabold ${card.cls}`}>{card.value}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between text-sm font-semibold text-gray-700">
+                            <span>ภาพรวมเข้างาน</span>
+                            <span>{overall.work}/{overall.total} ({pct(overall.work, overall.total)}%)</span>
+                        </div>
+                        <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all ${tone(pct(overall.work, overall.total))}`} style={{ width: `${pct(overall.work, overall.total)}%` }}></div></div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-600">กะ:</span>
+                        {[['ALL', 'ทุกกะ'], ['A', 'กะ A'], ['B', 'กะ B']].map(([value, label]) => (
+                            <button key={value} type="button" onClick={() => setShiftFilter(value)} className={`rounded-full border px-3 py-1 text-xs font-bold ${shiftFilter === value ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
+                        ))}
+                        <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-gray-600"><input type="checkbox" checked={showPendingOnly} onChange={event => setShowPendingOnly(event.target.checked)} />แสดงเฉพาะแผนกที่ยังไม่ครบ</label>
+                    </div>
+
+                    {employees.length === 0 && !loading && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">ไม่มีรายชื่อพนักงานที่เข้าถึงได้</div>}
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {departments.filter(dept => !showPendingOnly || dept.work < dept.total).map(dept => {
+                            const percent = pct(dept.work, dept.total);
+                            const isOpen = openDept === dept.name;
+                            return (
+                                <div key={dept.name} className="rounded-2xl border bg-white p-4 shadow-sm">
+                                    <button type="button" onClick={() => setOpenDept(isOpen ? '' : dept.name)} className="w-full text-left" aria-expanded={isOpen}>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h2 className="text-base font-bold text-gray-900">{dept.name}</h2>
+                                            <span className="text-sm font-bold text-gray-700">{percent}%</span>
+                                        </div>
+                                        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all ${tone(percent)}`} style={{ width: `${percent}%` }}></div></div>
+                                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold">
+                                            <span className="text-green-700">เข้างาน {dept.work}/{dept.total}</span>
+                                            <span className="text-purple-700">OT {dept.ot}</span>
+                                            <span className={dept.total - dept.work > 0 ? 'text-red-600' : 'text-gray-400'}>ยังไม่เข้า {dept.total - dept.work}</span>
+                                            <span className="ml-auto text-gray-400">{isOpen ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'}</span>
+                                        </div>
+                                    </button>
+                                    {isOpen && (
+                                        <div className="mt-3 space-y-3 border-t pt-3">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">เข้างาน</th><th className="px-2 text-right">OT</th><th className="pl-2 text-right">%</th></tr></thead>
+                                                    <tbody>
+                                                        {Array.from(dept.subs.values()).sort((a, b) => a.name.localeCompare(b.name)).map(sub => (
+                                                            <tr key={sub.name} className="border-t">
+                                                                <td className="py-1.5 pr-2 font-semibold text-gray-800">{sub.name}</td>
+                                                                <td className="px-2 text-right">{sub.total}</td>
+                                                                <td className="px-2 text-right text-green-700">{sub.work}</td>
+                                                                <td className="px-2 text-right text-purple-700">{sub.ot}</td>
+                                                                <td className="pl-2 text-right font-bold">{pct(sub.work, sub.total)}%</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div>
+                                                <div className="mb-1 text-xs font-bold text-gray-600">ยังไม่เช็คเข้างาน ({dept.pending.length})</div>
+                                                {dept.pending.length === 0
+                                                    ? <div className="text-xs font-semibold text-green-700">เข้างานครบทุกคนแล้ว</div>
+                                                    : <div className="flex flex-wrap gap-1.5">{dept.pending.map(employee => <span key={employee.id} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={`${employee.id} · ${employee.position || ''}`}>{employee.name}</span>)}</div>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            );
+        };
+
         const sortAttendanceByHierarchy = (employees) => {
             const roster = Array.isArray(employees) ? employees : [];
             const byId = new Map(roster.map(employee => [String(employee.id), employee]));
@@ -1167,14 +1315,6 @@
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'วันนี้';
-            // H1, Coil winding and Lug&Screw are shown as one combined sub-department in the attendance filter.
-            const mergedSubDeptLabel = 'H1 / Coil winding / Lug&Screw';
-            const mergedSubDeptNames = ['h1', 'coilwinding', 'lugscrew'];
-            const attendanceSubDeptKey = value => {
-                const name = String(value || '').trim();
-                if (!name) return '__NO_SUB_DEPT__';
-                return mergedSubDeptNames.includes(name.toLowerCase().replace(/[^a-z0-9]/g, '')) ? mergedSubDeptLabel : name;
-            };
             const scopedEmployees = orderedEmployees.filter(employee => selectedDept === 'ALL' || (employee.dept || '__NO_DEPT__') === selectedDept);
             const subDeptOptions = Array.from(new Set(scopedEmployees.map(employee => attendanceSubDeptKey(employee.subDept)))).sort((a, b) => a === '__NO_SUB_DEPT__' ? 1 : b === '__NO_SUB_DEPT__' ? -1 : a.localeCompare(b));
             const subDeptOptionsKey = subDeptOptions.join('|');
@@ -1416,6 +1556,7 @@
             const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
             const [attendanceData, setAttendanceData] = useState({ date: '', mine: {}, records: [], employees: [], departments: [] });
             const [attendanceLoading, setAttendanceLoading] = useState(false);
+            const [attendanceUpdatedAt, setAttendanceUpdatedAt] = useState(null);
             const [attendanceSavingType, setAttendanceSavingType] = useState('');
             const [attendanceError, setAttendanceError] = useState('');
             const [attendanceNotice, setAttendanceNotice] = useState('');
@@ -1465,6 +1606,7 @@
                     }
                     if (result?.status !== 'success') throw new Error(result?.message || 'โหลดข้อมูลเช็คชื่อไม่สำเร็จ');
                     setAttendanceData(result);
+                    setAttendanceUpdatedAt(Date.now());
                 } catch (error) {
                     setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ');
                 } finally {
@@ -1514,7 +1656,12 @@
             }, [appApiCall, attendanceSavingType, driveUrl]);
 
             useEffect(() => {
-                if (viewMode === 'attendance' && currentUser) void loadAttendance();
+                if ((viewMode === 'attendance' || viewMode === 'monitor') && currentUser) void loadAttendance();
+            }, [viewMode, currentUser, loadAttendance]);
+            useEffect(() => {
+                if (viewMode !== 'monitor' || !currentUser) return undefined;
+                const timer = setInterval(() => { if (!document.hidden) void loadAttendance(); }, 60000);
+                return () => clearInterval(timer);
             }, [viewMode, currentUser, loadAttendance]);
 
             const persistPendingSync = useCallback((queue) => {
@@ -2391,6 +2538,7 @@
                                 <button onClick={()=>setViewMode('chart')} aria-label="ผังองค์กร" title="ผังองค์กร" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='chart'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Grid size={15}/><span className="hidden 2xl:inline">ผังองค์กร</span></button>
                                 <button onClick={()=>setViewMode('list')} aria-label="รายชื่อ" title="รายชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='list'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.List size={15}/><span className="hidden 2xl:inline">รายชื่อ</span></button>
                                 <button onClick={()=>setViewMode('attendance')} aria-label="เช็คชื่อ" title="เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">เช็คชื่อ</span></button>
+                                <button onClick={()=>setViewMode('monitor')} aria-label="Monitor เช็คชื่อ" title="Monitor เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='monitor'?'bg-blue-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Chart size={15}/><span className="hidden 2xl:inline">Monitor</span></button>
                             </div>
 
                             <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true"></div>
@@ -2407,7 +2555,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -2428,9 +2576,11 @@
                             </>
                         )}
 
-                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' ? 'p-4 sm:p-6' : 'p-8'}`}>
+                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
-                            {viewMode === 'attendance' ? (
+                            {viewMode === 'monitor' ? (
+                                <AttendanceMonitor data={attendanceData} loading={attendanceLoading} error={attendanceError} onRefresh={loadAttendance} lastUpdated={attendanceUpdatedAt} />
+                            ) : viewMode === 'attendance' ? (
                                 <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onSaveBatch={handleAttendanceBatchSave} onRefresh={loadAttendance}/>
                             ) : viewMode === 'chart' ? (
                                 <div className="flex flex-col items-center min-w-max" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
