@@ -1000,52 +1000,67 @@
         const AttendanceMonitor = ({ data, loading, error, onRefresh, lastUpdated }) => {
             const employees = Array.isArray(data?.employees) ? data.employees : [];
             const records = Array.isArray(data?.records) ? data.records : [];
+            const previousShifts = Array.isArray(data?.previousShifts) ? data.previousShifts : [];
             const [openDept, setOpenDept] = useState('');
-            const [shiftFilter, setShiftFilter] = useState('ALL');
             const [showPendingOnly, setShowPendingOnly] = useState(false);
-            const statusById = records.reduce((map, record) => {
-                const entry = map[record.username] || {};
-                entry[record.type] = record;
-                map[record.username] = entry;
-                return map;
-            }, {});
-            const scoped = employees.filter(employee => shiftFilter === 'ALL' || String(employee.shift || '').trim().toUpperCase() === shiftFilter);
-            const shiftKeys = ['A', 'B', 'NONE'];
-            const shiftLabels = { A: 'กะ A', B: 'กะ B', NONE: 'ไม่ระบุกะ' };
-            const shiftOf = employee => { const shift = String(employee.shift || '').trim().toUpperCase(); return shift === 'A' || shift === 'B' ? shift : 'NONE'; };
-            const blank = () => ({ total: 0, work: 0, ot: 0, shifts: { A: { total: 0, work: 0 }, B: { total: 0, work: 0 }, NONE: { total: 0, work: 0 } } });
-            const add = (bucket, employee) => {
-                const status = statusById[employee.id] || {};
-                const shift = bucket.shifts[shiftOf(employee)];
-                bucket.total++;
-                shift.total++;
-                if (status.work) { bucket.work++; shift.work++; }
-                if (status.ot) bucket.ot++;
-            };
-            const overall = blank();
-            const deptMap = new Map();
-            scoped.forEach(employee => {
-                add(overall, employee);
+            const workedIds = new Set(records.filter(record => record.type === 'work').map(record => record.username));
+            const otIds = new Set(records.filter(record => record.type === 'ot').map(record => record.username));
+            const shiftOf = employee => { const shift = String(employee.shift || '').trim().toUpperCase(); return shift === 'A' || shift === 'B' ? shift : ''; };
+
+            // Group by department + team, then work out which shift(s) are on duty for each team:
+            // 1) shifts that already have someone checked in this round, else
+            // 2) the shifts the team checked in on its last earlier work day, else
+            // 3) every shift (nothing to go on yet).
+            // Employees with no shift assigned are always counted as expected.
+            const teamMap = new Map();
+            employees.forEach(employee => {
                 const dept = employee.dept || 'ไม่ระบุแผนก';
-                if (!deptMap.has(dept)) deptMap.set(dept, { name: dept, ...blank(), subs: new Map(), pending: [] });
-                const group = deptMap.get(dept);
-                add(group, employee);
                 const subKey = attendanceSubDeptKey(employee.subDept);
-                if (!group.subs.has(subKey)) group.subs.set(subKey, { name: subKey === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : subKey, ...blank() });
-                add(group.subs.get(subKey), employee);
-                if (!(statusById[employee.id] || {}).work) group.pending.push(employee);
+                const key = `${dept}\u0000${subKey}`;
+                if (!teamMap.has(key)) teamMap.set(key, { dept, subKey, members: [], earlier: new Set() });
+                teamMap.get(key).members.push(employee);
+            });
+            previousShifts.forEach(entry => {
+                const team = teamMap.get(`${entry.dept || 'ไม่ระบุแผนก'}\u0000${attendanceSubDeptKey(entry.subDept)}`);
+                if (team) (entry.shifts || []).forEach(shift => team.earlier.add(shift));
+            });
+            const deptMap = new Map();
+            teamMap.forEach(team => {
+                const todayShifts = new Set(team.members.filter(employee => workedIds.has(employee.id)).map(shiftOf).filter(Boolean));
+                let basis = 'today';
+                let active = todayShifts;
+                if (active.size === 0) { active = team.earlier; basis = 'earlier'; }
+                if (active.size === 0) { active = new Set(['A', 'B']); basis = 'unknown'; }
+                const expected = team.members.filter(employee => !shiftOf(employee) || active.has(shiftOf(employee)));
+                const entry = {
+                    name: team.subKey === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : team.subKey,
+                    shifts: Array.from(active).sort(),
+                    basis,
+                    total: expected.length,
+                    work: expected.filter(employee => workedIds.has(employee.id)).length,
+                    ot: expected.filter(employee => otIds.has(employee.id)).length,
+                    pending: expected.filter(employee => !workedIds.has(employee.id))
+                };
+                if (!deptMap.has(team.dept)) deptMap.set(team.dept, { name: team.dept, total: 0, work: 0, ot: 0, teams: [], pending: [] });
+                const dept = deptMap.get(team.dept);
+                dept.total += entry.total; dept.work += entry.work; dept.ot += entry.ot;
+                dept.teams.push(entry);
+                dept.pending.push(...entry.pending);
             });
             const departments = Array.from(deptMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+            departments.forEach(dept => dept.teams.sort((a, b) => a.name.localeCompare(b.name)));
+            const overall = departments.reduce((sum, dept) => ({ total: sum.total + dept.total, work: sum.work + dept.work, ot: sum.ot + dept.ot }), { total: 0, work: 0, ot: 0 });
             const pct = (done, total) => total > 0 ? Math.round((done / total) * 100) : 0;
             const tone = percent => percent >= 90 ? 'bg-green-500' : percent >= 60 ? 'bg-amber-400' : 'bg-red-400';
+            const shiftText = team => `${team.shifts.map(shift => `กะ ${shift}`).join(' + ')}${team.basis === 'today' ? '' : ' (คาดการณ์)'}`;
             const dateLabel = data?.date
                 ? new Date(`${data.date}T00:00:00`).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
                 : 'วันนี้';
             const timeLabel = lastUpdated ? new Date(lastUpdated).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
             const cards = [
-                { label: 'พนักงานทั้งหมด', value: overall.total, cls: 'text-gray-900' },
-                { label: 'เข้างานแล้ว', value: overall.work, cls: 'text-green-700' },
-                { label: 'ยังไม่เข้างาน', value: overall.total - overall.work, cls: overall.total - overall.work > 0 ? 'text-red-600' : 'text-gray-400' },
+                { label: 'ต้องเข้างาน (กะที่ทำงานอยู่)', value: overall.total, cls: 'text-gray-900' },
+                { label: 'มาแล้ว', value: overall.work, cls: 'text-green-700' },
+                { label: 'ยังไม่มา', value: overall.total - overall.work, cls: overall.total - overall.work > 0 ? 'text-red-600' : 'text-gray-400' },
                 { label: 'OT', value: overall.ot, cls: 'text-purple-700' }
             ];
             return (
@@ -1059,7 +1074,7 @@
                         <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด...' : 'โหลดใหม่'}</button>
                     </div>
                     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
-                    {data?.message && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{data.message}</div>}
+                    {data?.rosterMessage && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">{data.rosterMessage}</div>}
 
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                         {cards.map(card => (
@@ -1072,20 +1087,14 @@
 
                     <div className="rounded-2xl border bg-white p-4 shadow-sm">
                         <div className="flex items-center justify-between text-sm font-semibold text-gray-700">
-                            <span>ภาพรวมเข้างาน</span>
+                            <span>มาแล้ว / ต้องเข้างาน</span>
                             <span>{overall.work}/{overall.total} ({pct(overall.work, overall.total)}%)</span>
                         </div>
                         <div className="mt-2 h-3 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all ${tone(pct(overall.work, overall.total))}`} style={{ width: `${pct(overall.work, overall.total)}%` }}></div></div>
+                        <p className="mt-2 text-xs text-gray-500">ระบบตรวจจับกะที่กำลังทำงานของแต่ละทีมเอง จากคนที่เช็คชื่อแล้ววันนี้ ถ้ายังไม่มีใครเช็คจะใช้กะของวันทำงานล่าสุดก่อนหน้า (คาดการณ์)</p>
                     </div>
 
-                    <p className="text-xs text-gray-500">กะ A/B เป็นเพียงป้ายกำกับ ไม่ได้บอกว่าใครควรเข้างานช่วงไหน การ์ดแต่ละแผนกจึงแสดงยอดเข้างานแยกตามกะให้เห็นพร้อมกัน ส่วน "ยังไม่เข้างาน" นับทุกคนที่ยังไม่ได้เช็คในรอบนี้</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-gray-600">กรองตามกะ:</span>
-                        {[['ALL', 'ทุกกะ'], ['A', 'กะ A'], ['B', 'กะ B']].map(([value, label]) => (
-                            <button key={value} type="button" onClick={() => setShiftFilter(value)} className={`rounded-full border px-3 py-1 text-xs font-bold ${shiftFilter === value ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
-                        ))}
-                        <label className="ml-auto flex items-center gap-2 text-xs font-semibold text-gray-600"><input type="checkbox" checked={showPendingOnly} onChange={event => setShowPendingOnly(event.target.checked)} />แสดงเฉพาะแผนกที่ยังไม่ครบ</label>
-                    </div>
+                    <label className="flex items-center justify-end gap-2 text-xs font-semibold text-gray-600"><input type="checkbox" checked={showPendingOnly} onChange={event => setShowPendingOnly(event.target.checked)} />แสดงเฉพาะแผนกที่ยังมาไม่ครบ</label>
 
                     {employees.length === 0 && !loading && <div className="rounded-2xl border bg-white p-5 text-sm text-gray-500">ไม่มีรายชื่อพนักงานที่เข้าถึงได้</div>}
 
@@ -1102,39 +1111,33 @@
                                         </div>
                                         <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full transition-all ${tone(percent)}`} style={{ width: `${percent}%` }}></div></div>
                                         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold">
-                                            <span className="text-green-700">เข้างาน {dept.work}/{dept.total}</span>
+                                            <span className="text-green-700">มาแล้ว {dept.work}/{dept.total}</span>
                                             <span className="text-purple-700">OT {dept.ot}</span>
-                                            <span className={dept.total - dept.work > 0 ? 'text-red-600' : 'text-gray-400'}>ยังไม่เข้า {dept.total - dept.work}</span>
+                                            <span className={dept.total - dept.work > 0 ? 'text-red-600' : 'text-gray-400'}>ยังไม่มา {dept.total - dept.work}</span>
                                             <span className="ml-auto text-gray-400">{isOpen ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'}</span>
-                                        </div>
-                                        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] font-semibold text-gray-600">
-                                            {shiftKeys.filter(key => dept.shifts[key].total > 0).map(key => <span key={key} className="rounded-full bg-gray-100 px-2 py-0.5">{shiftLabels[key]} {dept.shifts[key].work}/{dept.shifts[key].total}</span>)}
                                         </div>
                                     </button>
                                     {isOpen && (
                                         <div className="mt-3 space-y-3 border-t pt-3">
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-xs">
-                                                    <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">เข้างาน</th><th className="px-2 text-right">OT</th><th className="px-2 text-right">กะ A</th><th className="px-2 text-right">กะ B</th><th className="px-2 text-right">ไม่ระบุ</th><th className="pl-2 text-right">%</th></tr></thead>
-                                                    <tbody>
-                                                        {Array.from(dept.subs.values()).sort((a, b) => a.name.localeCompare(b.name)).map(sub => (
-                                                            <tr key={sub.name} className="border-t">
-                                                                <td className="py-1.5 pr-2 font-semibold text-gray-800">{sub.name}</td>
-                                                                <td className="px-2 text-right">{sub.total}</td>
-                                                                <td className="px-2 text-right text-green-700">{sub.work}</td>
-                                                                <td className="px-2 text-right text-purple-700">{sub.ot}</td>
-                                                                {shiftKeys.map(key => <td key={key} className="px-2 text-right text-gray-600">{sub.shifts[key].total > 0 ? `${sub.shifts[key].work}/${sub.shifts[key].total}` : '-'}</td>)}
-                                                                <td className="pl-2 text-right font-bold">{pct(sub.work, sub.total)}%</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            <table className="w-full text-xs">
+                                                <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2">กะที่ทำงาน</th><th className="px-2 text-right">ต้องมา</th><th className="px-2 text-right">มาแล้ว</th><th className="pl-2 text-right">%</th></tr></thead>
+                                                <tbody>
+                                                    {dept.teams.map(team => (
+                                                        <tr key={team.name} className="border-t">
+                                                            <td className="py-1.5 pr-2 font-semibold text-gray-800">{team.name}</td>
+                                                            <td className="px-2 text-gray-600">{shiftText(team)}</td>
+                                                            <td className="px-2 text-right">{team.total}</td>
+                                                            <td className="px-2 text-right text-green-700">{team.work}</td>
+                                                            <td className="pl-2 text-right font-bold">{pct(team.work, team.total)}%</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                             <div>
-                                                <div className="mb-1 text-xs font-bold text-gray-600">ยังไม่เช็คเข้างาน ({dept.pending.length})</div>
+                                                <div className="mb-1 text-xs font-bold text-gray-600">ยังไม่มา ({dept.pending.length})</div>
                                                 {dept.pending.length === 0
-                                                    ? <div className="text-xs font-semibold text-green-700">เข้างานครบทุกคนแล้ว</div>
-                                                    : <div className="flex flex-wrap gap-1.5">{dept.pending.map(employee => <span key={employee.id} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={`${employee.id} · ${employee.position || ''}`}>{employee.name}{shiftOf(employee) !== 'NONE' ? ` (${shiftOf(employee)})` : ''}</span>)}</div>}
+                                                    ? <div className="text-xs font-semibold text-green-700">มาครบทุกคนแล้ว</div>
+                                                    : <div className="flex flex-wrap gap-1.5">{dept.pending.map(employee => <span key={employee.id} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700" title={`${employee.id} · ${employee.position || ''}`}>{employee.name}</span>)}</div>}
                                             </div>
                                         </div>
                                     )}

@@ -906,7 +906,8 @@ function getAttendance(data) {
   const sheet = getSheet('Attendance');
   const window = getAttendanceWindow_(new Date());
   const today = window.date;
-  const records = sheet.getDataRange().getValues().slice(1)
+  const rows = sheet.getDataRange().getValues().slice(1);
+  const records = rows
     .filter(row => isAttendanceTimestampInWindow_(row[1], window))
     .map(attendanceRecordFromRow_)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
@@ -916,10 +917,33 @@ function getAttendance(data) {
   const allowedIds = new Set(roster.employees.map(employee => employee.id));
   let visibleRecords = records.filter(record => allowedIds.has(record.username) || record.username === actor.username);
 
+  // Which shift(s) each team checked in on its most recent earlier work day. The Monitor uses this
+  // to guess who is expected before anyone has checked in this round.
+  const employeesById = new Map(roster.employees.map(employee => [employee.id, employee]));
+  const latestByTeam = new Map();
+  rows.forEach(row => {
+    if (String(row[5] || '').trim() !== 'work') return;
+    const employee = employeesById.get(String(row[2] || '').trim());
+    if (!employee || (employee.shift !== 'A' && employee.shift !== 'B')) return;
+    const timestamp = row[1] instanceof Date ? row[1] : new Date(row[1]);
+    if (isNaN(timestamp.getTime()) || timestamp >= window.start) return;
+    const workDate = getAttendanceDate_(timestamp);
+    const key = [employee.dept, employee.subDept].join('\u0000');
+    let entry = latestByTeam.get(key);
+    if (!entry || workDate > entry.date) {
+      entry = { dept: employee.dept, subDept: employee.subDept, date: workDate, shifts: new Set() };
+      latestByTeam.set(key, entry);
+    }
+    if (workDate === entry.date) entry.shifts.add(employee.shift);
+  });
+  const previousShifts = Array.from(latestByTeam.values()).map(entry => ({
+    dept: entry.dept, subDept: entry.subDept, date: entry.date, shifts: Array.from(entry.shifts).sort()
+  }));
+
   return createJSONOutput({
     status: 'success', date: today, mine: mine, records: visibleRecords,
     employees: roster.employees, departments: roster.departments, rosterMessage: roster.message,
-    selfId: roster.selfId, actorUsername: actor.username
+    selfId: roster.selfId, actorUsername: actor.username, previousShifts: previousShifts
   });
 }
 
