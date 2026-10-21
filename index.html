@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -149,6 +149,149 @@
             };
             rootEmployees.forEach(root => walk(root, 0, new Set()));
             return rows;
+        };
+        // ---- Excel org chart: lays the chart out on a cell grid (each card = 8 rows x 1 "unit" of 3 columns) ----
+        const ORG_CARD_ROWS = 8;
+        const ORG_GAP_ROWS = 2;
+        const TW_HEX = {
+            blue: { 50: 'EFF6FF', 100: 'DBEAFE', 200: 'BFDBFE', 400: '60A5FA', 600: '2563EB' },
+            teal: { 50: 'F0FDFA', 100: 'CCFBF1', 200: '99F6E4', 400: '2DD4BF', 600: '0D9488' },
+            indigo: { 50: 'EEF2FF', 100: 'E0E7FF', 200: 'C7D2FE', 400: '818CF8', 600: '4F46E5' },
+            rose: { 50: 'FFF1F2', 100: 'FFE4E6', 200: 'FECDD3', 400: 'FB7185', 600: 'E11D48' },
+            slate: { 50: 'F8FAFC', 100: 'F1F5F9', 200: 'E2E8F0', 300: 'CBD5E1', 400: '94A3B8', 600: '475569' },
+            orange: { 50: 'FFF7ED', 100: 'FFEDD5', 200: 'FED7AA', 400: 'FB923C', 600: 'EA580C' },
+            gray: { 200: 'E5E7EB', 300: 'D1D5DB' }
+        };
+        // 'bg-blue-100' / 'border-blue-600' -> 'FFDBEAFE' (ARGB for ExcelJS)
+        const tailwindArgb = (className, fallback) => {
+            const match = /^(?:bg|border)-([a-z]+)-(\d+)$/.exec(className || '');
+            const hex = match && TW_HEX[match[1]] && TW_HEX[match[1]][match[2]];
+            return `FF${hex || fallback}`;
+        };
+        const buildOrgChartLayout = (employees, rootEmployees) => {
+            const measure = (employee, visited) => {
+                if (visited.has(employee.id)) return null;
+                const seen = new Set(visited).add(employee.id);
+                const kids = employees.filter(e => e.reportsTo === employee.id && !seen.has(e.id)).sort(compareEmployeeCategoryOrder).map(kid => measure(kid, seen)).filter(Boolean);
+                const node = { employee, kids, w: 1, h: ORG_CARD_ROWS, cols: 1, colW: [], rowH: [] };
+                if (kids.length) {
+                    // Leaders show their team in a grid (gridCols wide); everyone else spreads the team in one row.
+                    const isGrid = String(employee.position || '').toLowerCase().includes('leader');
+                    const wanted = Number(employee.gridCols) > 0 ? Number(employee.gridCols) : kids.length;
+                    node.cols = isGrid ? Math.min(wanted, kids.length) : kids.length;
+                    const rows = Math.ceil(kids.length / node.cols);
+                    node.colW = Array(node.cols).fill(1);
+                    node.rowH = Array(rows).fill(ORG_CARD_ROWS);
+                    kids.forEach((kid, i) => {
+                        const c = i % node.cols;
+                        const r = Math.floor(i / node.cols);
+                        node.colW[c] = Math.max(node.colW[c], kid.w);
+                        node.rowH[r] = Math.max(node.rowH[r], kid.h);
+                    });
+                    node.w = node.colW.reduce((a, b) => a + b, 0);
+                    node.h = ORG_CARD_ROWS + ORG_GAP_ROWS + node.rowH.reduce((a, b) => a + b, 0) + (rows - 1);
+                }
+                return node;
+            };
+            const cards = [];
+            const vlines = [];
+            const bars = [];
+            const place = (node, u0, r0, level) => {
+                const top = r0 + ORG_CARD_ROWS + ORG_GAP_ROWS;
+                const firstRowCx = [];
+                node.kids.forEach((kid, i) => {
+                    const c = i % node.cols;
+                    const r = Math.floor(i / node.cols);
+                    let x = u0 + Math.floor((node.colW[c] - kid.w) / 2);
+                    for (let k = 0; k < c; k++) x += node.colW[k];
+                    let y = top + r;
+                    for (let k = 0; k < r; k++) y += node.rowH[k];
+                    place(kid, x, y, level + 1);
+                    if (r === 0) firstRowCx.push(kid.cx);
+                    else vlines.push({ unit: kid.cx, row: y - 1 });
+                });
+                if (firstRowCx.length) {
+                    const min = Math.min(...firstRowCx);
+                    const max = Math.max(...firstRowCx);
+                    node.cx = Math.floor((min + max) / 2);
+                    vlines.push({ unit: node.cx, row: top - 2 });
+                    firstRowCx.forEach(cx => vlines.push({ unit: cx, row: top - 1 }));
+                    if (max > min) bars.push({ from: min, to: max, row: top - 2 });
+                } else {
+                    node.cx = u0;
+                }
+                cards.push({ employee: node.employee, unit: node.cx, row: r0, level, team: node.kids.length ? countTeamMembers(employees, node.employee.id) : null });
+            };
+            let unit = 0;
+            let rows = 0;
+            rootEmployees.forEach(root => {
+                const node = measure(root, new Set());
+                if (!node) return;
+                place(node, unit, 0, 0);
+                unit += node.w + 1;
+                rows = Math.max(rows, node.h);
+            });
+            return { cards, vlines, bars, units: Math.max(unit - 1, 1), rows };
+        };
+        const renderOrgChartSheet = (sheet, layout, theme, title) => {
+            const COL0 = 2;
+            const ROW0 = 3;
+            const colL = unit => COL0 + unit * 3;
+            const colR = unit => colL(unit) + 1;
+            const lineStyle = { style: 'thin', color: { argb: 'FF9CA3AF' } };
+            const FONT = 'Tahoma';
+            sheet.getColumn(1).width = 2;
+            for (let u = 0; u < layout.units; u++) {
+                sheet.getColumn(colL(u)).width = 13;
+                sheet.getColumn(colR(u)).width = 13;
+                sheet.getColumn(colL(u) + 2).width = 2.5;
+            }
+            sheet.getCell(1, 2).value = title;
+            sheet.getCell(1, 2).font = { name: FONT, size: 14, bold: true };
+            const addBorder = (cell, side) => { cell.border = { ...(cell.border || {}), [side]: lineStyle }; };
+            layout.vlines.forEach(v => addBorder(sheet.getCell(ROW0 + v.row, colL(v.unit)), 'right'));
+            layout.bars.forEach(bar => { for (let c = colR(bar.from); c <= colL(bar.to); c++) addBorder(sheet.getCell(ROW0 + bar.row, c), 'bottom'); });
+
+            layout.cards.forEach(({ employee, unit, row, level, team }) => {
+                const isSub = isSubcontractEmployee(employee);
+                const levelClass = level === 0 ? theme?.lv0 : level === 1 ? theme?.lv1 : theme?.lvN;
+                const colorClass = (employee.customColor && THEMES[employee.customColor]) ? THEMES[employee.customColor].lv0 : levelClass;
+                const classes = String(colorClass || '').split(' ');
+                const fill = tailwindArgb(classes.find(c => c.startsWith('bg-')), 'FFFFFF');
+                const edge = tailwindArgb(classes.find(c => c.startsWith('border-')), 'D1D5DB');
+                const edgeSide = { style: 'thin', color: { argb: edge } };
+                const tenure = employee.startDate ? calculateTenure(employee.startDate) : '';
+                const shiftText = ['A', 'B'].includes(String(employee.shift || '').toUpperCase()) ? `กะ ${String(employee.shift).toUpperCase()}` : '';
+                const phoneText = employee.showPhone && employee.phone ? `โทร ${employee.phone}` : '';
+                const lines = [
+                    { text: `${isSub ? 'S' : 'P'}  ${employee.id}`, font: { size: 9, bold: true, color: { argb: 'FF6B7280' } } },
+                    { text: employee.name || '', font: { size: 11, bold: true, color: { argb: 'FF111827' } }, note: employee.jobDescription ? `Job Description\n${employee.jobDescription}` : '' },
+                    { text: employee.position || '', font: { size: 9, color: { argb: 'FF4B5563' } } },
+                    { text: employee.subDept || '', font: { size: 9, color: { argb: 'FF2563EB' } } },
+                    { text: [shiftText, phoneText].filter(Boolean).join('   '), font: { size: 9, color: { argb: 'FF4338CA' } } },
+                    { text: isSub && employee.company ? employee.company : '', font: { size: 9, bold: true, color: { argb: 'FFEA580C' } } },
+                    { text: tenure ? `อายุงาน ${tenure}` : '', font: { size: 9, color: { argb: 'FF15803D' } } },
+                    { text: team && team.total > 0 ? `ลูกทีม ${team.total} | ประจำ ${team.regular} | Sub ${team.subcontract}` : '', font: { size: 9, bold: true, color: { argb: 'FF374151' } } }
+                ];
+                lines.forEach((line, i) => {
+                    const excelRow = ROW0 + row + i;
+                    sheet.mergeCells(excelRow, colL(unit), excelRow, colR(unit));
+                    const border = { left: edgeSide, right: edgeSide };
+                    if (i === 0) border.top = edgeSide;
+                    if (i === ORG_CARD_ROWS - 1) border.bottom = { style: 'medium', color: { argb: edge } };
+                    [colL(unit), colR(unit)].forEach(col => {
+                        const cell = sheet.getCell(excelRow, col);
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+                        cell.border = border;
+                    });
+                    const cell = sheet.getCell(excelRow, colL(unit));
+                    cell.value = line.text;
+                    cell.font = { name: FONT, ...line.font };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
+                    if (line.note) cell.note = line.note;
+                });
+            });
+            sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
         };
         const compareEmployeeCategoryOrder = (a, b) => {
             const typeOrder = Number(isSubcontractEmployee(a)) - Number(isSubcontractEmployee(b));
@@ -2486,15 +2629,28 @@
                     document.body.removeChild(host);
                 }
             };
-            const exportChartExcel = () => {
-                if (!window.XLSX) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
+            const exportChartExcel = async () => {
+                if (!window.ExcelJS) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
                 const chartRows = buildOrgChartRows(filteredAll, rootEmployees);
                 if (chartRows.length === 0) { alert('ไม่มีข้อมูลผังองค์กรให้ส่งออก'); return; }
-                const header = ['Level', 'ID', 'Name (tree)', 'Position', 'Department', 'Sub-department', 'Shift', 'Type', 'Company', 'Reports To ID', 'Reports To', 'Phone', 'Start Date', 'Team Total', 'Team Regular', 'Team Subcontract', 'Job Description'];
-                const body = chartRows.map(r => [r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescription]);
-                const sheet = window.XLSX.utils.aoa_to_sheet([header, ...body]);
-                sheet['!cols'] = [6, 10, 34, 24, 16, 18, 7, 14, 16, 12, 24, 14, 14, 10, 12, 16, 50].map(wch => ({ wch }));
-                sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+                const today = new Date().toISOString().slice(0, 10);
+                const workbook = new window.ExcelJS.Workbook();
+
+                // 1) The chart itself, laid out like the on-screen cards (every cell is editable).
+                const chartSheet = workbook.addWorksheet('Org Chart', { views: [{ showGridLines: false }] });
+                renderOrgChartSheet(chartSheet, buildOrgChartLayout(filteredAll, rootEmployees), THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`);
+
+                // 2) The same people as a flat, filterable table.
+                const dataSheet = workbook.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
+                dataSheet.columns = [
+                    ['Level', 6], ['ID', 10], ['Name (tree)', 34], ['Position', 24], ['Department', 16], ['Sub-department', 18], ['Shift', 7], ['Type', 14], ['Company', 16],
+                    ['Reports To ID', 12], ['Reports To', 24], ['Phone', 14], ['Start Date', 14], ['Team Total', 10], ['Team Regular', 12], ['Team Subcontract', 16], ['Job Description', 50]
+                ].map(([header, width]) => ({ header, width }));
+                chartRows.forEach(r => dataSheet.addRow([r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescription]));
+                dataSheet.getRow(1).font = { bold: true };
+                dataSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 17 } };
+
+                // 3) Headcount per department.
                 const deptMap = new Map();
                 filteredAll.forEach(e => {
                     const dept = e.dept || '-';
@@ -2503,13 +2659,24 @@
                     entry.total++;
                     if (isSubcontractEmployee(e)) entry.subcontract++;
                 });
+                const summarySheet = workbook.addWorksheet('Summary');
+                summarySheet.columns = [{ header: 'Department', width: 22 }, { header: 'Regular', width: 10 }, { header: 'Subcontract', width: 12 }, { header: 'Total', width: 10 }];
                 const summaryRows = Array.from(deptMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([dept, v]) => [dept, v.total - v.subcontract, v.subcontract, v.total]);
-                const summary = window.XLSX.utils.aoa_to_sheet([['Department', 'Regular', 'Subcontract', 'Total'], ...summaryRows, ['Total', summaryRows.reduce((n, r) => n + r[1], 0), summaryRows.reduce((n, r) => n + r[2], 0), summaryRows.reduce((n, r) => n + r[3], 0)]]);
-                summary['!cols'] = [22, 10, 12, 10].map(wch => ({ wch }));
-                const workbook = window.XLSX.utils.book_new();
-                window.XLSX.utils.book_append_sheet(workbook, sheet, 'Org Chart');
-                window.XLSX.utils.book_append_sheet(workbook, summary, 'Summary');
-                window.XLSX.writeFile(workbook, `org_chart_${currentDept}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                summaryRows.forEach(row => summarySheet.addRow(row));
+                summarySheet.addRow(['Total', summaryRows.reduce((n, r) => n + r[1], 0), summaryRows.reduce((n, r) => n + r[2], 0), summaryRows.reduce((n, r) => n + r[3], 0)]);
+                summarySheet.getRow(1).font = { bold: true };
+                summarySheet.lastRow.font = { bold: true };
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                const url = window.URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const link = document.createElement('a');
+                link.setAttribute('hidden', '');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `org_chart_${currentDept}_${today}.xlsx`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
             };
 
             const exportChartPDF = async () => {
