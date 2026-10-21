@@ -150,8 +150,9 @@
             rootEmployees.forEach(root => walk(root, 0, new Set()));
             return rows;
         };
-        // ---- Excel org chart: lays the chart out on a cell grid (each card = 8 rows x 1 "unit" of 3 columns) ----
-        const ORG_CARD_ROWS = 8;
+        // ---- Excel org chart: lays the chart out on a cell grid (each card = 12 rows x 1 "unit" of 3 columns) ----
+        const ORG_PHOTO_ROWS = 4;
+        const ORG_CARD_ROWS = 12;
         const ORG_GAP_ROWS = 2;
         const TW_HEX = {
             blue: { 50: 'EFF6FF', 100: 'DBEAFE', 200: 'BFDBFE', 400: '60A5FA', 600: '2563EB' },
@@ -168,6 +169,40 @@
             const hex = match && TW_HEX[match[1]] && TW_HEX[match[1]][match[2]];
             return `FF${hex || fallback}`;
         };
+        // Photo -> 96px circle with a white ring and a thin outline (transparent corners), as a PNG data URL for the Excel chart.
+        const circlePhotoDataUrl = (src) => new Promise((resolve, reject) => {
+            const probe = new Image();
+            probe.crossOrigin = 'anonymous';
+            probe.referrerPolicy = 'no-referrer';
+            const timer = setTimeout(() => reject(new Error('photo timeout')), 8000);
+            probe.onload = () => {
+                clearTimeout(timer);
+                try {
+                    const size = 96;
+                    const ring = 5;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight);
+                    ctx.beginPath();
+                    ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = '#d1d5db';
+                    ctx.stroke();
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(size / 2, size / 2, size / 2 - 1 - ring, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(probe, (probe.naturalWidth - crop) / 2, (probe.naturalHeight - crop) / 2, crop, crop, ring, ring, size - ring * 2, size - ring * 2);
+                    ctx.restore();
+                    resolve(canvas.toDataURL('image/png'));
+                } catch (error) { reject(error); }
+            };
+            probe.onerror = () => { clearTimeout(timer); reject(new Error('photo failed')); };
+            probe.src = src;
+        });
         const buildOrgChartLayout = (employees, rootEmployees) => {
             const measure = (employee, visited) => {
                 if (visited.has(employee.id)) return null;
@@ -233,7 +268,7 @@
             });
             return { cards, vlines, bars, units: Math.max(unit - 1, 1), rows };
         };
-        const renderOrgChartSheet = (sheet, layout, theme, title) => {
+        const renderOrgChartSheet = (sheet, layout, theme, title, photoIds = new Map()) => {
             const COL0 = 2;
             const ROW0 = 3;
             const colL = unit => COL0 + unit * 3;
@@ -273,18 +308,32 @@
                     { text: tenure ? `อายุงาน ${tenure}` : '', font: { size: 9, color: { argb: 'FF15803D' } } },
                     { text: team && team.total > 0 ? `ลูกทีม ${team.total} | ประจำ ${team.regular} | Sub ${team.subcontract}` : '', font: { size: 9, bold: true, color: { argb: 'FF374151' } } }
                 ];
-                lines.forEach((line, i) => {
-                    const excelRow = ROW0 + row + i;
-                    sheet.mergeCells(excelRow, colL(unit), excelRow, colR(unit));
+                // Photo block on top (rows 0-3, merged), then one merged row per text line.
+                const cardTop = ROW0 + row;
+                const textStart = ORG_PHOTO_ROWS;
+                const styleCell = (excelRow, col, rel) => {
+                    const cell = sheet.getCell(excelRow, col);
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+                    // Both halves of a merged row get the same border so the frame draws whichever cell the viewer treats as the master.
                     const border = { left: edgeSide, right: edgeSide };
-                    if (i === 0) border.top = edgeSide;
-                    if (i === ORG_CARD_ROWS - 1) border.bottom = { style: 'medium', color: { argb: edge } };
-                    [colL(unit), colR(unit)].forEach(col => {
-                        const cell = sheet.getCell(excelRow, col);
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-                        cell.border = border;
-                    });
-                    const cell = sheet.getCell(excelRow, colL(unit));
+                    if (rel === 0) border.top = edgeSide;
+                    if (rel === ORG_CARD_ROWS - 1) border.bottom = { style: 'medium', color: { argb: edge } };
+                    cell.border = border;
+                    return cell;
+                };
+                sheet.mergeCells(cardTop, colL(unit), cardTop + ORG_PHOTO_ROWS - 1, colR(unit));
+                for (let i = 0; i < ORG_PHOTO_ROWS; i++) { styleCell(cardTop + i, colL(unit), i); styleCell(cardTop + i, colR(unit), i); }
+                const photoId = photoIds.get(employee.id);
+                if (photoId !== undefined) {
+                    // 192px wide card, 80px tall photo block: centre a 68px circle in it.
+                    sheet.addImage(photoId, { tl: { col: colL(unit) - 1 + 0.66, row: cardTop - 1 + 0.15 }, ext: { width: 68, height: 68 } });
+                }
+                lines.forEach((line, i) => {
+                    const rel = textStart + i;
+                    const excelRow = cardTop + rel;
+                    sheet.mergeCells(excelRow, colL(unit), excelRow, colR(unit));
+                    styleCell(excelRow, colR(unit), rel);
+                    const cell = styleCell(excelRow, colL(unit), rel);
                     cell.value = line.text;
                     cell.font = { name: FONT, ...line.font };
                     cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
@@ -2638,7 +2687,17 @@
 
                 // 1) The chart itself, laid out like the on-screen cards (every cell is editable).
                 const chartSheet = workbook.addWorksheet('Org Chart', { views: [{ showGridLines: false }] });
-                renderOrgChartSheet(chartSheet, buildOrgChartLayout(filteredAll, rootEmployees), THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`);
+                const layout = buildOrgChartLayout(filteredAll, rootEmployees);
+                // Photos need a CORS-enabled load (same as the PDF export); anyone whose photo fails simply gets no picture.
+                const photoIds = new Map();
+                await Promise.all(layout.cards.map(async ({ employee }) => {
+                    if (!employee.image) return;
+                    try {
+                        const dataUrl = await circlePhotoDataUrl(formatDriveUrl(employee.image));
+                        photoIds.set(employee.id, workbook.addImage({ base64: dataUrl, extension: 'png' }));
+                    } catch (error) { /* no photo for this card */ }
+                }));
+                renderOrgChartSheet(chartSheet, layout, THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`, photoIds);
 
                 // 2) The same people as a flat, filterable table.
                 const dataSheet = workbook.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
