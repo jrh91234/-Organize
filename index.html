@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -116,6 +117,38 @@
                 });
             }
             return { total, subcontract, regular: total - subcontract };
+        };
+        // Flatten the org chart depth-first (same child order as the chart) into rows for the Excel export.
+        const buildOrgChartRows = (employees, rootEmployees) => {
+            const nameById = new Map(employees.map(e => [e.id, e.name]));
+            const rows = [];
+            const walk = (employee, level, visited) => {
+                if (visited.has(employee.id)) return;
+                const seen = new Set(visited).add(employee.id);
+                const team = countTeamMembers(employees, employee.id);
+                rows.push({
+                    level,
+                    id: employee.id,
+                    name: employee.name || '',
+                    position: employee.position || '',
+                    dept: employee.dept || '',
+                    subDept: employee.subDept || '',
+                    shift: employee.shift || '',
+                    type: employee.type || '',
+                    company: employee.company || '',
+                    reportsToId: employee.reportsTo && employee.reportsTo !== 'STAGING' ? employee.reportsTo : '',
+                    reportsToName: nameById.get(employee.reportsTo) || '',
+                    phone: employee.showPhone && employee.phone ? employee.phone : '',
+                    startDate: employee.startDate || '',
+                    teamTotal: team.total,
+                    teamRegular: team.regular,
+                    teamSubcontract: team.subcontract,
+                    jobDescription: employee.jobDescription || ''
+                });
+                employees.filter(e => e.reportsTo === employee.id).sort(compareEmployeeCategoryOrder).forEach(child => walk(child, level + 1, seen));
+            };
+            rootEmployees.forEach(root => walk(root, 0, new Set()));
+            return rows;
         };
         const compareEmployeeCategoryOrder = (a, b) => {
             const typeOrder = Number(isSubcontractEmployee(a)) - Number(isSubcontractEmployee(b));
@@ -2453,6 +2486,32 @@
                     document.body.removeChild(host);
                 }
             };
+            const exportChartExcel = () => {
+                if (!window.XLSX) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
+                const chartRows = buildOrgChartRows(filteredAll, rootEmployees);
+                if (chartRows.length === 0) { alert('ไม่มีข้อมูลผังองค์กรให้ส่งออก'); return; }
+                const header = ['Level', 'ID', 'Name (tree)', 'Position', 'Department', 'Sub-department', 'Shift', 'Type', 'Company', 'Reports To ID', 'Reports To', 'Phone', 'Start Date', 'Team Total', 'Team Regular', 'Team Subcontract', 'Job Description'];
+                const body = chartRows.map(r => [r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescription]);
+                const sheet = window.XLSX.utils.aoa_to_sheet([header, ...body]);
+                sheet['!cols'] = [6, 10, 34, 24, 16, 18, 7, 14, 16, 12, 24, 14, 14, 10, 12, 16, 50].map(wch => ({ wch }));
+                sheet['!freeze'] = { xSplit: 0, ySplit: 1 };
+                const deptMap = new Map();
+                filteredAll.forEach(e => {
+                    const dept = e.dept || '-';
+                    if (!deptMap.has(dept)) deptMap.set(dept, { total: 0, subcontract: 0 });
+                    const entry = deptMap.get(dept);
+                    entry.total++;
+                    if (isSubcontractEmployee(e)) entry.subcontract++;
+                });
+                const summaryRows = Array.from(deptMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([dept, v]) => [dept, v.total - v.subcontract, v.subcontract, v.total]);
+                const summary = window.XLSX.utils.aoa_to_sheet([['Department', 'Regular', 'Subcontract', 'Total'], ...summaryRows, ['Total', summaryRows.reduce((n, r) => n + r[1], 0), summaryRows.reduce((n, r) => n + r[2], 0), summaryRows.reduce((n, r) => n + r[3], 0)]]);
+                summary['!cols'] = [22, 10, 12, 10].map(wch => ({ wch }));
+                const workbook = window.XLSX.utils.book_new();
+                window.XLSX.utils.book_append_sheet(workbook, sheet, 'Org Chart');
+                window.XLSX.utils.book_append_sheet(workbook, summary, 'Summary');
+                window.XLSX.writeFile(workbook, `org_chart_${currentDept}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            };
+
             const exportChartPDF = async () => {
                 const source = document.getElementById('org-chart-full-view');
                 if (!source) return;
@@ -2659,6 +2718,7 @@
                                 {!isLocked && <button onClick={addAnnotation} aria-label="เพิ่มข้อความบนผัง" title="เพิ่มข้อความบนผัง" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
                                 {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
                                 {viewMode === 'chart' && <button onClick={exportChartPDF} disabled={isExportingChartPdf} aria-label="บันทึกผังเป็น PDF" title="บันทึกผังเป็น PDF" className="flex h-7 w-8 items-center justify-center rounded-md text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"><Icons.FileText size={18}/></button>}
+                                {viewMode === 'chart' && <button onClick={exportChartExcel} aria-label="ส่งออกผังเป็น Excel" title="ส่งออกผังเป็น Excel" className="flex h-7 w-8 items-center justify-center rounded-md text-green-700 transition-colors hover:bg-green-50"><Icons.FileSpreadsheet size={18}/></button>}
                                 <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
                                 <button onClick={()=>setShowRulers(!showRulers)} aria-label={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} title={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showRulers?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.RulerIcon size={18}/></button>
                                 {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} aria-label="ตั้งค่าผู้ดูแล" title="ตั้งค่าผู้ดูแล" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Settings size={18}/></button>}
@@ -2668,7 +2728,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
