@@ -63,6 +63,7 @@ function doPost(e) {
     // Routing การทำงาน
     switch (data.action) {
       case 'login': return loginUser(data);
+      case 'ssoLogin': return ssoLoginUser(data);
       case 'getUsers': return getUsers();
       case 'saveUser': return saveUser(data);
       case 'deleteUser': return deleteUser(data);
@@ -646,6 +647,65 @@ function cleanupDuplicateDataKeys(sheet) {
   for (let i = toDelete.length - 1; i >= 0; i--) {
     sheet.deleteRow(toDelete[i]);
   }
+}
+
+// ===== Assembly Super App SSO =====
+// Script Property SUPERAPP_AUTH_URL = URL /exec ของ auth กลาง (repo Assembly-super-app, scr/auth.gs)
+// Username ของ Super App = Username ในชีต Users: ถ้ายังไม่มีจะสร้างให้ (รหัสผ่านสุ่ม = login ด้วยรหัสผ่านไม่ได้
+// จนกว่า admin จะตั้งให้) ถ้ามีอยู่แล้ว ชื่อ/Role/แผนกจะอัปเดตตาม Super App ทุกครั้งที่ SSO login
+const SUPERAPP_APP_ID = 'organize';
+const SSO_ROLES = ['admin', 'supervisor', 'leader', 'viewer'];
+
+function ssoLoginUser(data) {
+  const verified = verifySuperAppToken_(data && data.ssoToken);
+  if (!verified.success) return createJSONOutput({ status: 'error', message: verified.message });
+
+  const ssoUser = verified.user;
+  const username = String(ssoUser.username || '').trim();
+  if (!username) return createJSONOutput({ status: 'error', message: 'ข้อมูลผู้ใช้จาก Super App ไม่ถูกต้อง' });
+  const role = SSO_ROLES.indexOf(String(ssoUser.role).toLowerCase()) !== -1 ? String(ssoUser.role).toLowerCase() : 'viewer';
+  const dept = String(ssoUser.dept || '').trim() || (role === 'admin' ? 'ALL' : 'ASSEMBLY');
+  const name = String(ssoUser.name || username).trim();
+
+  const sheet = getSheet('Users');
+  const rows = sheet.getDataRange().getValues();
+  let idx = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim().normalize('NFC') === username.normalize('NFC')) { idx = i + 1; break; }
+  }
+  if (idx > 0) {
+    sheet.getRange(idx, 3, 1, 3).setValues([[name, role, dept]]);
+  } else {
+    sheet.appendRow([username, Utilities.getUuid(), name, role, dept]);
+  }
+  return createJSONOutput({ status: 'success', user: issueAttendanceSession_({ username, name, role, dept, sso: true }) });
+}
+
+function verifySuperAppToken_(ssoToken) {
+  const url = PropertiesService.getScriptProperties().getProperty('SUPERAPP_AUTH_URL');
+  if (!url) return { success: false, message: 'ยังไม่ได้ตั้งค่า SUPERAPP_AUTH_URL ใน Script Properties' };
+  if (!ssoToken) return { success: false, message: 'ไม่พบ token ของ Super App' };
+  const res = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'text/plain',
+    payload: JSON.stringify({ action: 'verify', token: ssoToken, app: SUPERAPP_APP_ID }),
+    muteHttpExceptions: true
+  });
+  let result;
+  try {
+    result = JSON.parse(res.getContentText());
+  } catch (error) {
+    return { success: false, message: 'ตรวจสอบกับ Super App ไม่สำเร็จ' };
+  }
+  if (!result || !result.success || !result.user) return { success: false, message: (result && result.message) || 'ไม่มีสิทธิ์ใช้งานแอปนี้' };
+  return result;
+}
+
+// รันครั้งเดียวจาก Apps Script editor หลัง deploy เพื่ออนุญาต UrlFetchApp (scope script.external_request)
+function authorizeSuperAppSso() {
+  const url = PropertiesService.getScriptProperties().getProperty('SUPERAPP_AUTH_URL');
+  if (!url) throw new Error('ตั้ง Script Property SUPERAPP_AUTH_URL ก่อน');
+  Logger.log(UrlFetchApp.fetch(url, { muteHttpExceptions: true }).getContentText());
 }
 
 function createJSONOutput(obj) { 
