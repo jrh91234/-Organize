@@ -174,6 +174,18 @@
             return myRank > targetRank;
         };
 
+        // Job descriptions can be changed by Engineer and above (engineer, supervisor, admin), limited to their own department.
+        const canEditJobDescription = (currentUser, targetEmp) => {
+            if (!currentUser || !targetEmp) return false;
+            if (currentUser.role === 'admin') return true;
+            if (!['engineer', 'supervisor'].includes(currentUser.role)) return false;
+            return currentUser.dept === 'ALL' || currentUser.dept === targetEmp.dept;
+        };
+        const openJobDescription = (event, employeeId) => {
+            event.stopPropagation();
+            window.dispatchEvent(new CustomEvent('open-job-description', { detail: { id: employeeId } }));
+        };
+
         const IconBase = ({ children, size = 18, className = "" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>;
         const Icons = { 
             Camera: (p)=><IconBase {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></IconBase>, Plus: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></IconBase>, Trash2: (p)=><IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>, 
@@ -423,6 +435,7 @@
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
                     </div>
+                    {!isStaging && !selectionMode && <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`absolute top-1 right-1 rounded-full p-1 hover:bg-white/70 ${employee.jobDescription ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>}
                     {isStaging && canDrag && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
@@ -522,6 +535,51 @@
                 </div>
             );
         });
+
+        const JobDescriptionModal = ({ employee, manager, canEdit, onSave, onClose }) => {
+            const [text, setText] = useState(String(employee.jobDescription || ''));
+            const changed = text.trim() !== String(employee.jobDescription || '').trim();
+            const printJobDescription = () => {
+                const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+                const win = window.open('', '_blank');
+                if (!win) { alert('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต pop-up'); return; }
+                win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Job Description - ${esc(employee.name)}</title>
+                    <style>body{font-family:'Sarabun','Noto Sans Thai',sans-serif;margin:32px;color:#111}h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;margin:12px 0 20px}td{padding:3px 16px 3px 0;font-size:14px}td:first-child{color:#555}pre{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.6;border:1px solid #ccc;border-radius:8px;padding:12px;min-height:160px}.sign{display:flex;gap:48px;margin-top:48px;font-size:13px}.sign div{flex:1;border-top:1px solid #333;padding-top:6px;text-align:center}</style></head><body>
+                    <h1>Job Description</h1>
+                    <table><tr><td>ชื่อ</td><td>${esc(employee.name)}</td></tr><tr><td>รหัสพนักงาน</td><td>${esc(employee.id)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(employee.position)}</td></tr><tr><td>แผนก</td><td>${esc([employee.dept, employee.subDept].filter(Boolean).join(' / '))}</td></tr><tr><td>รายงานต่อ</td><td>${esc(manager?.name || '-')}</td></tr></table>
+                    <pre>${esc(text.trim() || '-')}</pre>
+                    <div class="sign"><div>พนักงาน</div><div>หัวหน้างาน</div></div>
+                    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+                win.document.close();
+            };
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+                    <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between border-b bg-gray-50 px-6 py-4">
+                            <div>
+                                <h2 className="text-lg font-bold">Job Description</h2>
+                                <p className="text-sm text-gray-600">{employee.name} · {employee.id}</p>
+                                <p className="text-xs text-gray-500">{employee.position}{employee.dept ? ` · ${employee.dept}` : ''}{employee.subDept ? ` / ${employee.subDept}` : ''}</p>
+                            </div>
+                            <button type="button" onClick={onClose} aria-label="ปิด"><Icons.X/></button>
+                        </div>
+                        <div className="grow overflow-y-auto p-6">
+                            {canEdit
+                                ? <textarea value={text} onChange={e => setText(e.target.value)} rows={12} placeholder="ระบุหน้าที่รับผิดชอบ เช่น 1. ... 2. ..." className="w-full rounded-lg border p-3 text-sm leading-relaxed focus:border-blue-500 focus:outline-none" />
+                                : <div className="min-h-[8rem] whitespace-pre-wrap rounded-lg border bg-gray-50 p-3 text-sm leading-relaxed text-gray-800">{text.trim() || <span className="text-gray-400">ยังไม่ได้กำหนด Job Description</span>}</div>}
+                            {!canEdit && <p className="mt-2 text-xs text-gray-500">แก้ไขได้เฉพาะระดับ Engineer ขึ้นไป (ในแผนกของตัวเอง)</p>}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t px-6 py-4">
+                            <button type="button" onClick={printJobDescription} className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">พิมพ์ / PDF</button>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">{canEdit ? 'ยกเลิก' : 'ปิด'}</button>
+                                {canEdit && <button type="button" disabled={!changed} onClick={() => onSave(employee.id, text.trim())} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">บันทึก</button>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         const EmployeeForm = ({ employee, supervisors, positions, positionRename, depts, subDepartments, onAddSubDept, onDeleteSubDept, onSave, onCancel, onDelete, currentUser, driveUrl, onManagePositions }) => {
             const safePositions = positions || [];
@@ -2154,6 +2212,22 @@
             }, [employees, updateStateFull, currentDept, applyDropReparent]);
             
             // [V13 NEW] Save Logic with Validation & Cascading Update - Defined BEFORE passed to EmployeeForm
+            const [jobDescriptionId, setJobDescriptionId] = useState(null);
+            useEffect(() => {
+                const open = event => setJobDescriptionId(event.detail?.id ?? null);
+                window.addEventListener('open-job-description', open);
+                return () => window.removeEventListener('open-job-description', open);
+            }, []);
+            const handleSaveJobDescription = useCallback((employeeId, text) => {
+                const target = employees.find(e => String(e.id) === String(employeeId));
+                if (!target || !canEditJobDescription(currentUser, target)) {
+                    alert('แก้ไข Job Description ได้เฉพาะระดับ Engineer ขึ้นไปในแผนกของตัวเอง');
+                    return;
+                }
+                const updated = { ...target, jobDescription: text };
+                updateStateFull(employees.map(e => String(e.id) === String(employeeId) ? updated : e), [updated], [], {}, []);
+                setJobDescriptionId(null);
+            }, [employees, currentUser, updateStateFull]);
             const handleSave = useCallback((data) => { 
                 const cleanData = {
                     ...data,
@@ -2678,6 +2752,10 @@
                         </main>
                     </div>
 
+                    {jobDescriptionId !== null && (() => {
+                        const target = employees.find(e => String(e.id) === String(jobDescriptionId));
+                        return target ? <JobDescriptionModal key={target.id} employee={target} manager={employees.find(e => String(e.id) === String(target.reportsTo))} canEdit={canEditJobDescription(currentUser, target)} onSave={handleSaveJobDescription} onClose={() => setJobDescriptionId(null)} /> : null;
+                    })()}
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} positionRename={positionRename} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onDeleteSubDept={handleDeleteSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
 
                     {pendingShiftDrop && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="drop-shift-title">
