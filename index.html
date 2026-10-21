@@ -99,6 +99,24 @@
             shift: ['A', 'B'].includes(String(e.shift || '').trim().toUpperCase()) ? String(e.shift).trim().toUpperCase() : ''
         }));
         const isSubcontractEmployee = (employee) => String(employee?.type || '').trim().toLowerCase().replace(/[\s_-]/g, '').startsWith('subcontract');
+        // Everyone under an employee (all levels, resigned excluded), split into regular staff and subcontract.
+        const countTeamMembers = (allEmployees, rootId) => {
+            const seen = new Set([rootId]);
+            const queue = [rootId];
+            let subcontract = 0;
+            let total = 0;
+            for (let cursor = 0; cursor < queue.length; cursor++) {
+                allEmployees.forEach(member => {
+                    if (member.reportsTo !== queue[cursor] || seen.has(member.id)) return;
+                    seen.add(member.id);
+                    queue.push(member.id);
+                    if (isResignedEmployee(member)) return;
+                    total++;
+                    if (isSubcontractEmployee(member)) subcontract++;
+                });
+            }
+            return { total, subcontract, regular: total - subcontract };
+        };
         const compareEmployeeCategoryOrder = (a, b) => {
             const typeOrder = Number(isSubcontractEmployee(a)) - Number(isSubcontractEmployee(b));
             if (typeOrder) return typeOrder;
@@ -471,6 +489,7 @@
             const newVisited = new Set(visitedIds).add(employee.id);
             
             const subordinates = allEmployees.filter(e => e.reportsTo === employee.id && !newVisited.has(e.id)).sort(compareEmployeeCategoryOrder);
+            const team = subordinates.length > 0 ? countTeamMembers(allEmployees, employee.id) : null;
             
             let cardColor = "bg-white border-gray-300"; if (themeConf) { if (level === 0) cardColor = themeConf.lv0; else if (level === 1) cardColor = themeConf.lv1; else cardColor = themeConf.lvN; }
             const isMatch = searchTerm && (employee.name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -512,6 +531,13 @@
                     <div onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && (canDrag || !isLocked) && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
                         {moveTargetId && (canDrag || !isLocked) && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
                         <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange} currentUser={currentUser} isAllDepts={isAllDepts}/>
+                        {team && team.total > 0 && (
+                            <div className="absolute left-full top-1/2 z-10 ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white/95 px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm" title="จำนวนลูกทีมทุกระดับ (ไม่นับผู้ที่ลาออก)">
+                                <div className="text-gray-800">ลูกทีม {team.total}</div>
+                                <div className="text-green-700">ประจำ {team.regular}</div>
+                                <div className="text-orange-600">Sub {team.subcontract}</div>
+                            </div>
+                        )}
                         {!moveTargetId && (canDrag || !isLocked) && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
                     </div>
                     
