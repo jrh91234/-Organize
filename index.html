@@ -118,6 +118,27 @@
             }
             return { total, subcontract, regular: total - subcontract };
         };
+        // One A4 page per person with a Job Description: details, the text, and signature lines (printed through html2pdf so Thai renders with the browser font).
+        const buildJobDescriptionPagesHtml = (rows, printedOn) => {
+            const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const detail = (label, value) => `<tr><td style="padding:3px 18px 3px 0;color:#6b7280;white-space:nowrap;width:130px">${label}</td><td style="padding:3px 0;font-weight:600">${esc(value) || '-'}</td></tr>`;
+            return rows.map((r, i) => `
+                <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0;${i < rows.length - 1 ? 'page-break-after:always;' : ''}">
+                    <div style="border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end">
+                        <h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1>
+                        <span style="font-size:12px;color:#6b7280">${esc(printedOn)}</span>
+                    </div>
+                    <table style="border-collapse:collapse;font-size:14px;margin-bottom:16px">
+                        ${detail('ชื่อ', r.name)}${detail('รหัสพนักงาน', r.id)}${detail('ตำแหน่ง', r.position)}${detail('แผนก', [r.dept, r.subDept].filter(Boolean).join(' / '))}${detail('รายงานต่อ', r.reportsToName)}
+                    </table>
+                    <div style="font-size:13px;font-weight:700;margin-bottom:6px">หน้าที่และความรับผิดชอบ</div>
+                    <div style="white-space:pre-wrap;font-size:14px;line-height:1.7;border:1px solid #d1d5db;border-radius:8px;padding:14px 16px;flex-grow:1">${esc(r.jobDescription.trim())}</div>
+                    <div style="display:flex;gap:56px;margin:56px 0 24px;font-size:13px">
+                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">พนักงาน (${esc(r.name)})<br><span style="color:#6b7280">วันที่ ____ / ____ / ________</span></div>
+                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">หัวหน้างาน${r.reportsToName ? ` (${esc(r.reportsToName)})` : ''}<br><span style="color:#6b7280">วันที่ ____ / ____ / ________</span></div>
+                    </div>
+                </section>`).join('');
+        };
         // Flatten the org chart depth-first (same child order as the chart) into rows for the Excel export.
         const buildOrgChartRows = (employees, rootEmployees) => {
             const nameById = new Map(employees.map(e => [e.id, e.name]));
@@ -2690,6 +2711,31 @@
                     document.body.removeChild(host);
                 }
             };
+            const exportJobDescriptionsPDF = async () => {
+                if (!window.html2pdf) { alert('ไม่สามารถโหลดตัวสร้าง PDF ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'); return; }
+                const rows = buildOrgChartRows(filteredAll, rootEmployees).filter(r => String(r.jobDescription || '').trim());
+                if (rows.length === 0) { alert('ยังไม่มีพนักงานที่กำหนด Job Description ในแผนกนี้'); return; }
+                const wrap = document.createElement('div');
+                wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:Sarabun,sans-serif;color:#111827;';
+                wrap.innerHTML = buildJobDescriptionPagesHtml(rows, new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
+                document.body.appendChild(wrap);
+                try {
+                    if (document.fonts?.ready) await document.fonts.ready;
+                    await window.html2pdf().set({
+                        margin: 10,
+                        filename: `job_descriptions_${currentDept}_${new Date().toISOString().slice(0, 10)}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak: { mode: ['css', 'legacy'] }
+                    }).from(wrap).save();
+                } catch (err) {
+                    console.error(err);
+                    alert('สร้าง PDF ไม่สำเร็จ: ' + (err?.message || err));
+                } finally {
+                    document.body.removeChild(wrap);
+                }
+            };
             const exportChartExcel = async () => {
                 if (!window.ExcelJS) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
                 const chartRows = buildOrgChartRows(filteredAll, rootEmployees);
@@ -2965,6 +3011,7 @@
                                 {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
                                 {viewMode === 'chart' && <button onClick={exportChartPDF} disabled={isExportingChartPdf} aria-label="บันทึกผังเป็น PDF" title="บันทึกผังเป็น PDF" className="flex h-7 w-8 items-center justify-center rounded-md text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"><Icons.FileText size={18}/></button>}
                                 {viewMode === 'chart' && <button onClick={exportChartExcel} aria-label="ส่งออกผังเป็น Excel" title="ส่งออกผังเป็น Excel" className="flex h-7 w-8 items-center justify-center rounded-md text-green-700 transition-colors hover:bg-green-50"><Icons.FileSpreadsheet size={18}/></button>}
+                                {viewMode === 'chart' && <button onClick={exportJobDescriptionsPDF} aria-label="ส่งออก Job Description เป็น PDF" title="ส่งออก Job Description เป็น PDF" className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-blue-700 transition-colors hover:bg-blue-50"><Icons.FileText size={16}/><span className="text-[10px] font-bold">JD</span></button>}
                                 <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
                                 <button onClick={()=>setShowRulers(!showRulers)} aria-label={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} title={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showRulers?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.RulerIcon size={18}/></button>
                                 {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} aria-label="ตั้งค่าผู้ดูแล" title="ตั้งค่าผู้ดูแล" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Settings size={18}/></button>}
@@ -2974,7 +3021,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
