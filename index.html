@@ -118,26 +118,37 @@
             }
             return { total, subcontract, regular: total - subcontract };
         };
-        // One A4 page per person with a Job Description: details, the text, and signature lines (printed through html2pdf so Thai renders with the browser font).
-        const buildJobDescriptionPagesHtml = (rows, printedOn) => {
+        // A person counts as having a Job Description when either language is filled in (Thai: jobDescriptionTh, English: jobDescription).
+        const hasJobDescription = (employee) => Boolean(String(employee?.jobDescription || '').trim() || String(employee?.jobDescriptionTh || '').trim());
+        // One A4 page per person: photo + details, the Thai and English text, and signature lines (printed through html2canvas so Thai renders with the browser font).
+        // `photos` maps employee id -> image src (data URL or URL); people without an entry get no photo.
+        const buildJobDescriptionPagesHtml = (rows, printedOn, photos = new Map()) => {
             const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const detail = (label, value) => `<tr><td style="padding:3px 18px 3px 0;color:#6b7280;white-space:nowrap;width:130px">${label}</td><td style="padding:3px 0;font-weight:600">${esc(value) || '-'}</td></tr>`;
-            return rows.map((r, i) => `
-                <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0;">
+            const detail = (label, value) => `<tr><td style="padding:3px 18px 3px 0;color:#6b7280;white-space:nowrap;width:190px">${label}</td><td style="padding:3px 0;font-weight:600">${esc(value) || '-'}</td></tr>`;
+            const box = (title, text) => String(text || '').trim() ? `
+                <div style="font-size:13px;font-weight:700;margin:0 0 6px">${title}</div>
+                <div style="white-space:pre-wrap;font-size:14px;line-height:1.65;border:1px solid #d1d5db;border-radius:8px;padding:12px 16px;margin-bottom:14px;flex:1 1 0">${esc(String(text).trim())}</div>` : '';
+            return rows.map(r => {
+                const photo = photos.get(r.id);
+                return `
+                <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0">
                     <div style="border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end">
-                        <h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1>
+                        <div><h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1><div style="font-size:13px;color:#4b5563">ใบกำหนดหน้าที่และความรับผิดชอบ</div></div>
                         <span style="font-size:12px;color:#6b7280">${esc(printedOn)}</span>
                     </div>
-                    <table style="border-collapse:collapse;font-size:14px;margin-bottom:16px">
-                        ${detail('ชื่อ', r.name)}${detail('รหัสพนักงาน', r.id)}${detail('ตำแหน่ง', r.position)}${detail('แผนก', [r.dept, r.subDept].filter(Boolean).join(' / '))}${detail('รายงานต่อ', r.reportsToName)}
-                    </table>
-                    <div style="font-size:13px;font-weight:700;margin-bottom:6px">หน้าที่และความรับผิดชอบ</div>
-                    <div style="white-space:pre-wrap;font-size:14px;line-height:1.7;border:1px solid #d1d5db;border-radius:8px;padding:14px 16px;flex-grow:1">${esc(r.jobDescription.trim())}</div>
-                    <div style="display:flex;gap:56px;margin:56px 0 24px;font-size:13px">
-                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">พนักงาน (${esc(r.name)})<br><span style="color:#6b7280">วันที่ ____ / ____ / ________</span></div>
-                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">หัวหน้างาน${r.reportsToName ? ` (${esc(r.reportsToName)})` : ''}<br><span style="color:#6b7280">วันที่ ____ / ____ / ________</span></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px">
+                        <table style="border-collapse:collapse;font-size:14px">
+                            ${detail('ชื่อ / Name', r.name)}${detail('รหัสพนักงาน / Employee ID', r.id)}${detail('ตำแหน่ง / Position', r.position)}${detail('แผนก / Department', [r.dept, r.subDept].filter(Boolean).join(' / '))}${detail('รายงานต่อ / Reports to', r.reportsToName)}
+                        </table>
+                        ${photo ? `<img src="${esc(photo)}" referrerpolicy="no-referrer" style="width:104px;height:104px;border-radius:50%;object-fit:cover;flex:none" alt="">` : ''}
                     </div>
-                </section>`).join('');
+                    ${box('หน้าที่และความรับผิดชอบ', r.jobDescriptionTh)}${box('Duties and Responsibilities', r.jobDescription)}
+                    <div style="display:flex;gap:56px;margin:42px 0 24px;font-size:13px">
+                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">พนักงาน / Employee (${esc(r.name)})<br><span style="color:#6b7280">วันที่ / Date ____ / ____ / ________</span></div>
+                        <div style="flex:1;border-top:1px solid #111827;padding-top:6px;text-align:center">หัวหน้างาน / Supervisor${r.reportsToName ? ` (${esc(r.reportsToName)})` : ''}<br><span style="color:#6b7280">วันที่ / Date ____ / ____ / ________</span></div>
+                    </div>
+                </section>`;
+            }).join('');
         };
         // Flatten the org chart depth-first (same child order as the chart) into rows for the Excel export.
         const buildOrgChartRows = (employees, rootEmployees) => {
@@ -164,7 +175,9 @@
                     teamTotal: team.total,
                     teamRegular: team.regular,
                     teamSubcontract: team.subcontract,
-                    jobDescription: employee.jobDescription || ''
+                    jobDescription: employee.jobDescription || '',
+                    jobDescriptionTh: employee.jobDescriptionTh || '',
+                    image: employee.image || ''
                 });
                 employees.filter(e => e.reportsTo === employee.id).sort(compareEmployeeCategoryOrder).forEach(child => walk(child, level + 1, seen));
             };
@@ -321,7 +334,7 @@
                 const phoneText = employee.showPhone && employee.phone ? `โทร ${employee.phone}` : '';
                 const lines = [
                     { text: `${isSub ? 'S' : 'P'}  ${employee.id}`, font: { size: 9, bold: true, color: { argb: 'FF6B7280' } } },
-                    { text: employee.name || '', font: { size: 11, bold: true, color: { argb: 'FF111827' } }, note: employee.jobDescription ? `Job Description\n${employee.jobDescription}` : '' },
+                    { text: employee.name || '', font: { size: 11, bold: true, color: { argb: 'FF111827' } }, note: hasJobDescription(employee) ? ['Job Description', employee.jobDescriptionTh, employee.jobDescription].filter(Boolean).join('\n') : '' },
                     { text: employee.position || '', font: { size: 9, color: { argb: 'FF4B5563' } } },
                     { text: employee.subDept || '', font: { size: 9, color: { argb: 'FF2563EB' } } },
                     { text: [shiftText, phoneText].filter(Boolean).join('   '), font: { size: 9, color: { argb: 'FF4338CA' } } },
@@ -699,7 +712,7 @@
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
                     </div>
-                    {!isStaging && !selectionMode && <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`absolute bottom-1 right-1 rounded-full p-1 hover:bg-white/70 ${employee.jobDescription ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>}
+                    {!isStaging && !selectionMode && <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`absolute bottom-1 right-1 rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>}
                     {isStaging && canDrag && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
@@ -809,43 +822,53 @@
         });
 
         const JobDescriptionModal = ({ employee, manager, canEdit, onSave, onClose }) => {
-            const [text, setText] = useState(String(employee.jobDescription || ''));
-            const changed = text.trim() !== String(employee.jobDescription || '').trim();
+            const [texts, setTexts] = useState({ th: String(employee.jobDescriptionTh || ''), en: String(employee.jobDescription || '') });
+            const [lang, setLang] = useState(String(employee.jobDescriptionTh || '').trim() || !String(employee.jobDescription || '').trim() ? 'th' : 'en');
+            const changed = texts.th.trim() !== String(employee.jobDescriptionTh || '').trim() || texts.en.trim() !== String(employee.jobDescription || '').trim();
             const printJobDescription = () => {
-                const esc = value => String(value ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
                 const win = window.open('', '_blank');
                 if (!win) { alert('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ กรุณาอนุญาต pop-up'); return; }
-                win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Job Description - ${esc(employee.name)}</title>
-                    <style>body{font-family:'Sarabun','Noto Sans Thai',sans-serif;margin:32px;color:#111}h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;margin:12px 0 20px}td{padding:3px 16px 3px 0;font-size:14px}td:first-child{color:#555}pre{white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.6;border:1px solid #ccc;border-radius:8px;padding:12px;min-height:160px}.sign{display:flex;gap:48px;margin-top:48px;font-size:13px}.sign div{flex:1;border-top:1px solid #333;padding-top:6px;text-align:center}</style></head><body>
-                    <h1>Job Description</h1>
-                    <table><tr><td>ชื่อ</td><td>${esc(employee.name)}</td></tr><tr><td>รหัสพนักงาน</td><td>${esc(employee.id)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(employee.position)}</td></tr><tr><td>แผนก</td><td>${esc([employee.dept, employee.subDept].filter(Boolean).join(' / '))}</td></tr><tr><td>รายงานต่อ</td><td>${esc(manager?.name || '-')}</td></tr></table>
-                    <pre>${esc(text.trim() || '-')}</pre>
-                    <div class="sign"><div>พนักงาน</div><div>หัวหน้างาน</div></div>
-                    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+                const row = { id: employee.id, name: employee.name, position: employee.position, dept: employee.dept, subDept: employee.subDept, reportsToName: manager?.name || '', jobDescription: texts.en, jobDescriptionTh: texts.th };
+                const photos = new Map(employee.image ? [[employee.id, formatDriveUrl(employee.image)]] : []);
+                win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Job Description - ${employee.name}</title>
+                    <style>body{font-family:'Sarabun','Noto Sans Thai',sans-serif;margin:24px;color:#111827}</style></head><body>
+                    ${buildJobDescriptionPagesHtml([row], new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }), photos)}
+                    <script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script></body></html>`);
                 win.document.close();
             };
+            const tabs = [['th', 'ไทย'], ['en', 'English']];
             return (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
                     <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-start justify-between border-b bg-gray-50 px-6 py-4">
-                            <div>
-                                <h2 className="text-lg font-bold">Job Description</h2>
-                                <p className="text-sm text-gray-600">{employee.name} · {employee.id}</p>
-                                <p className="text-xs text-gray-500">{employee.position}{employee.dept ? ` · ${employee.dept}` : ''}{employee.subDept ? ` / ${employee.subDept}` : ''}</p>
+                            <div className="flex items-center gap-3">
+                                {employee.image && <img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" alt="" className="h-14 w-14 rounded-full border-2 border-white object-cover shadow" />}
+                                <div>
+                                    <h2 className="text-lg font-bold">Job Description</h2>
+                                    <p className="text-sm text-gray-600">{employee.name} · {employee.id}</p>
+                                    <p className="text-xs text-gray-500">{employee.position}{employee.dept ? ` · ${employee.dept}` : ''}{employee.subDept ? ` / ${employee.subDept}` : ''}</p>
+                                </div>
                             </div>
                             <button type="button" onClick={onClose} aria-label="ปิด"><Icons.X/></button>
                         </div>
+                        <div className="flex border-b" role="tablist">
+                            {tabs.map(([key, label]) => (
+                                <button key={key} type="button" role="tab" aria-selected={lang === key} onClick={() => setLang(key)} className={`flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold ${lang === key ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>
+                                    {label}{texts[key].trim() && <span className="h-2 w-2 rounded-full bg-green-500" title="มีข้อมูลแล้ว"></span>}
+                                </button>
+                            ))}
+                        </div>
                         <div className="grow overflow-y-auto p-6">
                             {canEdit
-                                ? <textarea value={text} onChange={e => setText(e.target.value)} rows={20} placeholder="ระบุหน้าที่รับผิดชอบ เช่น 1. ... 2. ..." className="min-h-[50vh] w-full resize-y rounded-lg border p-4 text-base leading-relaxed focus:border-blue-500 focus:outline-none" />
-                                : <div className="min-h-[30vh] whitespace-pre-wrap rounded-lg border bg-gray-50 p-4 text-base leading-relaxed text-gray-800">{text.trim() || <span className="text-gray-400">ยังไม่ได้กำหนด Job Description</span>}</div>}
+                                ? <textarea value={texts[lang]} onChange={e => setTexts(previous => ({ ...previous, [lang]: e.target.value }))} rows={20} placeholder={lang === 'th' ? 'ระบุหน้าที่รับผิดชอบ (ภาษาไทย) เช่น 1. ... 2. ...' : 'Describe the duties and responsibilities (English), e.g. 1. ... 2. ...'} className="min-h-[50vh] w-full resize-y rounded-lg border p-4 text-base leading-relaxed focus:border-blue-500 focus:outline-none" />
+                                : <div className="min-h-[30vh] whitespace-pre-wrap rounded-lg border bg-gray-50 p-4 text-base leading-relaxed text-gray-800">{texts[lang].trim() || <span className="text-gray-400">{lang === 'th' ? 'ยังไม่ได้กำหนด Job Description ภาษาไทย' : 'No English Job Description yet'}</span>}</div>}
                             {!canEdit && <p className="mt-2 text-xs text-gray-500">แก้ไขได้เฉพาะระดับ Engineer ขึ้นไป (ในแผนกของตัวเอง)</p>}
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t px-6 py-4">
-                            <button type="button" onClick={printJobDescription} className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">พิมพ์ / PDF</button>
+                            <button type="button" onClick={printJobDescription} className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">พิมพ์ / PDF (ไทย + English)</button>
                             <div className="flex gap-2">
                                 <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">{canEdit ? 'ยกเลิก' : 'ปิด'}</button>
-                                {canEdit && <button type="button" disabled={!changed} onClick={() => onSave(employee.id, text.trim())} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">บันทึก</button>}
+                                {canEdit && <button type="button" disabled={!changed} onClick={() => onSave(employee.id, { th: texts.th.trim(), en: texts.en.trim() })} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">บันทึก</button>}
                             </div>
                         </div>
                     </div>
@@ -2490,13 +2513,13 @@
                 window.addEventListener('open-job-description', open);
                 return () => window.removeEventListener('open-job-description', open);
             }, []);
-            const handleSaveJobDescription = useCallback((employeeId, text) => {
+            const handleSaveJobDescription = useCallback((employeeId, texts) => {
                 const target = employees.find(e => String(e.id) === String(employeeId));
                 if (!target || !canEditJobDescription(currentUser, target)) {
                     alert('แก้ไข Job Description ได้เฉพาะระดับ Engineer ขึ้นไปในแผนกของตัวเอง');
                     return;
                 }
-                const updated = { ...target, jobDescription: text };
+                const updated = { ...target, jobDescription: texts.en, jobDescriptionTh: texts.th };
                 updateStateFull(employees.map(e => String(e.id) === String(employeeId) ? updated : e), [updated], [], {}, []);
                 setJobDescriptionId(null);
             }, [employees, currentUser, updateStateFull]);
@@ -2712,11 +2735,17 @@
                 }
             };
             const exportJobDescriptionsPDF = async () => {
-                const rows = buildOrgChartRows(filteredAll, rootEmployees).filter(r => String(r.jobDescription || '').trim());
+                const rows = buildOrgChartRows(filteredAll, rootEmployees).filter(hasJobDescription);
                 if (rows.length === 0) { alert('ยังไม่มีพนักงานที่กำหนด Job Description ในแผนกนี้'); return; }
+                // Photos are drawn into the page as data URLs (CORS-enabled load, same as the org chart exports); a failed photo is simply left out.
+                const photos = new Map();
+                await Promise.all(rows.map(async r => {
+                    if (!r.image) return;
+                    try { photos.set(r.id, await circlePhotoDataUrl(formatDriveUrl(r.image))); } catch (error) { /* no photo */ }
+                }));
                 const wrap = document.createElement('div');
                 wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:Sarabun,sans-serif;color:#111827;';
-                wrap.innerHTML = buildJobDescriptionPagesHtml(rows, new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
+                wrap.innerHTML = buildJobDescriptionPagesHtml(rows, new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }), photos);
                 document.body.appendChild(wrap);
                 try {
                     const [html2canvas, { jsPDF }] = await Promise.all([
@@ -2771,19 +2800,19 @@
                 const dataSheet = workbook.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
                 dataSheet.columns = [
                     ['Level', 6], ['ID', 10], ['Name (tree)', 34], ['Position', 24], ['Department', 16], ['Sub-department', 18], ['Shift', 7], ['Type', 14], ['Company', 16],
-                    ['Reports To ID', 12], ['Reports To', 24], ['Phone', 14], ['Start Date', 14], ['Team Total', 10], ['Team Regular', 12], ['Team Subcontract', 16], ['Job Description', 50]
+                    ['Reports To ID', 12], ['Reports To', 24], ['Phone', 14], ['Start Date', 14], ['Team Total', 10], ['Team Regular', 12], ['Team Subcontract', 16], ['Job Description (TH)', 50], ['Job Description (EN)', 50]
                 ].map(([header, width]) => ({ header, width }));
-                chartRows.forEach(r => dataSheet.addRow([r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescription]));
+                chartRows.forEach(r => dataSheet.addRow([r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescriptionTh, r.jobDescription]));
                 dataSheet.getRow(1).font = { bold: true };
-                dataSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 17 } };
+                dataSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 18 } };
 
                 // 3) Job descriptions, one person per row with the full text wrapped (row height is left to Excel so long text is not cut off).
                 const jdSheet = workbook.addWorksheet('Job Description', { views: [{ state: 'frozen', ySplit: 1 }] });
-                jdSheet.columns = [['ID', 10], ['Name', 28], ['Position', 26], ['Department', 16], ['Sub-department', 18], ['Reports To', 24], ['Job Description', 90]].map(([header, width]) => ({ header, width }));
-                chartRows.forEach(r => jdSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, r.reportsToName, r.jobDescription]));
+                jdSheet.columns = [['ID', 10], ['Name', 28], ['Position', 26], ['Department', 16], ['Sub-department', 18], ['Reports To', 24], ['Job Description (TH)', 70], ['Job Description (EN)', 70]].map(([header, width]) => ({ header, width }));
+                chartRows.forEach(r => jdSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, r.reportsToName, r.jobDescriptionTh, r.jobDescription]));
                 jdSheet.getRow(1).font = { bold: true };
                 jdSheet.eachRow(row => row.eachCell(cell => { cell.alignment = { vertical: 'top', wrapText: true }; }));
-                jdSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+                jdSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 8 } };
 
                 // 4) Headcount per department.
                 const deptMap = new Map();
