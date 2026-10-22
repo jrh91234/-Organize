@@ -123,7 +123,7 @@
             const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const detail = (label, value) => `<tr><td style="padding:3px 18px 3px 0;color:#6b7280;white-space:nowrap;width:130px">${label}</td><td style="padding:3px 0;font-weight:600">${esc(value) || '-'}</td></tr>`;
             return rows.map((r, i) => `
-                <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0;${i < rows.length - 1 ? 'page-break-after:always;' : ''}">
+                <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0;">
                     <div style="border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end">
                         <h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1>
                         <span style="font-size:12px;color:#6b7280">${esc(printedOn)}</span>
@@ -2712,7 +2712,6 @@
                 }
             };
             const exportJobDescriptionsPDF = async () => {
-                if (!window.html2pdf) { alert('ไม่สามารถโหลดตัวสร้าง PDF ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'); return; }
                 const rows = buildOrgChartRows(filteredAll, rootEmployees).filter(r => String(r.jobDescription || '').trim());
                 if (rows.length === 0) { alert('ยังไม่มีพนักงานที่กำหนด Job Description ในแผนกนี้'); return; }
                 const wrap = document.createElement('div');
@@ -2720,15 +2719,26 @@
                 wrap.innerHTML = buildJobDescriptionPagesHtml(rows, new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
                 document.body.appendChild(wrap);
                 try {
+                    const [html2canvas, { jsPDF }] = await Promise.all([
+                        loadAttendanceLibrary('html2canvas', 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+                        loadAttendanceLibrary('jspdf', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
+                    ]);
                     if (document.fonts?.ready) await document.fonts.ready;
-                    await window.html2pdf().set({
-                        margin: 10,
-                        filename: `job_descriptions_${currentDept}_${new Date().toISOString().slice(0, 10)}.pdf`,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true },
-                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                        pagebreak: { mode: ['css', 'legacy'] }
-                    }).from(wrap).save();
+                    // One canvas per person: a single canvas for the whole book exceeds the browser's canvas size limit after ~15 pages and comes out blank.
+                    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                    const margin = 10;
+                    const maxW = 210 - margin * 2;
+                    const maxH = 297 - margin * 2;
+                    const sections = [...wrap.querySelectorAll('section')];
+                    for (let i = 0; i < sections.length; i++) {
+                        const canvas = await html2canvas(sections[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: getViewportWidth() });
+                        let w = maxW;
+                        let h = (canvas.height / canvas.width) * w;
+                        if (h > maxH) { h = maxH; w = (canvas.width / canvas.height) * h; }
+                        if (i > 0) pdf.addPage();
+                        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', margin + (maxW - w) / 2, margin, w, h);
+                    }
+                    pdf.save(`job_descriptions_${currentDept}_${new Date().toISOString().slice(0, 10)}.pdf`);
                 } catch (err) {
                     console.error(err);
                     alert('สร้าง PDF ไม่สำเร็จ: ' + (err?.message || err));
