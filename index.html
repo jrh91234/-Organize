@@ -2670,6 +2670,18 @@
                         if (el.classList.contains('truncate')) { el.style.paddingTop = '0.4em'; el.style.paddingBottom = '0.4em'; el.style.marginTop = '-0.4em'; el.style.marginBottom = '-0.4em'; }
                     });
                     if (document.fonts?.ready) await document.fonts.ready;
+                    // The Tailwind CDN builds CSS for freshly inserted markup asynchronously. If the Dashboard was never opened, capturing right away
+                    // catches this copy half-styled (grids collapsed, padding missing, lines stacked on top of each other), so wait until its classes apply.
+                    const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+                    // Classes the page may not have used yet (the big numbers and the stat cards' padding); stop waiting after ~3 s regardless.
+                    const stylesApplied = () => {
+                        const big = inner.querySelector('.text-4xl');
+                        const padded = inner.querySelector('.p-5');
+                        return (!big || parseFloat(getComputedStyle(big).fontSize) >= 30) && (!padded || parseFloat(getComputedStyle(padded).paddingTop) > 0);
+                    };
+                    for (let i = 0; i < 60 && !stylesApplied(); i++) await new Promise(resolve => setTimeout(resolve, 50));
+                    await nextFrame();
+                    await nextFrame();
                     const w = 1000, h = Math.ceil(inner.scrollHeight);
                     const canvas = await html2canvas(inner, { scale: 2, useCORS: true, backgroundColor: '#f9fafb', logging: false, width: w, height: h, windowWidth: viewportWidth, windowHeight: window.innerHeight, scrollX: 0, scrollY: 0 });
                     return { canvas, w, h };
