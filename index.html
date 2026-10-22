@@ -2721,7 +2721,15 @@
                 dataSheet.getRow(1).font = { bold: true };
                 dataSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 17 } };
 
-                // 3) Headcount per department.
+                // 3) Job descriptions, one person per row with the full text wrapped (row height is left to Excel so long text is not cut off).
+                const jdSheet = workbook.addWorksheet('Job Description', { views: [{ state: 'frozen', ySplit: 1 }] });
+                jdSheet.columns = [['ID', 10], ['Name', 28], ['Position', 26], ['Department', 16], ['Sub-department', 18], ['Reports To', 24], ['Job Description', 90]].map(([header, width]) => ({ header, width }));
+                chartRows.forEach(r => jdSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, r.reportsToName, r.jobDescription]));
+                jdSheet.getRow(1).font = { bold: true };
+                jdSheet.eachRow(row => row.eachCell(cell => { cell.alignment = { vertical: 'top', wrapText: true }; }));
+                jdSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
+
+                // 4) Headcount per department.
                 const deptMap = new Map();
                 filteredAll.forEach(e => {
                     const dept = e.dept || '-';
