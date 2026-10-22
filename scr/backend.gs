@@ -33,7 +33,7 @@ function doPost(e) {
     }
 
     // [VERIFIED] Logging แบบใหม่ บันทึกละเอียดขึ้น ไม่บันทึกการ Read data
-    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance' && data.action !== 'getAttendanceCounts') {
+    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance' && data.action !== 'getAttendanceCounts' && data.action !== 'translateText') {
       let detailStr = data.logDetail || '';
       
       // กรณี Update/Delete ให้บันทึกรายละเอียดพนักงานที่ถูกแก้ไข (ชื่อ, รหัส, แผนก, ตำแหน่ง)
@@ -71,6 +71,7 @@ function doPost(e) {
       case 'getData': return getData();
       case 'getAttendance': return getAttendance(data);
       case 'getAttendanceCounts': return getAttendanceCounts();
+      case 'translateText': return translateText(data);
       case 'recordAttendance': return recordAttendance(data);
       case 'recordAttendanceBatch': return recordAttendanceBatch(data);
       case 'recoverOrgData': return recoverOrgData(data);
@@ -850,6 +851,29 @@ function getAttendanceRoster_(actor) {
   })).filter(employee => employee.id);
   const departments = Array.from(new Set(roster.map(employee => employee.dept).filter(Boolean))).sort();
   return { employees: roster, departments: departments, message: message, selfId: selfId };
+}
+
+// Thai <-> English machine translation for the Job Description editor (Apps Script's built-in LanguageApp, no API key).
+// Same people who may edit a Job Description may use it: Engineer and above.
+function translateText(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  if (!actor) return createJSONOutput({ status: 'error', code: 'session_expired', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+  if (['admin', 'supervisor', 'engineer'].indexOf(actor.role) === -1) {
+    return createJSONOutput({ status: 'error', message: 'เฉพาะระดับ Engineer ขึ้นไปที่ใช้การแปลได้' });
+  }
+  const from = String(data.from || '');
+  const to = String(data.to || '');
+  const text = String(data.text || '').trim();
+  if (!((from === 'th' && to === 'en') || (from === 'en' && to === 'th'))) {
+    return createJSONOutput({ status: 'error', message: 'รองรับเฉพาะการแปลไทย ⇄ อังกฤษ' });
+  }
+  if (!text) return createJSONOutput({ status: 'error', message: 'ไม่มีข้อความให้แปล' });
+  if (text.length > 5000) return createJSONOutput({ status: 'error', message: 'ข้อความยาวเกิน 5,000 ตัวอักษร กรุณาแบ่งแปลทีละส่วน' });
+  try {
+    return createJSONOutput({ status: 'success', text: LanguageApp.translate(text, from, to) });
+  } catch (error) {
+    return createJSONOutput({ status: 'error', message: 'แปลไม่สำเร็จ: ' + (error.message || error) });
+  }
 }
 
 // Public, aggregate-only attendance endpoint for the production dashboard.
