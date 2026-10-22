@@ -821,9 +821,30 @@
             );
         });
 
-        const JobDescriptionModal = ({ employee, manager, canEdit, onSave, onClose }) => {
+        const JobDescriptionModal = ({ employee, manager, canEdit, onSave, onTranslate, onClose }) => {
             const [texts, setTexts] = useState({ th: String(employee.jobDescriptionTh || ''), en: String(employee.jobDescription || '') });
             const [lang, setLang] = useState(String(employee.jobDescriptionTh || '').trim() || !String(employee.jobDescription || '').trim() ? 'th' : 'en');
+            const [translating, setTranslating] = useState(false);
+            const [translatedNote, setTranslatedNote] = useState('');
+            // Translate what is on the current tab into the other language, drop it into that tab and switch there so it can be reviewed and corrected before saving.
+            const translateCurrent = async () => {
+                const from = lang;
+                const to = lang === 'th' ? 'en' : 'th';
+                if (!texts[from].trim() || translating) return;
+                if (texts[to].trim() && !confirm(`แท็บ ${to === 'th' ? 'ไทย' : 'English'} มีข้อความอยู่แล้ว ต้องการแทนที่ด้วยผลการแปลหรือไม่`)) return;
+                setTranslating(true);
+                setTranslatedNote('');
+                try {
+                    const translated = await onTranslate(texts[from].trim(), from, to);
+                    setTexts(previous => ({ ...previous, [to]: translated }));
+                    setLang(to);
+                    setTranslatedNote('แปลอัตโนมัติ กรุณาตรวจทานและแก้ไขก่อนกดบันทึก');
+                } catch (error) {
+                    alert(error?.message || 'แปลไม่สำเร็จ');
+                } finally {
+                    setTranslating(false);
+                }
+            };
             const changed = texts.th.trim() !== String(employee.jobDescriptionTh || '').trim() || texts.en.trim() !== String(employee.jobDescription || '').trim();
             const printJobDescription = () => {
                 const win = window.open('', '_blank');
@@ -862,10 +883,14 @@
                             {canEdit
                                 ? <textarea value={texts[lang]} onChange={e => setTexts(previous => ({ ...previous, [lang]: e.target.value }))} rows={20} placeholder={lang === 'th' ? 'ระบุหน้าที่รับผิดชอบ (ภาษาไทย) เช่น 1. ... 2. ...' : 'Describe the duties and responsibilities (English), e.g. 1. ... 2. ...'} className="min-h-[50vh] w-full resize-y rounded-lg border p-4 text-base leading-relaxed focus:border-blue-500 focus:outline-none" />
                                 : <div className="min-h-[30vh] whitespace-pre-wrap rounded-lg border bg-gray-50 p-4 text-base leading-relaxed text-gray-800">{texts[lang].trim() || <span className="text-gray-400">{lang === 'th' ? 'ยังไม่ได้กำหนด Job Description ภาษาไทย' : 'No English Job Description yet'}</span>}</div>}
+                            {canEdit && translatedNote && <p className="mt-2 text-xs font-semibold text-amber-700">{translatedNote}</p>}
                             {!canEdit && <p className="mt-2 text-xs text-gray-500">แก้ไขได้เฉพาะระดับ Engineer ขึ้นไป (ในแผนกของตัวเอง)</p>}
                         </div>
                         <div className="flex items-center justify-between gap-2 border-t px-6 py-4">
-                            <button type="button" onClick={printJobDescription} className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">พิมพ์ / PDF (ไทย + English)</button>
+                            <div className="flex flex-wrap gap-2">
+                                <button type="button" onClick={printJobDescription} className="rounded-lg border px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">พิมพ์ / PDF (ไทย + English)</button>
+                                {canEdit && <button type="button" onClick={translateCurrent} disabled={translating || !texts[lang].trim()} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-40">{translating ? 'กำลังแปล...' : (lang === 'th' ? 'แปลเป็นอังกฤษ' : 'แปลเป็นไทย')}</button>}
+                            </div>
                             <div className="flex gap-2">
                                 <button type="button" onClick={onClose} className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">{canEdit ? 'ยกเลิก' : 'ปิด'}</button>
                                 {canEdit && <button type="button" disabled={!changed} onClick={() => onSave(employee.id, { th: texts.th.trim(), en: texts.en.trim() })} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">บันทึก</button>}
@@ -1935,7 +1960,7 @@
                     dept: currentUser.dept || 'ALL'
                 } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
                 const requestBody = { action, ...payload, executor };
-                if (action === 'getAttendance' || action === 'recordAttendance' || action === 'recordAttendanceBatch') {
+                if (action === 'getAttendance' || action === 'recordAttendance' || action === 'recordAttendanceBatch' || action === 'translateText') {
                     requestBody.attendanceToken = currentUser?.attendanceToken || '';
                 }
 
@@ -2513,6 +2538,12 @@
                 window.addEventListener('open-job-description', open);
                 return () => window.removeEventListener('open-job-description', open);
             }, []);
+            const handleTranslateJobDescription = useCallback(async (text, from, to) => {
+                if (!driveUrl) throw new Error('ยังไม่ได้ตั้งค่า URL ของระบบ');
+                const result = await appApiCall(driveUrl, 'translateText', { text, from, to });
+                if (result?.status !== 'success') throw new Error(result?.message || 'แปลไม่สำเร็จ');
+                return String(result.text || '');
+            }, [driveUrl, appApiCall]);
             const handleSaveJobDescription = useCallback((employeeId, texts) => {
                 const target = employees.find(e => String(e.id) === String(employeeId));
                 if (!target || !canEditJobDescription(currentUser, target)) {
@@ -3172,7 +3203,7 @@
 
                     {jobDescriptionId !== null && (() => {
                         const target = employees.find(e => String(e.id) === String(jobDescriptionId));
-                        return target ? <JobDescriptionModal key={target.id} employee={target} manager={employees.find(e => String(e.id) === String(target.reportsTo))} canEdit={canEditJobDescription(currentUser, target)} onSave={handleSaveJobDescription} onClose={() => setJobDescriptionId(null)} /> : null;
+                        return target ? <JobDescriptionModal key={target.id} employee={target} manager={employees.find(e => String(e.id) === String(target.reportsTo))} canEdit={canEditJobDescription(currentUser, target)} onSave={handleSaveJobDescription} onTranslate={handleTranslateJobDescription} onClose={() => setJobDescriptionId(null)} /> : null;
                     })()}
                     {isModalOpen && <EmployeeForm employee={editingEmployee} supervisors={employees} positions={positions} positionRename={positionRename} depts={departments} subDepartments={subDepartments} onAddSubDept={handleAddSubDepartment} onDeleteSubDept={handleDeleteSubDepartment} onSave={handleSave} onCancel={()=>setIsModalOpen(false)} onDelete={handleDelete} currentUser={currentUser} driveUrl={driveUrl} onManagePositions={()=>setIsManagePositionsOpen(true)}/>}
 
