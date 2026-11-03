@@ -990,7 +990,12 @@
                                 <div><label className="text-xs text-gray-500 mb-2 block">Card Color Override</label><div className="grid grid-cols-5 gap-2"><button type="button" onClick={()=>setFormData({...formData, customColor: ''})} className={`h-8 rounded-lg border bg-white text-xs ${formData.customColor===''?'ring-2 ring-blue-500':''}`}>None</button>{Object.entries(THEMES).map(([k,t]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customColor: k})} className={`h-8 rounded-lg ${t.lv0} ${formData.customColor===k?'ring-2 ring-blue-500':''}`}></button>))}</div></div>
                                 <div><label className="text-xs text-gray-500 mb-2 block">Shape Override</label><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setFormData({...formData, customShape: ''})} className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customShape: k})} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div>
                                 <div><label className="text-xs text-gray-500">Employee Status</label><select value={formData.status} onChange={e=>{const status=e.target.value;setFormData(previous=>status==='Resigned'&&previous.status!=='Resigned'?{...previous,status,exitDate:getLocalDateValue(),exitDept:previous.dept||'',exitSubDept:previous.subDept||''}:{...previous,status});}} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Resigned">Resigned</option></select></div>
-                                {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">วันสิ้นสุดการทำงาน</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/><p className="mt-1 text-xs text-amber-800">บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน</p></div>}
+                                {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">วันสิ้นสุดการทำงาน</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/>
+                                    <label className="mt-2 block text-xs font-semibold text-amber-900">สาเหตุที่ออก</label>
+                                    <select value={formData.exitReason || ''} onChange={e=>setFormData(previous=>({...previous,exitReason:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"><option value="">ไม่ระบุ</option>{Object.entries(EXIT_REASONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+                                    <label className="mt-2 block text-xs font-semibold text-amber-900">หมายเหตุ</label>
+                                    <textarea rows={2} value={formData.exitNote || ''} onChange={e=>setFormData(previous=>({...previous,exitNote:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"/>
+                                    <p className="mt-1 text-xs text-amber-800">บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน ระบบจะจำทีมและหัวหน้า ณ วันที่ออกไว้ใน Staff Turnover</p></div>}
                             </div>)}
                         </form>
                         <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
@@ -1366,6 +1371,8 @@
             );
         };
 
+        const EXIT_REASONS = { voluntary: 'ลาออกเอง (Voluntary)', terminated: 'เลิกจ้าง (Terminated)', contract_end: 'หมดสัญญา (Contract ended)', retired: 'เกษียณ (Retired)', other: 'อื่น ๆ (Other)' };
+
         // H1, Coil winding and Lug&Screw are shown as one combined sub-department in attendance views.
         const mergedSubDeptLabel = 'H1 / Coil winding / Lug&Screw';
         const mergedSubDeptNames = ['h1', 'coilwinding', 'lugscrew'];
@@ -1373,6 +1380,234 @@
             const name = String(value || '').trim();
             if (!name) return '__NO_SUB_DEPT__';
             return mergedSubDeptNames.includes(name.toLowerCase().replace(/[^a-z0-9]/g, '')) ? mergedSubDeptLabel : name;
+        };
+
+        // ---- Staff turnover ----
+        const parseDay = (value) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null; };
+        const dayKey = (time) => { const d = new Date(time); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const DAY_MS = 86400000;
+        const TENURE_BUCKETS = [['< 3 เดือน', 0, 3], ['3 – 6 เดือน', 3, 6], ['6 – 12 เดือน', 6, 12], ['1 – 3 ปี', 12, 36], ['3 ปีขึ้นไป', 36, Infinity]];
+        // Who left, from which team and when, plus headcount-based turnover rates for [from, to] (day timestamps, inclusive).
+        // Headcount on a day = people who had started and had not yet left (resigned people need an exit date to be counted).
+        const computeTurnoverStats = (employees, { dept = 'ALL', team = 'ALL', from, to }) => {
+            const all = (Array.isArray(employees) ? employees : []).filter(e => e && e.id !== null && e.id !== undefined && e.id !== '');
+            const byId = new Map(all.map(e => [String(e.id), e]));
+            const deptOf = (e) => isResignedEmployee(e) ? (e.exitDept || e.dept || '') : (e.dept || '');
+            const teamOf = (e) => attendanceSubDeptKey(isResignedEmployee(e) ? (e.exitSubDept || e.subDept) : e.subDept);
+            const people = all.filter(e => (dept === 'ALL' || deptOf(e) === dept) && (team === 'ALL' || teamOf(e) === team));
+            const startOf = (e) => parseDay(e.startDate);
+            const exitOf = (e) => isResignedEmployee(e) ? parseDay(e.exitDate) : null;
+            const headcountAt = (group, time) => group.filter(e => {
+                if (isResignedEmployee(e) && exitOf(e) === null) return false;
+                const start = startOf(e);
+                if (start !== null && start > time) return false;
+                const exit = exitOf(e);
+                return exit === null || exit > time;
+            }).length;
+            const leaversIn = (group, a, b) => group.filter(e => { const x = exitOf(e); return x !== null && x >= a && x <= b; });
+            const rateFor = (group, a, b) => {
+                const leavers = leaversIn(group, a, b).length;
+                const avg = (headcountAt(group, a - DAY_MS) + headcountAt(group, b)) / 2;
+                const days = Math.round((b - a) / DAY_MS) + 1;
+                const rate = avg > 0 ? (leavers / avg) * 100 : 0;
+                return { leavers, avgHeadcount: avg, rate, annualised: days > 0 ? rate * (365 / days) : 0 };
+            };
+            const leaverRows = leaversIn(people, from, to).map(e => {
+                const start = startOf(e);
+                const exit = exitOf(e);
+                const months = start !== null ? Math.max(0, (exit - start) / (DAY_MS * 30.4375)) : null;
+                const leaderRecord = e.reportsTo && e.reportsTo !== 'STAGING' ? byId.get(String(e.reportsTo)) : null;
+                return {
+                    id: String(e.id), name: e.name || '', position: e.exitPosition || e.position || '', dept: deptOf(e), team: teamOf(e),
+                    leader: e.exitManagerName || leaderRecord?.name || '', type: isSubcontractEmployee(e) ? 'Subcontract' : 'Permanent', company: e.company || '',
+                    startDate: e.startDate || '', exitDate: e.exitDate || '', exitTime: exit, months, reason: e.exitReason || '', note: e.exitNote || ''
+                };
+            }).sort((a, b) => b.exitTime - a.exitTime || a.name.localeCompare(b.name));
+            const tally = (keyOf) => {
+                const map = new Map();
+                leaverRows.forEach(r => { const k = keyOf(r); map.set(k, (map.get(k) || 0) + 1); });
+                return Array.from(map.entries()).map(([name, count]) => ({ name, count })).sort((x, y) => y.count - x.count || x.name.localeCompare(y.name));
+            };
+            const teams = Array.from(new Set(people.map(teamOf))).sort((a, b) => a.localeCompare(b)).map(name => {
+                const group = people.filter(e => teamOf(e) === name);
+                return { name: name === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : name, headcount: headcountAt(group, to), ...rateFor(group, from, to) };
+            }).filter(t => t.leavers > 0 || t.headcount > 0).sort((a, b) => b.leavers - a.leavers || b.headcount - a.headcount);
+            // Monthly trend for the 12 months ending with the month of `to`.
+            const trend = [];
+            const end = new Date(to);
+            for (let i = 11; i >= 0; i--) {
+                const first = new Date(end.getFullYear(), end.getMonth() - i, 1).getTime();
+                const last = Math.min(new Date(end.getFullYear(), end.getMonth() - i + 1, 0).getTime(), to);
+                trend.push({ label: new Date(first).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), leavers: leaversIn(people, first, last).length, rate: rateFor(people, first, last).rate });
+            }
+            const known = leaverRows.filter(r => r.months !== null);
+            return {
+                ...rateFor(people, from, to),
+                headcountNow: headcountAt(people, to),
+                leaverRows,
+                missingExitDate: people.filter(e => isResignedEmployee(e) && exitOf(e) === null).length,
+                avgTenureMonths: known.length ? known.reduce((n, r) => n + r.months, 0) / known.length : null,
+                byTeam: teams,
+                byLeader: tally(r => r.leader || 'ไม่ทราบหัวหน้า'),
+                byReason: tally(r => EXIT_REASONS[r.reason] || 'ไม่ระบุ'),
+                byType: tally(r => r.type),
+                byTenure: TENURE_BUCKETS.map(([name, lo, hi]) => ({ name, count: known.filter(r => r.months >= lo && r.months < hi).length })).concat([{ name: 'ไม่ทราบวันเริ่มงาน', count: leaverRows.length - known.length }]),
+                trend,
+                teamOptions: Array.from(new Set(all.filter(e => dept === 'ALL' || deptOf(e) === dept).map(teamOf))).sort((a, b) => a.localeCompare(b))
+            };
+        };
+
+        const TurnoverDashboard = ({ employees, currentDept }) => {
+            const [preset, setPreset] = useState('12m');
+            const [customFrom, setCustomFrom] = useState('');
+            const [customTo, setCustomTo] = useState('');
+            const [team, setTeam] = useState('ALL');
+            const [search, setSearch] = useState('');
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const range = (() => {
+                if (preset === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1).getTime(), today];
+                if (preset === '3m') return [new Date(now.getFullYear(), now.getMonth() - 2, 1).getTime(), today];
+                if (preset === 'ytd') return [new Date(now.getFullYear(), 0, 1).getTime(), today];
+                if (preset === 'custom') { const a = parseDay(customFrom); const b = parseDay(customTo); return [a ?? new Date(now.getFullYear(), 0, 1).getTime(), b ?? today]; }
+                return [new Date(now.getFullYear(), now.getMonth() - 11, 1).getTime(), today];
+            })();
+            const [from, to] = range[0] <= range[1] ? range : [range[1], range[0]];
+            const stats = computeTurnoverStats(employees, { dept: currentDept, team, from, to });
+            const query = search.trim().toLowerCase();
+            const rows = stats.leaverRows.filter(r => !query || `${r.name} ${r.id} ${r.position} ${r.team} ${r.leader}`.toLowerCase().includes(query));
+            const pct = (v) => `${(Math.round(v * 10) / 10).toFixed(1)}%`;
+            const tenureText = (months) => months === null ? '-' : months < 12 ? `${Math.round(months)} เดือน` : `${Math.floor(months / 12)} ปี ${Math.round(months % 12)} เดือน`;
+            const maxTrend = Math.max(1, ...stats.trend.map(t => t.leavers));
+            const presets = [['month', 'เดือนนี้'], ['3m', '3 เดือน'], ['ytd', 'ตั้งแต่ต้นปี'], ['12m', '12 เดือน'], ['custom', 'กำหนดเอง']];
+            const BarList = ({ title, items }) => {
+                const top = Math.max(1, ...items.map(i => i.count));
+                return (
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                        <h3 className="mb-3 text-sm font-bold text-gray-800">{title}</h3>
+                        {items.every(i => i.count === 0) ? <p className="text-xs text-gray-400">ไม่มีข้อมูล</p> : items.filter(i => i.count > 0).map(i => (
+                            <div key={i.name} className="mb-2">
+                                <div className="flex justify-between text-xs"><span className="truncate pr-2 text-gray-700">{i.name}</span><span className="font-bold text-gray-900">{i.count}</span></div>
+                                <div className="mt-0.5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-rose-400" style={{ width: `${(i.count / top) * 100}%` }}></div></div>
+                            </div>
+                        ))}
+                    </div>
+                );
+            };
+            const exportExcel = async () => {
+                if (!window.ExcelJS) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
+                const workbook = new window.ExcelJS.Workbook();
+                const list = workbook.addWorksheet('Resignations', { views: [{ state: 'frozen', ySplit: 1 }] });
+                list.columns = [['Exit Date', 14], ['ID', 10], ['Name', 28], ['Position', 24], ['Department', 16], ['Team', 22], ['Leader at exit', 26], ['Type', 13], ['Company', 16], ['Start Date', 14], ['Tenure (months)', 15], ['Reason', 28], ['Note', 40]].map(([header, width]) => ({ header, width }));
+                stats.leaverRows.forEach(r => list.addRow([r.exitDate, r.id, r.name, r.position, r.dept, r.team === '__NO_SUB_DEPT__' ? '' : r.team, r.leader, r.type, r.company, r.startDate, r.months === null ? '' : Math.round(r.months * 10) / 10, EXIT_REASONS[r.reason] || '', r.note]));
+                list.getRow(1).font = { bold: true };
+                list.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 13 } };
+                const teamSheet = workbook.addWorksheet('By team');
+                teamSheet.columns = [['Team', 26], ['Resignations', 14], ['Headcount (end)', 16], ['Avg headcount', 15], ['Turnover % (period)', 19], ['Annualised %', 14]].map(([header, width]) => ({ header, width }));
+                stats.byTeam.forEach(t => teamSheet.addRow([t.name, t.leavers, t.headcount, Math.round(t.avgHeadcount * 10) / 10, Math.round(t.rate * 10) / 10, Math.round(t.annualised * 10) / 10]));
+                teamSheet.getRow(1).font = { bold: true };
+                const trendSheet = workbook.addWorksheet('Monthly');
+                trendSheet.columns = [{ header: 'Month', width: 12 }, { header: 'Resignations', width: 14 }, { header: 'Turnover %', width: 12 }];
+                stats.trend.forEach(t => trendSheet.addRow([t.label, t.leavers, Math.round(t.rate * 10) / 10]));
+                trendSheet.getRow(1).font = { bold: true };
+                const buffer = await workbook.xlsx.writeBuffer();
+                const url = window.URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const link = document.createElement('a');
+                link.setAttribute('hidden', '');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `staff_turnover_${currentDept}_${dayKey(from)}_${dayKey(to)}.xlsx`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            };
+            const cards = [
+                { label: 'ลาออกในช่วงที่เลือก', value: stats.leavers, hint: `${dayKey(from)} – ${dayKey(to)}`, cls: 'text-rose-600' },
+                { label: 'พนักงานปัจจุบัน', value: stats.headcountNow, hint: 'ณ วันสิ้นสุดช่วง', cls: 'text-gray-900' },
+                { label: 'Turnover rate', value: pct(stats.rate), hint: Math.round((to - from) / DAY_MS) + 1 >= 60 ? `เฉลี่ยต่อปี ${pct(stats.annualised)}` : 'ช่วงสั้น (<60 วัน) ไม่คำนวณต่อปี', cls: 'text-amber-600' },
+                { label: 'อายุงานเฉลี่ยของผู้ลาออก', value: tenureText(stats.avgTenureMonths), hint: 'นับจากวันเริ่มงานถึงวันออก', cls: 'text-blue-700' }
+            ];
+            return (
+                <section className="mx-auto w-full max-w-6xl space-y-4 pb-10">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <div className="text-sm font-semibold text-rose-600">Staff Turnover</div>
+                            <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">การลาออกของพนักงาน — {currentDept === 'ALL' ? 'ทุกแผนก' : currentDept}</h1>
+                            <p className="mt-1 text-sm text-gray-500">ใครออกจากทีมไหน เมื่อไหร่ และอัตราการลาออก (Turnover rate = ผู้ลาออก ÷ จำนวนพนักงานเฉลี่ยในช่วงนั้น)</p>
+                        </div>
+                        <button type="button" onClick={exportExcel} className="rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-green-700 shadow-sm hover:bg-green-50">ส่งออก Excel</button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {presets.map(([key, label]) => <button key={key} type="button" onClick={() => setPreset(key)} className={`rounded-full border px-3 py-1 text-xs font-bold ${preset === key ? 'border-rose-600 bg-rose-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>)}
+                        {preset === 'custom' && <>
+                            <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="rounded border bg-white p-1 text-xs" aria-label="จากวันที่"/>
+                            <span className="text-xs text-gray-500">ถึง</span>
+                            <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="rounded border bg-white p-1 text-xs" aria-label="ถึงวันที่"/>
+                        </>}
+                        <select value={team} onChange={e => setTeam(e.target.value)} className="ml-auto rounded border bg-white p-1.5 text-xs" aria-label="ทีม">
+                            <option value="ALL">ทุกแผนกย่อย / ทีม</option>
+                            {stats.teamOptions.map(t => <option key={t} value={t}>{t === '__NO_SUB_DEPT__' ? 'ไม่ระบุแผนกย่อย' : t}</option>)}
+                        </select>
+                    </div>
+                    {stats.missingExitDate > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">มีผู้ลาออก {stats.missingExitDate} คนที่ยังไม่ได้ระบุวันที่ออก จึงยังไม่ถูกนับในรายงานนี้ (แก้ได้ที่ข้อมูลพนักงาน)</div>}
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                        {cards.map(card => (
+                            <div key={card.label} className="rounded-2xl border bg-white p-4 shadow-sm">
+                                <div className="text-xs font-semibold text-gray-500">{card.label}</div>
+                                <div className={`mt-1 text-3xl font-extrabold ${card.cls}`}>{card.value}</div>
+                                <div className="mt-1 text-[11px] text-gray-400">{card.hint}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                        <h3 className="mb-3 text-sm font-bold text-gray-800">แนวโน้ม 12 เดือนล่าสุด (จำนวนผู้ลาออก / อัตรา %)</h3>
+                        <div className="flex h-40 items-end gap-1.5">
+                            {stats.trend.map(t => (
+                                <div key={t.label} className="flex h-full flex-1 flex-col items-center justify-end">
+                                    <span className="text-[11px] font-bold text-gray-800">{t.leavers || ''}</span>
+                                    <div className="w-full rounded-t bg-rose-400" style={{ height: `${(t.leavers / maxTrend) * 100}%`, minHeight: t.leavers ? '4px' : '0' }}></div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-1 flex gap-1.5 text-center text-[10px] text-gray-500">
+                            {stats.trend.map(t => <div key={t.label} className="flex-1"><div>{t.label}</div><div className="font-semibold text-amber-600">{pct(t.rate)}</div></div>)}
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <BarList title="ตามแผนกย่อย / ทีม" items={stats.byTeam.map(t => ({ name: `${t.name} (${pct(t.rate)})`, count: t.leavers }))} />
+                        <BarList title="ตามหัวหน้า ณ วันที่ออก" items={stats.byLeader} />
+                        <BarList title="ตามสาเหตุ" items={stats.byReason} />
+                        <BarList title="ตามอายุงาน" items={stats.byTenure} />
+                        <BarList title="ตามประเภทพนักงาน" items={stats.byType} />
+                    </div>
+                    <div className="rounded-2xl border bg-white shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-4">
+                            <h3 className="text-sm font-bold text-gray-800">รายชื่อผู้ลาออก ({rows.length})</h3>
+                            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาชื่อ รหัส ทีม หัวหน้า..." aria-label="ค้นหาผู้ลาออก" className="w-64 rounded border p-1.5 text-xs"/>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                                <thead className="bg-gray-50 text-left text-gray-500"><tr>{['วันที่ออก', 'ID', 'ชื่อ', 'ตำแหน่ง', 'แผนก / ทีม', 'หัวหน้า ณ วันที่ออก', 'อายุงาน', 'สาเหตุ'].map(h => <th key={h} className="px-3 py-2 font-bold">{h}</th>)}</tr></thead>
+                                <tbody>
+                                    {rows.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">ไม่มีผู้ลาออกในช่วงที่เลือก</td></tr>}
+                                    {rows.map(r => (
+                                        <tr key={r.id} className="border-t">
+                                            <td className="whitespace-nowrap px-3 py-2">{formatDate(r.exitDate)}</td>
+                                            <td className="px-3 py-2 text-gray-500">{r.id}</td>
+                                            <td className="px-3 py-2 font-semibold text-gray-900">{r.name}{r.type === 'Subcontract' && <span className="ml-1 rounded bg-orange-100 px-1 text-[10px] font-bold text-orange-700">Sub</span>}</td>
+                                            <td className="px-3 py-2">{r.position}</td>
+                                            <td className="px-3 py-2">{r.dept}{r.team !== '__NO_SUB_DEPT__' ? ` / ${r.team}` : ''}</td>
+                                            <td className="px-3 py-2">{r.leader || '-'}</td>
+                                            <td className="whitespace-nowrap px-3 py-2">{tenureText(r.months)}</td>
+                                            <td className="px-3 py-2" title={r.note}>{EXIT_REASONS[r.reason] || <span className="text-gray-400">ไม่ระบุ</span>}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            );
         };
 
         const AttendanceMonitor = ({ data, loading, error, onRefresh, lastUpdated }) => {
@@ -2587,6 +2822,11 @@
                         data.exitDate = data.exitDate || getLocalDateValue();
                         data.exitDept = data.dept || '';
                         data.exitSubDept = data.subDept || '';
+                        data.exitPosition = data.position || '';
+                        // Remember who the person reported to when they left (the chart no longer shows resigned people).
+                        const leaver = data.reportsTo && data.reportsTo !== 'STAGING' ? employees.find(e => String(e.id) === String(data.reportsTo)) : null;
+                        data.exitManagerId = leaver ? String(leaver.id) : '';
+                        data.exitManagerName = leaver ? (leaver.name || '') : '';
                     } else {
                         data.exitDept = data.exitDept || existingEmployee?.dept || data.dept || '';
                         data.exitSubDept = data.exitSubDept || existingEmployee?.subDept || data.subDept || '';
@@ -3073,6 +3313,7 @@
                                 <button onClick={()=>setViewMode('list')} aria-label="รายชื่อ" title="รายชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='list'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.List size={15}/><span className="hidden 2xl:inline">รายชื่อ</span></button>
                                 <button onClick={()=>setViewMode('attendance')} aria-label="เช็คชื่อ" title="เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">เช็คชื่อ</span></button>
                                 <button onClick={()=>setViewMode('monitor')} aria-label="Monitor เช็คชื่อ" title="Monitor เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='monitor'?'bg-blue-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Chart size={15}/><span className="hidden 2xl:inline">Monitor</span></button>
+                                {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>setViewMode('turnover')} aria-label="Staff Turnover" title="Staff Turnover" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='turnover'?'bg-rose-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Users size={15}/><span className="hidden 2xl:inline">Turnover</span></button>}
                             </div>
 
                             <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true"></div>
@@ -3091,7 +3332,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>{setViewMode('turnover'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 font-bold text-rose-700"><Icons.Users/> Staff Turnover</button>} <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -3112,9 +3353,11 @@
                             </>
                         )}
 
-                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' ? 'p-4 sm:p-6' : 'p-8'}`}>
+                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' || viewMode === 'turnover' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
-                            {viewMode === 'monitor' ? (
+                            {viewMode === 'turnover' ? (
+                                <TurnoverDashboard employees={allEmployeesWithIds} currentDept={currentDept} />
+                            ) : viewMode === 'monitor' ? (
                                 <AttendanceMonitor data={attendanceData} loading={attendanceLoading} error={attendanceError} onRefresh={loadAttendance} lastUpdated={attendanceUpdatedAt} />
                             ) : viewMode === 'attendance' ? (
                                 <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onSaveBatch={handleAttendanceBatchSave} onRefresh={loadAttendance}/>
@@ -3151,7 +3394,7 @@
                                         <table className="min-w-full divide-y">
                                             <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
                                                 <tr>
-                                                    {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company', ...(showEmployeeHistory ? ['Exit Date'] : [])].map(h => (
+                                                    {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company', ...(showEmployeeHistory ? ['Exit Date', 'Leader at exit', 'Reason'] : [])].map(h => (
                                                         <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Sub-dept'?'subDept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':h==='Exit Date'?'exitDate':'company')}>
                                                             <div className="flex items-center">{h} <Icons.Sort size={12} className="ml-1 opacity-50"/></div>
                                                         </th>
@@ -3174,6 +3417,8 @@
                                                         <td className="px-4 py-3 text-sm text-gray-500"><div>{formatDate(emp.startDate)}</div><div className="text-[10px] text-gray-400">{calculateTenure(emp.startDate)}</div></td>
                                                         <td className="px-4 py-3 text-sm text-gray-500">{emp.company}</td>
                                                         {showEmployeeHistory && <td className="px-4 py-3 text-sm text-gray-500">{formatDate(emp.exitDate) || <span className="text-gray-400">ไม่ระบุ</span>}</td>}
+                                                        {showEmployeeHistory && <td className="px-4 py-3 text-sm text-gray-500">{emp.exitManagerName || employees.find(m => String(m.id) === String(emp.reportsTo))?.name || <span className="text-gray-400">-</span>}</td>}
+                                                        {showEmployeeHistory && <td className="px-4 py-3 text-sm text-gray-500" title={emp.exitNote || ''}>{EXIT_REASONS[emp.exitReason] || <span className="text-gray-400">ไม่ระบุ</span>}</td>}
                                                     </tr>
                                                 ))}
                                             </tbody>
