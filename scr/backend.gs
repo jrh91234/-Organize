@@ -52,6 +52,8 @@ function doPost(e) {
         detailStr = `ลบสิทธิ์: [User: ${data.username}]`;
       } else if (data.action === 'recordAttendance') {
         detailStr = `เช็คชื่อ: ${data.type === 'ot' ? 'เริ่ม OT' : 'เข้างาน'}`;
+      } else if (data.action === 'recordAttendanceBatch') {
+        detailStr = `เช็คชื่อ ${Array.isArray(data.items) ? data.items.length : 0} รายการ${data.workDate ? ` · ย้อนหลังรอบวันที่ ${data.workDate} เวลา ${data.time || '08:00'}` : ''}`;
       } else if (!detailStr && (data.user || data.updates)) {
         // Fallback ใส่รายละเอียดเท่าที่มี
         detailStr = JSON.stringify(data.user || data.updates || {});
@@ -269,15 +271,16 @@ function getSheet(name) {
     if(name === 'Users') sheet.appendRow(['Username','Password','Name','Role','Department']); 
     if(name === 'Data') sheet.appendRow(['Key','Value']); 
     if(name === 'Logs') sheet.appendRow(['Timestamp','Username','Name','Role','Department','Action','Detail']);
-    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName','SubDepartment','Position']);
-  } 
+    if(name === 'Attendance') sheet.appendRow(['WorkDate','Timestamp','Username','Name','Department','Type','CheckedByUsername','CheckedByName','SubDepartment','Position','RecordedAt']);
+  }
   if (name === 'Attendance') {
-    if (sheet.getMaxColumns() < 10) sheet.insertColumnsAfter(sheet.getMaxColumns(), 10 - sheet.getMaxColumns());
+    if (sheet.getMaxColumns() < 11) sheet.insertColumnsAfter(sheet.getMaxColumns(), 11 - sheet.getMaxColumns());
     if (sheet.getRange(1, 7, 1, 2).getValues()[0].join('|') !== 'CheckedByUsername|CheckedByName') {
       sheet.getRange(1, 7, 1, 2).setValues([['CheckedByUsername', 'CheckedByName']]);
     }
     if (sheet.getRange(1, 9).getValue() !== 'SubDepartment') sheet.getRange(1, 9).setValue('SubDepartment');
     if (sheet.getRange(1, 10).getValue() !== 'Position') sheet.getRange(1, 10).setValue('Position');
+    if (sheet.getRange(1, 11).getValue() !== 'RecordedAt') sheet.getRange(1, 11).setValue('RecordedAt');
   }
   return sheet; 
 }
@@ -726,6 +729,39 @@ function getAttendanceWindow_(date) {
   return { date: workDate, start: start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+// Backdated attendance: Leader / Supervisor / Admin may view and record an earlier round.
+// Non-admins are limited to the last ATTENDANCE_BACKDATE_DAYS rounds; nobody may record ahead.
+const ATTENDANCE_BACKDATE_DAYS = 31;
+const ATTENDANCE_BACKDATE_ROLES = ['admin', 'supervisor', 'leader'];
+
+// Returns the round a request reads or writes. An empty date (or today's) means the current round.
+function resolveAttendanceWindow_(actor, requestedDate) {
+  const current = getAttendanceWindow_(new Date());
+  const date = String(requestedDate || '').trim();
+  if (!date || date === current.date) return { window: current, today: current.date, backdated: false };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'รูปแบบวันที่ไม่ถูกต้อง' };
+  if (ATTENDANCE_BACKDATE_ROLES.indexOf(actor.role) === -1) {
+    return { error: 'เฉพาะ Leader, Supervisor และ Admin ที่เช็คชื่อย้อนหลังได้' };
+  }
+  const timezone = Session.getScriptTimeZone();
+  const start = Utilities.parseDate(date + ' 08:00:00', timezone, 'yyyy-MM-dd HH:mm:ss');
+  if (isNaN(start.getTime()) || Utilities.formatDate(start, timezone, 'yyyy-MM-dd') !== date) return { error: 'วันที่ไม่ถูกต้อง' };
+  if (date > current.date) return { error: 'ไม่สามารถเช็คชื่อล่วงหน้าได้' };
+  const oldest = getAttendanceDate_(new Date(current.start.getTime() - ATTENDANCE_BACKDATE_DAYS * 24 * 60 * 60 * 1000 + 60 * 60 * 1000));
+  if (actor.role !== 'admin' && date < oldest) {
+    return { error: 'เช็คชื่อย้อนหลังได้ไม่เกิน ' + ATTENDANCE_BACKDATE_DAYS + ' วัน' };
+  }
+  return { window: { date: date, start: start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) }, today: current.date, backdated: true };
+}
+
+// The time a backdated entry is filed under: HH:mm inside the round (00:00–07:59 = the next calendar morning).
+function backdatedAttendanceTimestamp_(window, time) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(time || '08:00').trim());
+  if (!match) return null;
+  const minutes = ((Number(match[1]) - 8 + 24) % 24) * 60 + Number(match[2]);
+  return new Date(window.start.getTime() + minutes * 60 * 1000);
+}
+
 function isAttendanceTimestampInWindow_(value, window) {
   const timestamp = value instanceof Date ? value : new Date(value);
   return !isNaN(timestamp.getTime()) && timestamp >= window.start && timestamp < window.end;
@@ -745,7 +781,8 @@ function attendanceRecordFromRow_(row) {
     checkedByUsername: String(row[6] || ''),
     checkedByName: String(row[7] || ''),
     subDept: String(row[8] || ''),
-    position: String(row[9] || '')
+    position: String(row[9] || ''),
+    recordedAt: row[10] instanceof Date ? row[10].toISOString() : String(row[10] || '')
   };
 }
 
@@ -927,8 +964,10 @@ function getAttendance(data) {
     return createJSONOutput({ status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' });
   }
 
+  const resolved = resolveAttendanceWindow_(actor, data && data.workDate);
+  if (resolved.error) return createJSONOutput({ status: 'error', message: resolved.error });
   const sheet = getSheet('Attendance');
-  const window = getAttendanceWindow_(new Date());
+  const window = resolved.window;
   const today = window.date;
   const rows = sheet.getDataRange().getValues().slice(1);
   const records = rows
@@ -965,7 +1004,10 @@ function getAttendance(data) {
   }));
 
   return createJSONOutput({
-    status: 'success', date: today, mine: mine, records: visibleRecords,
+    status: 'success', date: today, today: resolved.today, backdated: resolved.backdated,
+    canBackdate: ATTENDANCE_BACKDATE_ROLES.indexOf(actor.role) !== -1,
+    backdateDays: actor.role === 'admin' ? 0 : ATTENDANCE_BACKDATE_DAYS,
+    mine: mine, records: visibleRecords,
     employees: roster.employees, departments: roster.departments, rosterMessage: roster.message,
     selfId: roster.selfId, actorUsername: actor.username, previousShifts: previousShifts
   });
@@ -995,8 +1037,18 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
     return { status: 'error', message: error.message || 'โหลดรายชื่อพนักงานไม่สำเร็จ' };
   }
 
+  const resolved = resolveAttendanceWindow_(actor, data && data.workDate);
+  if (resolved.error) return { status: 'error', message: resolved.error };
+  const now = new Date();
+  let entryTimestamp = now;
+  if (resolved.backdated) {
+    entryTimestamp = backdatedAttendanceTimestamp_(resolved.window, data && data.time);
+    if (!entryTimestamp) return { status: 'error', message: 'รูปแบบเวลาไม่ถูกต้อง (HH:mm)' };
+    if (entryTimestamp > now) return { status: 'error', message: 'เวลาที่เลือกยังมาไม่ถึง กรุณาเลือกเวลาที่ผ่านมาแล้ว' };
+  }
+
   const sheet = getSheet('Attendance');
-  const window = getAttendanceWindow_(new Date());
+  const window = resolved.window;
   const today = window.date;
   const rows = sheet.getDataRange().getValues().slice(1);
   const todayRecords = rows.filter(row => isAttendanceTimestampInWindow_(row[1], window)).map(attendanceRecordFromRow_);
@@ -1039,8 +1091,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
       return;
     }
 
-    const timestamp = new Date();
-    const row = [today, timestamp, target.id, target.name, target.dept, type, actor.username, actor.name, target.subDept || '', target.position || ''];
+    const row = [today, entryTimestamp, target.id, target.name, target.dept, type, actor.username, actor.name, target.subDept || '', target.position || '', now];
     const record = attendanceRecordFromRow_(row);
     writes.push(row);
     mine[type] = record;
@@ -1049,7 +1100,7 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
 
   if (writes.length > 0) {
     const firstRow = sheet.getLastRow() + 1;
-    sheet.getRange(firstRow, 1, writes.length, 10).setValues(writes);
+    sheet.getRange(firstRow, 1, writes.length, 11).setValues(writes);
   }
-  return { status: 'success', date: today, items: outcomes };
+  return { status: 'success', date: today, backdated: resolved.backdated, items: outcomes };
 }
