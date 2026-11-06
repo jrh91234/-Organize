@@ -1894,7 +1894,27 @@
             );
         };
 
-        const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onSaveBatch, onRefresh }) => {
+        const shiftAttendanceDate = (isoDate, days) => {
+            const [y, m, d] = String(isoDate).split('-').map(Number);
+            const date = new Date(Date.UTC(y, m - 1, d + days));
+            return date.toISOString().slice(0, 10);
+        };
+
+        const AttendancePanel = ({ data, currentUser, currentDept, loading, savingType, error, notice, onSaveBatch, onRefresh, selectedDate = '', onDateChange }) => {
+            const [entryTime, setEntryTime] = useState('08:00');
+            const todayDate = data?.today || '';
+            const canBackdate = Boolean(data?.canBackdate && todayDate && onDateChange);
+            const isBackdated = Boolean(selectedDate) || Boolean(data?.backdated);
+            // The list on screen must belong to the round the next save will go to.
+            const dateMismatch = selectedDate ? data?.date !== selectedDate : Boolean(data?.backdated);
+            const minDate = canBackdate && Number(data?.backdateDays) > 0 ? shiftAttendanceDate(todayDate, -Number(data.backdateDays)) : undefined;
+            const changeDate = value => {
+                if (!onDateChange) return;
+                if (!value || value === todayDate) { onDateChange(''); return; }
+                if (todayDate && value > todayDate) return;
+                if (minDate && value < minDate) return;
+                onDateChange(value);
+            };
             const employees = Array.isArray(data?.employees) ? data.employees : [];
             const orderedEmployees = useMemo(() => sortAttendanceByHierarchy(employees), [employees]);
             const records = Array.isArray(data?.records) ? data.records : [];
@@ -1958,6 +1978,8 @@
                 return map;
             }, {});
             const pendingList = Object.values(pendingActions);
+            // A different round has different records: drop anything queued for the previous one.
+            useEffect(() => { setPendingActions({}); setScanNotice(''); }, [selectedDate]);
             const workCount = shiftScopedEmployees.filter(employee => recordsByEmployee[employee.id]?.work).length;
             const otCount = shiftScopedEmployees.filter(employee => recordsByEmployee[employee.id]?.ot).length;
 
@@ -2013,8 +2035,8 @@
             }, [employees, shiftScopedEmployees, recordsByEmployee, pendingActions]);
 
             const saveBatch = async () => {
-                if (pendingList.length === 0 || savingType) return;
-                const results = await onSaveBatch(pendingList);
+                if (pendingList.length === 0 || savingType || dateMismatch) return;
+                const results = await onSaveBatch(pendingList, entryTime);
                 if (!Array.isArray(results)) return;
                 const completed = new Set(results.filter(item => item.status === 'success' || item.status === 'duplicate').map(item => `${item.employeeId}:${item.type}`));
                 setPendingActions(previous => Object.fromEntries(Object.entries(previous).filter(([key]) => !completed.has(key))));
@@ -2024,12 +2046,30 @@
                 <section className="mx-auto w-full max-w-6xl space-y-4 pb-28">
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <div className="text-sm font-semibold text-blue-600">เช็คชื่อประจำวัน</div>
+                            <div className={`text-sm font-semibold ${isBackdated ? 'text-amber-700' : 'text-blue-600'}`}>{isBackdated ? 'เช็คชื่อย้อนหลัง' : 'เช็คชื่อประจำวัน'}</div>
                             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{dateLabel}</h1>
                             <p className="mt-1 text-sm text-gray-500">เลือกหลายคนหรือสแกน QR เพื่อบันทึกพร้อมกัน · รอบวัน 08:00–07:59 วันถัดไป</p>
                         </div>
-                        <button type="button" onClick={onRefresh} disabled={loading} className="shrink-0 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด…' : 'โหลดใหม่'}</button>
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                            {canBackdate && <>
+                                <label className="sr-only" htmlFor="attendance-date">วันที่เช็คชื่อ</label>
+                                <input id="attendance-date" type="date" value={selectedDate || todayDate} max={todayDate} min={minDate} disabled={loading || Boolean(savingType)}
+                                    onChange={event => changeDate(event.target.value)}
+                                    className="min-h-10 rounded-xl border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50" />
+                                {selectedDate && <button type="button" onClick={() => changeDate('')} disabled={loading || Boolean(savingType)} className="min-h-10 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 disabled:opacity-50">กลับวันนี้</button>}
+                            </>}
+                            <button type="button" onClick={onRefresh} disabled={loading} className="min-h-10 rounded-xl border bg-white px-3 py-2 text-sm font-semibold text-gray-600 shadow-sm disabled:opacity-50">{loading ? 'กำลังโหลด…' : 'โหลดใหม่'}</button>
+                        </div>
                     </div>
+
+                    {isBackdated && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <div className="min-w-0 font-semibold">กำลังลงเช็คชื่อย้อนหลังรอบวันที่ {dateLabel}{dateMismatch ? ' · กำลังโหลดข้อมูลวันที่เลือก…' : ''}<div className="mt-0.5 text-xs font-normal text-amber-800">รายการที่บันทึกจะใช้เวลาด้านขวา (บันทึกเข้างานและ OT แยกครั้งได้ถ้าเวลาต่างกัน) · ระบบเก็บผู้บันทึกและเวลาที่บันทึกจริงไว้ตรวจสอบ</div></div>
+                        <label className="flex shrink-0 items-center gap-2 font-semibold">
+                            เวลา
+                            <input type="time" value={entryTime} onChange={event => setEntryTime(event.target.value || '08:00')} disabled={Boolean(savingType)}
+                                className="min-h-10 rounded-xl border border-amber-300 bg-white px-3 text-sm font-semibold text-gray-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" />
+                        </label>
+                    </div>}
 
                     {notice && <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">{notice}</div>}
                     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
@@ -2070,7 +2110,7 @@
                         <div className="flex flex-wrap items-end gap-2 sm:col-span-2 sm:justify-end xl:col-span-3 xl:justify-between">
                             <span className="whitespace-nowrap rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800">เข้างาน {workCount}/{shiftScopedEmployees.length}</span>
                             <span className="whitespace-nowrap rounded-full bg-violet-100 px-3 py-2 text-xs font-bold text-violet-800">OT {otCount}/{shiftScopedEmployees.length}</span>
-                            <button type="button" onClick={() => { setScanNotice(''); setScannerOpen(true); }} disabled={loading || employees.length === 0} className="min-h-10 rounded-xl bg-green-700 px-4 text-sm font-bold text-white hover:bg-green-800 disabled:opacity-50">สแกน QR</button>
+                            <button type="button" onClick={() => { setScanNotice(''); setScannerOpen(true); }} disabled={loading || dateMismatch || employees.length === 0} className="min-h-10 rounded-xl bg-green-700 px-4 text-sm font-bold text-white hover:bg-green-800 disabled:opacity-50">สแกน QR</button>
                         </div>
                     </div>
 
@@ -2104,7 +2144,7 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 sm:w-[360px]">
                                         {buttons.map(button => (
-                                            <button key={button.type} type="button" disabled={loading || Boolean(savingType) || button.disabled}
+                                            <button key={button.type} type="button" disabled={loading || Boolean(savingType) || dateMismatch || button.disabled}
                                                 onClick={() => toggleAction(employee.id, button.type)}
                                                 className={`touch-manipulation min-h-12 rounded-xl border px-3 py-2 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed ${button.record ? 'border-green-200 bg-green-50 text-green-800' : button.queued ? 'border-blue-300 bg-blue-100 text-blue-800 ring-2 ring-blue-200' : button.type === 'ot' && button.disabled ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50'}`}>
                                                 {button.record ? `${button.title} ✓ ${button.record.time}` : button.queued ? `เลือกแล้ว · ${button.title}` : button.type === 'ot' && button.disabled ? 'เลือกเข้างานก่อน' : button.title}
@@ -2117,8 +2157,8 @@
                     </div>
 
                     {pendingList.length > 0 && <div className="fixed inset-x-3 bottom-3 z-[60] mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:px-5">
-                        <div className="min-w-0"><div className="font-bold text-gray-900">รอบันทึก {pendingList.length} รายการ</div><div className="hidden text-xs text-gray-500 sm:block">ระบบจะส่งบันทึกทั้งหมดในครั้งเดียว</div></div>
-                        <div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPendingActions({})} disabled={Boolean(savingType)} className="min-h-11 rounded-xl border px-3 text-sm font-semibold text-gray-600">ล้าง</button><button type="button" onClick={saveBatch} disabled={Boolean(savingType)} className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-60">{savingType === 'batch' ? 'กำลังบันทึก…' : 'บันทึกทั้งหมด'}</button></div>
+                        <div className="min-w-0"><div className="font-bold text-gray-900">รอบันทึก {pendingList.length} รายการ{isBackdated ? ` · ย้อนหลัง ${data?.date || ''} เวลา ${entryTime}` : ''}</div><div className="hidden text-xs text-gray-500 sm:block">ระบบจะส่งบันทึกทั้งหมดในครั้งเดียว</div></div>
+                        <div className="flex shrink-0 gap-2"><button type="button" onClick={() => setPendingActions({})} disabled={Boolean(savingType)} className="min-h-11 rounded-xl border px-3 text-sm font-semibold text-gray-600">ล้าง</button><button type="button" onClick={saveBatch} disabled={Boolean(savingType) || dateMismatch} className="min-h-11 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-60">{savingType === 'batch' ? 'กำลังบันทึก…' : 'บันทึกทั้งหมด'}</button></div>
                     </div>}
 
                     {qrEmployee && <AttendanceQRCodeModal employee={qrEmployee} onClose={() => setQrEmployee(null)} />}
@@ -2216,15 +2256,20 @@
                 return result;
             }, [currentUser]);
 
-            const loadAttendance = useCallback(async () => {
+            // '' = the current round; 'yyyy-MM-dd' = an earlier round picked on the check-in page (backdated entry).
+            const [attendanceDate, setAttendanceDate] = useState('');
+            const attendanceRequestSeq = useRef(0);
+            const loadAttendance = useCallback(async (workDate = '') => {
                 if (!driveUrl) {
                     setAttendanceError('ยังไม่ได้ตั้งค่า URL ของระบบ');
                     return;
                 }
+                const seq = ++attendanceRequestSeq.current;
                 setAttendanceLoading(true);
                 setAttendanceError('');
                 try {
-                    const result = await appApiCall(driveUrl, 'getAttendance');
+                    const result = await appApiCall(driveUrl, 'getAttendance', workDate ? { workDate } : {});
+                    if (seq !== attendanceRequestSeq.current) return;
                     if (result?.code === 'session_expired') {
                         localStorage.removeItem('currentUser');
                         setCurrentUser(null);
@@ -2234,19 +2279,21 @@
                     setAttendanceData(result);
                     setAttendanceUpdatedAt(Date.now());
                 } catch (error) {
-                    setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ');
+                    if (seq === attendanceRequestSeq.current) setAttendanceError(error?.message || 'เชื่อมต่อระบบเช็คชื่อไม่สำเร็จ');
                 } finally {
-                    setAttendanceLoading(false);
+                    if (seq === attendanceRequestSeq.current) setAttendanceLoading(false);
                 }
             }, [appApiCall, driveUrl]);
+            const activeAttendanceDate = viewMode === 'attendance' ? attendanceDate : '';
+            const reloadAttendance = useCallback(() => loadAttendance(activeAttendanceDate), [loadAttendance, activeAttendanceDate]);
 
-            const handleAttendanceBatchSave = useCallback(async (items) => {
+            const handleAttendanceBatchSave = useCallback(async (items, entryTime) => {
                 if (!driveUrl || attendanceSavingType || !Array.isArray(items) || items.length === 0) return null;
                 setAttendanceSavingType('batch');
                 setAttendanceError('');
                 setAttendanceNotice('');
                 try {
-                    const result = await appApiCall(driveUrl, 'recordAttendanceBatch', { items });
+                    const result = await appApiCall(driveUrl, 'recordAttendanceBatch', attendanceDate ? { items, workDate: attendanceDate, time: entryTime || '08:00' } : { items });
                     if (result?.code === 'session_expired') {
                         localStorage.removeItem('currentUser');
                         setCurrentUser(null);
@@ -2270,7 +2317,7 @@
                     const savedCount = result.items.filter(item => item.status === 'success').length;
                     const duplicateCount = result.items.filter(item => item.status === 'duplicate').length;
                     const failed = result.items.filter(item => item.status !== 'success' && item.status !== 'duplicate');
-                    setAttendanceNotice(`บันทึกสำเร็จ ${savedCount} รายการ${duplicateCount ? ` · มีรายการบันทึกไว้แล้ว ${duplicateCount} รายการ` : ''}`);
+                    setAttendanceNotice(`บันทึกสำเร็จ ${savedCount} รายการ${result.backdated ? ` (ย้อนหลังรอบวันที่ ${result.date})` : ''}${duplicateCount ? ` · มีรายการบันทึกไว้แล้ว ${duplicateCount} รายการ` : ''}`);
                     if (failed.length) setAttendanceError(failed.map(item => `${item.name || item.employeeId}: ${item.message || 'บันทึกไม่สำเร็จ'}`).join(' · '));
                     return result.items;
                 } catch (error) {
@@ -2279,14 +2326,14 @@
                 } finally {
                     setAttendanceSavingType('');
                 }
-            }, [appApiCall, attendanceSavingType, driveUrl]);
+            }, [appApiCall, attendanceSavingType, attendanceDate, driveUrl]);
 
             useEffect(() => {
-                if ((viewMode === 'attendance' || viewMode === 'monitor') && currentUser) void loadAttendance();
-            }, [viewMode, currentUser, loadAttendance]);
+                if ((viewMode === 'attendance' || viewMode === 'monitor') && currentUser) void loadAttendance(activeAttendanceDate);
+            }, [viewMode, currentUser, loadAttendance, activeAttendanceDate]);
             useEffect(() => {
                 if (viewMode !== 'monitor' || !currentUser) return undefined;
-                const timer = setInterval(() => { if (!document.hidden) void loadAttendance(); }, 60000);
+                const timer = setInterval(() => { if (!document.hidden) void loadAttendance(''); }, 60000);
                 return () => clearInterval(timer);
             }, [viewMode, currentUser, loadAttendance]);
 
@@ -3358,9 +3405,9 @@
                             {viewMode === 'turnover' ? (
                                 <TurnoverDashboard employees={allEmployeesWithIds} currentDept={currentDept} />
                             ) : viewMode === 'monitor' ? (
-                                <AttendanceMonitor data={attendanceData} loading={attendanceLoading} error={attendanceError} onRefresh={loadAttendance} lastUpdated={attendanceUpdatedAt} />
+                                <AttendanceMonitor data={attendanceData} loading={attendanceLoading} error={attendanceError} onRefresh={reloadAttendance} lastUpdated={attendanceUpdatedAt} />
                             ) : viewMode === 'attendance' ? (
-                                <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onSaveBatch={handleAttendanceBatchSave} onRefresh={loadAttendance}/>
+                                <AttendancePanel data={attendanceData} currentUser={currentUser} currentDept={currentDept} loading={attendanceLoading} savingType={attendanceSavingType} error={attendanceError} notice={attendanceNotice} onSaveBatch={handleAttendanceBatchSave} onRefresh={reloadAttendance} selectedDate={attendanceDate} onDateChange={setAttendanceDate}/>
                             ) : viewMode === 'chart' ? (
                                 <div className="flex flex-col items-center min-w-max" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
                                     <DraggableLogo logo={logo} setLogo={setLogo} isLocked={isLocked} />
