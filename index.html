@@ -1641,6 +1641,14 @@
             { key: 'safety', label: 'Safety', head: 'bg-amber-500', soft: 'bg-amber-50', text: 'text-amber-700', hex: 'F59E0B' },
             { key: 'general', label: 'General', head: 'bg-slate-500', soft: 'bg-slate-50', text: 'text-slate-700', hex: '64748B' }
         ];
+        const SKILL_CODE_PREFIX = { process: 'P', machine: 'M', quality: 'Q', safety: 'S', general: 'G' };
+        // Next free code for a category (P01, P02 ... per prefix), looking at every code already used.
+        const nextSkillCode = (category, skills) => {
+            const prefix = SKILL_CODE_PREFIX[category] || 'P';
+            const pattern = new RegExp(`^${prefix}(\\d+)$`, 'i');
+            const max = (skills || []).reduce((top, skill) => { const m = String(skill?.code || '').trim().match(pattern); return m ? Math.max(top, Number(m[1])) : top; }, 0);
+            return `${prefix}${String(max + 1).padStart(2, '0')}`;
+        };
         const SKILL_CHART_COLORS = ['#ef4444', '#f97316', '#facc15', '#60a5fa', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#a3a3a3'];
         const SKILL_NO_LINE_LABEL = 'ไม่ระบุไลน์';
         const skillCategory = (key) => SKILL_CATEGORIES.find(c => c.key === key) || SKILL_CATEGORIES[0];
@@ -2460,7 +2468,9 @@
             const update = (setter) => (index, patch) => { setter(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s)); setDirty(true); };
             const move = (setter) => (index, delta) => { setter(prev => { const next = [...prev]; const target = index + delta; if (target < 0 || target >= next.length) return prev; [next[index], next[target]] = [next[target], next[index]]; return next; }); setDirty(true); };
             const remove = (setter) => (index) => { setter(prev => prev.filter((_, i) => i !== index)); setDirty(true); };
-            const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', code: '', name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', forLine ? linePositions : deptPositions) }]); setDirty(true); };
+            // Codes are unique across the department: saved skills of every line plus the rows being edited here.
+            const usedCodeSkills = (exceptId) => [...(data.catalog || []).filter(c => c.active !== false && skillSameText(c.dept, dept)), ...lineSkills, ...sharedSkills].filter(c => c.id !== exceptId);
+            const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', autoCode: true, code: nextSkillCode(forLine ? 'process' : 'safety', [...usedCodeSkills(), ...prev]), name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', forLine ? linePositions : deptPositions) }]); setDirty(true); };
             const addSamples = () => {
                 const names = new Set([...lineSkills, ...sharedSkills].map(s => s.name.toLowerCase()));
                 if (line) setLineSkills(prev => [...prev, ...makeSampleSkills(linePositions, true).filter(s => !names.has(s.name.toLowerCase()))]);
@@ -2472,7 +2482,9 @@
                 if (all.some(s => !String(s.name || '').trim())) { setMessage({ ok: false, text: 'กรุณาใส่ชื่อทักษะให้ครบทุกแถว' }); return; }
                 setSaving(true); setMessage(null);
                 try {
-                    const clean = list => list.map(s => ({ id: s.id, category: s.category, code: s.code, name: String(s.name).trim(), wi: s.wi, wiRev: s.wiRev, critical: s.critical, targetCount: Number(s.targetCount) || 0, targetLevel: Number(s.targetLevel) || 3, required: s.required }));
+                    const codePool = usedCodeSkills();
+                    const withCode = s => { if (String(s.code || '').trim()) return s.code; const code = nextSkillCode(s.category, codePool); codePool.push({ code }); return code; };
+                    const clean = list => list.map(s => ({ id: s.id, category: s.category, code: withCode(s), name: String(s.name).trim(), wi: s.wi, wiRev: s.wiRev, critical: s.critical, targetCount: Number(s.targetCount) || 0, targetLevel: Number(s.targetLevel) || 3, required: s.required }));
                     const scopes = [{ subDept: '', skills: clean(sharedSkills) }];
                     if (line) scopes.unshift({ subDept: line, skills: clean(lineSkills) });
                     const result = await call('saveSkillCatalog', { dept, scopes });
@@ -2520,8 +2532,8 @@
                                     {list.map((s, i) => (
                                         <tr key={s.id} className="border-t border-gray-100 align-middle">
                                             <td className="whitespace-nowrap px-1">{canEdit && <span className="flex flex-col"><button type="button" aria-label="เลื่อนขึ้น" onClick={() => onMove(i, -1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowUp size={12}/></button><button type="button" aria-label="เลื่อนลง" onClick={() => onMove(i, 1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowDown size={12}/></button></span>}</td>
-                                            <td className="px-1 py-1.5"><select disabled={!canEdit} value={s.category} onChange={e => onUpdate(i, { category: e.target.value })} className={`${input} min-w-[160px] font-semibold ${skillCategory(s.category).text}`}>{SKILL_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></td>
-                                            <td className="px-1"><input disabled={!canEdit} value={s.code} onChange={e => onUpdate(i, { code: e.target.value })} className={`${input} w-14`} placeholder="P01"/></td>
+                                            <td className="px-1 py-1.5"><select disabled={!canEdit} value={s.category} onChange={e => onUpdate(i, s.autoCode || !String(s.code || '').trim() ? { category: e.target.value, autoCode: true, code: nextSkillCode(e.target.value, usedCodeSkills(s.id)) } : { category: e.target.value })} className={`${input} min-w-[160px] font-semibold ${skillCategory(s.category).text}`}>{SKILL_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></td>
+                                            <td className="px-1"><input disabled={!canEdit} value={s.code} onChange={e => onUpdate(i, { code: e.target.value, autoCode: false })} className={`${input} w-14`} placeholder="P01"/></td>
                                             <td className="px-1"><input disabled={!canEdit} value={s.name} onChange={e => onUpdate(i, { name: e.target.value })} className={`${input} min-w-[180px] font-semibold`} placeholder="เช่น Screw torque"/></td>
                                             <td className="px-1"><input disabled={!canEdit} value={s.wi} onChange={e => onUpdate(i, { wi: e.target.value })} className={`${input} w-28`} placeholder="WI-xxx"/></td>
                                             <td className="px-1"><input disabled={!canEdit} value={s.wiRev} onChange={e => onUpdate(i, { wiRev: e.target.value })} className={`${input} w-12`}/></td>
