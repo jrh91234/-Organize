@@ -973,6 +973,19 @@
                                     <button type="button" onClick={()=>{setIsAddingSubDept(value=>!value);setNewSubDeptName('');}} aria-label="เพิ่มแผนกย่อย" title="เพิ่มแผนกย่อย" className="shrink-0 rounded border border-blue-200 bg-blue-50 px-3 text-blue-700 hover:bg-blue-100"><Icons.Plus size={18}/></button>
                                     {formData.subDept && <button type="button" onClick={()=>{if(onDeleteSubDept(formData.dept, formData.subDept)) setFormData(previous=>({...previous, subDept: ''}));}} aria-label={`ลบแผนกย่อย ${formData.subDept}`} title="ลบแผนกย่อยที่เลือก" className="shrink-0 rounded border border-red-200 bg-red-50 px-3 text-red-600 hover:bg-red-100"><Icons.Trash2 size={17}/></button>}
                                 </div>
+                                {formData.dept && subDeptOptions.some(name => name !== formData.subDept) && (
+                                    <div className="mt-2 rounded border border-sky-100 bg-sky-50/60 p-2">
+                                        <div className="mb-1 text-[11px] font-semibold text-sky-800">ไลน์อื่นที่ดูแลเพิ่ม <span className="font-normal text-sky-600">(ใช้ใน Skill Matrix เท่านั้น ไม่เปลี่ยนตำแหน่งในผัง)</span></div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {subDeptOptions.filter(name => name !== formData.subDept).map(name => {
+                                                const extras = Array.isArray(formData.extraSubDepts) ? formData.extraSubDepts : [];
+                                                const on = extras.includes(name);
+                                                return <button key={name} type="button" aria-pressed={on} onClick={() => setFormData(previous => { const current = Array.isArray(previous.extraSubDepts) ? previous.extraSubDepts : []; return { ...previous, extraSubDepts: on ? current.filter(item => item !== name) : [...current, name] }; })}
+                                                    className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold transition ${on ? 'border-sky-600 bg-sky-600 text-white' : 'border-gray-300 bg-white text-gray-600 hover:border-sky-400'}`}>{on ? '✓ ' : '+ '}{name}</button>;
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 {isAddingSubDept && <div className="mt-2 flex gap-2">
                                     <input autoFocus value={newSubDeptName} onChange={e=>setNewSubDeptName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addSubDepartment();}}} className="min-w-0 flex-1 border p-2 rounded text-sm" placeholder={`เพิ่มแผนกย่อยใน ${formData.dept || 'แผนกหลัก'}`}/>
                                     <button type="button" onClick={addSubDepartment} disabled={!newSubDeptName.trim() || !formData.dept} className="rounded bg-green-600 px-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">เพิ่ม</button>
@@ -1639,6 +1652,15 @@
         const compareSkills = (a, b) => skillCategoryIndex(a.category) - skillCategoryIndex(b.category) || (a.subDept === '' ? 1 : 0) - (b.subDept === '' ? 1 : 0) || (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name));
         // Skills that apply to one line: that line's own skills plus the department-wide ones (subDept '').
         const skillsForLine = (catalog, dept, line) => (catalog || []).filter(s => s.active !== false && skillSameText(s.dept, dept) && (s.subDept === '' || s.subDept === line)).sort(compareSkills);
+        // Lines an employee belongs to in the Skill Matrix: the main sub-department plus any extra lines they also cover (e.g. a leader of two lines).
+        const employeeExtraLines = (employee) => [...new Set((Array.isArray(employee?.extraSubDepts) ? employee.extraSubDepts : []).map(skillLine).filter(l => l && l !== skillLine(employee?.subDept)))];
+        const employeeSkillLines = (employee) => [skillLine(employee?.subDept), ...employeeExtraLines(employee)];
+        const inSkillLine = (employee, line) => employeeSkillLines(employee).includes(line);
+        const skillsForEmployee = (catalog, employee) => {
+            const seen = new Map();
+            employeeSkillLines(employee).forEach(l => skillsForLine(catalog, employee.dept, l).forEach(s => seen.set(s.id, s)));
+            return [...seen.values()].sort(compareSkills);
+        };
         const requiredSkillLevel = (skill, position) => {
             const required = skill?.required || {};
             const key = Object.keys(required).find(k => skillSameText(k, position));
@@ -1726,14 +1748,14 @@
             const levelMap = new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l]));
             const inDept = (e) => dept === 'ALL' || e.dept === dept;
             const active = employees.filter(e => !isResignedEmployee(e) && inDept(e));
-            const inLine = active.filter(e => line === 'ALL' || skillLine(e.subDept) === line);
+            const inLine = active.filter(e => line === 'ALL' || inSkillLine(e, line));
             const people = inLine.filter(e => (position === 'ALL' || e.position === position) && (shift === 'ALL' || (e.shift || '-') === shift));
             const skillsInScope = new Map();
             const topGaps = new Map(), byPosition = new Map(), byLine = new Map();
             const levelCounts = [0, 0, 0, 0, 0];
             let unassessed = 0, multiSkilled = 0;
             const rows = people.map(emp => {
-                const skills = skillsForLine(catalog, emp.dept, skillLine(emp.subDept));
+                const skills = skillsForEmployee(catalog, emp);
                 let gapPoints = 0, gapSkills = 0, stations = 0, hasRequirement = false;
                 skills.forEach(skill => {
                     skillsInScope.set(skill.id, skill);
@@ -1763,7 +1785,7 @@
             // Station coverage (3x3): per line, how many people are at the target level and how many can be released per shift.
             const coverage = [];
             const lineGroups = new Map();
-            inLine.forEach(e => { const k = `${e.dept}\u0000${skillLine(e.subDept)}`; if (!lineGroups.has(k)) lineGroups.set(k, []); lineGroups.get(k).push(e); });
+            inLine.forEach(e => employeeSkillLines(e).filter(l => line === 'ALL' || l === line).forEach(l => { const k = `${e.dept}\u0000${l}`; if (!lineGroups.has(k)) lineGroups.set(k, []); lineGroups.get(k).push(e); }));
             lineGroups.forEach((members, k) => {
                 const [d, l] = k.split('\u0000');
                 skillsForLine(catalog, d, l).filter(s => s.targetCount > 0).forEach(skill => {
@@ -2121,7 +2143,7 @@
                                             <div className="flex items-center gap-2">
                                                 {!printMode && <SkillAvatar employee={row.emp} size={30}/>}
                                                 <div className="min-w-0">
-                                                    <div className={`${trunc} font-semibold text-gray-900`}>{row.emp.name}</div>
+                                                    <div className={`${trunc} font-semibold text-gray-900`}>{row.emp.name}{skillLine(row.emp.subDept) !== line && <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-700" title={`ไลน์หลัก: ${skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL} · ดูแลไลน์นี้เพิ่ม`}>+ ไลน์หลัก {skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL}</span>}</div>
                                                     <div className={`${trunc} text-[10px] text-gray-500`}>{row.emp.id} · {row.emp.position || '-'}{row.emp.shift ? ` · กะ ${row.emp.shift}` : ''}{row.emp.startDate ? ` · ${calculateTenure(row.emp.startDate)}` : ''}</div>
                                                 </div>
                                             </div>
@@ -2210,7 +2232,7 @@
                 return levelMap.get(key)?.level ?? null;
             }, [draft, levelMap]);
             const skills = useMemo(() => skillsForLine(data.catalog, dept, line), [data.catalog, dept, line]);
-            const lineEmployees = useMemo(() => employees.filter(e => !isResignedEmployee(e) && e.dept === dept && skillLine(e.subDept) === line), [employees, dept, line]);
+            const lineEmployees = useMemo(() => employees.filter(e => !isResignedEmployee(e) && e.dept === dept && inSkillLine(e, line)), [employees, dept, line]);
             const positionsHere = [...new Set(lineEmployees.map(e => e.position).filter(Boolean))].sort((a, b) => getPositionRank(b) - getPositionRank(a) || a.localeCompare(b));
             const query = String(searchTerm || '').trim().toLowerCase();
             const rows = lineEmployees
@@ -2431,7 +2453,7 @@
             }, [employees, dept, positions]);
             // A line's own skills only matter for the people working on that line, so its table shows only their positions.
             const linePositions = useMemo(() => {
-                const used = new Set(employees.filter(e => !isResignedEmployee(e) && e.dept === dept && skillLine(e.subDept) === line).map(e => e.position).filter(Boolean));
+                const used = new Set(employees.filter(e => !isResignedEmployee(e) && e.dept === dept && inSkillLine(e, line)).map(e => e.position).filter(Boolean));
                 const list = deptPositions.filter(p => used.has(p));
                 return list.length ? list : deptPositions;
             }, [employees, dept, line, deptPositions]);
@@ -2586,7 +2608,7 @@
                 const set = new Set();
                 const inDept = (d) => deptForLines === 'ALL' || d === deptForLines;
                 Object.entries(subDepartments || {}).forEach(([d, list]) => { if (inDept(d)) (list || []).forEach(l => set.add(skillLine(l))); });
-                activeEmployees.forEach(e => { if (inDept(e.dept)) set.add(skillLine(e.subDept)); });
+                activeEmployees.forEach(e => { if (inDept(e.dept)) employeeSkillLines(e).forEach(l => set.add(l)); });
                 (data.catalog || []).forEach(s => { if (s.active !== false && s.subDept && inDept(s.dept)) set.add(s.subDept); });
                 const hasNoLine = set.has('');
                 set.delete('');
@@ -2594,7 +2616,7 @@
                 if (hasNoLine) list.push('');
                 return list;
             }, [subDepartments, activeEmployees, data.catalog, deptForLines]);
-            const workLine = line !== 'ALL' && lineOptions.includes(line) ? line : (lineOptions.find(l => activeEmployees.some(e => e.dept === workDept && skillLine(e.subDept) === l)) ?? lineOptions[0] ?? '');
+            const workLine = line !== 'ALL' && lineOptions.includes(line) ? line : (lineOptions.find(l => activeEmployees.some(e => e.dept === workDept && inSkillLine(e, l))) ?? lineOptions[0] ?? '');
             const stats = useMemo(() => computeSkillStats(employees, data, { dept, line, position, shift }), [employees, data, dept, line, position, shift]);
             const hasCatalog = (data.catalog || []).some(s => s.active !== false && (dept === 'ALL' || skillSameText(s.dept, dept)));
             const canEdit = canEditSkillMatrix(currentUser, workDept);
@@ -3877,6 +3899,7 @@
                     position: String(data?.position ?? '').trim(),
                     subDept: String(data?.subDept ?? '').trim()
                 };
+                if (Array.isArray(cleanData.extraSubDepts)) cleanData.extraSubDepts = [...new Set(cleanData.extraSubDepts.map(item => String(item || '').trim()).filter(item => item && item !== cleanData.subDept))];
                 delete cleanData.isNew;
                 data = cleanData;
                 // 1. Validation: ID Required
