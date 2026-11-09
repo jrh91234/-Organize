@@ -2429,13 +2429,19 @@
                 const list = used.length ? used : positions;
                 return list.filter(p => getPositionRank(p) <= 3).sort((a, b) => getPositionRank(a) - getPositionRank(b) || a.localeCompare(b));
             }, [employees, dept, positions]);
+            // A line's own skills only matter for the people working on that line, so its table shows only their positions.
+            const linePositions = useMemo(() => {
+                const used = new Set(employees.filter(e => !isResignedEmployee(e) && e.dept === dept && skillLine(e.subDept) === line).map(e => e.position).filter(Boolean));
+                const list = deptPositions.filter(p => used.has(p));
+                return list.length ? list : deptPositions;
+            }, [employees, dept, line, deptPositions]);
             const update = (setter) => (index, patch) => { setter(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s)); setDirty(true); };
             const move = (setter) => (index, delta) => { setter(prev => { const next = [...prev]; const target = index + delta; if (target < 0 || target >= next.length) return prev; [next[index], next[target]] = [next[target], next[index]]; return next; }); setDirty(true); };
             const remove = (setter) => (index) => { setter(prev => prev.filter((_, i) => i !== index)); setDirty(true); };
-            const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', code: '', name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', deptPositions) }]); setDirty(true); };
+            const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', code: '', name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', forLine ? linePositions : deptPositions) }]); setDirty(true); };
             const addSamples = () => {
                 const names = new Set([...lineSkills, ...sharedSkills].map(s => s.name.toLowerCase()));
-                if (line) setLineSkills(prev => [...prev, ...makeSampleSkills(deptPositions, true).filter(s => !names.has(s.name.toLowerCase()))]);
+                if (line) setLineSkills(prev => [...prev, ...makeSampleSkills(linePositions, true).filter(s => !names.has(s.name.toLowerCase()))]);
                 setSharedSkills(prev => [...prev, ...makeSampleSkills(deptPositions, false).filter(s => !names.has(s.name.toLowerCase()))]);
                 setDirty(true);
             };
@@ -2458,6 +2464,7 @@
             const input = 'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 disabled:border-transparent disabled:bg-transparent';
             const SkillTable = ({ title, hint, list, setter, forLine }) => {
                 const onUpdate = update(setter), onMove = move(setter), onRemove = remove(setter);
+                const cols = forLine ? linePositions : deptPositions;
                 const onSetColumn = (position, level) => { setter(prev => prev.map(s => ({ ...s, required: { ...(s.required || {}), [position]: level } }))); setDirty(true); };
                 return (
                     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -2470,7 +2477,7 @@
                                 <thead className="bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500">
                                     <tr>
                                         {['', 'หมวด', 'รหัส', 'ชื่อสถานี / ทักษะ', 'WI', 'Rev.', 'CC/SC', 'เป้า (คน)', 'ระดับเป้า'].map(h => <th key={h} className="cursor-default whitespace-nowrap px-2 py-2 font-bold hover:bg-gray-50">{h}</th>)}
-                                        {deptPositions.map(p => (
+                                        {cols.map(p => (
                                             <th key={p} className="cursor-default whitespace-nowrap px-2 py-2 text-center align-top font-bold text-violet-600 hover:bg-gray-50" title="ระดับที่ตำแหน่งนี้ต้องมี (– = ไม่บังคับ)">
                                                 <div>{p}</div>
                                                 {canEdit && list.length > 0 && (
@@ -2487,7 +2494,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {list.length === 0 && <tr><td colSpan={10 + deptPositions.length} className="px-4 py-6 text-center text-gray-400">ยังไม่มีรายการ</td></tr>}
+                                    {list.length === 0 && <tr><td colSpan={10 + cols.length} className="px-4 py-6 text-center text-gray-400">ยังไม่มีรายการ</td></tr>}
                                     {list.map((s, i) => (
                                         <tr key={s.id} className="border-t border-gray-100 align-middle">
                                             <td className="whitespace-nowrap px-1">{canEdit && <span className="flex flex-col"><button type="button" aria-label="เลื่อนขึ้น" onClick={() => onMove(i, -1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowUp size={12}/></button><button type="button" aria-label="เลื่อนลง" onClick={() => onMove(i, 1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowDown size={12}/></button></span>}</td>
@@ -2499,7 +2506,7 @@
                                             <td className="px-1"><select disabled={!canEdit} value={s.critical} onChange={e => onUpdate(i, { critical: e.target.value })} className={`${input} min-w-[76px] ${s.critical ? 'font-bold text-rose-600' : ''}`}><option value="">-</option><option value="CC">CC</option><option value="SC">SC</option></select></td>
                                             <td className="px-1"><input disabled={!canEdit} type="number" min="0" max="99" value={s.targetCount} onChange={e => onUpdate(i, { targetCount: e.target.value })} className={`${input} w-14 text-center`}/></td>
                                             <td className="px-1"><select disabled={!canEdit} value={s.targetLevel} onChange={e => onUpdate(i, { targetLevel: Number(e.target.value) })} className={`${input} w-14`}>{[1, 2, 3, 4].map(l => <option key={l} value={l}>L{l}</option>)}</select></td>
-                                            {deptPositions.map(p => (
+                                            {cols.map(p => (
                                                 <td key={p} className="px-1 text-center">
                                                     <select disabled={!canEdit} value={s.required?.[p] || ''} onChange={e => onUpdate(i, { required: { ...(s.required || {}), [p]: e.target.value ? Number(e.target.value) : undefined } })} className={`${input} w-14 text-center ${s.required?.[p] ? 'font-bold text-violet-700' : 'text-gray-300'}`}>
                                                         <option value="">–</option>{[1, 2, 3, 4].map(l => <option key={l} value={l}>L{l}</option>)}
@@ -2526,7 +2533,7 @@
                         {canEdit && <button type="button" onClick={addSamples} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">+ ใส่ชุดตัวอย่าง</button>}
                     </div>
                     {message && <div className={`rounded-xl border px-4 py-2 text-sm font-semibold ${message.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div>}
-                    {line && SkillTable({ title: `ทักษะเฉพาะไลน์ ${line}`, hint: 'สถานี / เครื่องจักร / Quality ของไลน์นี้', list: lineSkills, setter: setLineSkills, forLine: true })}
+                    {line && SkillTable({ title: `ทักษะเฉพาะไลน์ ${line}`, hint: `สถานี / เครื่องจักร / Quality ของไลน์นี้ · แสดงเฉพาะตำแหน่งของคนในไลน์ ${line}`, list: lineSkills, setter: setLineSkills, forLine: true })}
                     {SkillTable({ title: `ทักษะร่วมทั้งแผนก ${dept}`, hint: 'แสดงในทุกไลน์ของแผนกนี้ เช่น LOTO, PPE, 5S, การจัดการ NG', list: sharedSkills, setter: setSharedSkills, forLine: false })}
                     {canEdit && dirty && (
                         <div className="sticky bottom-3 z-30 mx-auto flex w-fit items-center gap-3 rounded-2xl border border-violet-200 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
