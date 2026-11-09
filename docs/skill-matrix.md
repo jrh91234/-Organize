@@ -1,0 +1,45 @@
+# Skill Matrix
+
+เมนู **Skill Matrix** (ไอคอนหมวกบัณฑิต บนแถบเมนู) เป็นบอร์ดแสดงว่าพนักงานแต่ละคนอยู่ระดับทักษะไหน ตามแนว ISO 9001 / IATF 16949
+ตอนนี้ Engineer / Supervisor / Admin ของแผนกเป็นคนใส่ระดับเอง ส่วนการสอบและการเทรนอยู่ที่ระบบอื่น ซึ่งอนาคตจะส่งระดับเข้ามาที่นี่
+
+## หน้าจอ
+
+| แท็บ | ใช้ทำอะไร |
+|---|---|
+| Dashboard | KPI, Top 5 Skill Gaps, Gap ตามตำแหน่ง / ไลน์, Training Need, Recent Skill Improvement, Station Coverage 3×3 |
+| Matrix | ตารางต่อไลน์ (วงกลม 4 ส่วน ระดับ 0–4) พร้อมหัวเอกสาร, แถวสรุปเป้า / ปล่อยงานได้ต่อกะ, ส่งออก Excel และ PDF A3 |
+| ตั้งค่าทักษะ | รายการสถานี / ทักษะต่อไลน์ และทักษะร่วมทั้งแผนก, CC/SC, WI + Rev., เป้าจำนวนคน, ระดับที่แต่ละตำแหน่งต้องมี |
+
+- **Skill Gap** = ระดับที่ตำแหน่งต้องมี − ระดับจริง (ช่องที่ยังไม่ประเมินนับเป็น 0)
+- **ปล่อยงานได้** = ระดับ ≥ 2
+- **Coverage 3×3** = จำนวนคนที่ถึง "ระดับเป้า" ของสถานี เทียบกับ "เป้า (คน)"
+
+## ข้อมูลใน Google Sheets
+
+Backend จะสร้างชีตเหล่านี้ให้เองในการใช้งานครั้งแรก
+
+| ชีต | คอลัมน์ |
+|---|---|
+| `SkillCatalog` | SkillId, Dept, SubDept (ว่าง = ใช้ทั้งแผนก), Category, Code, Name, WI, WIRev, Critical (CC/SC), TargetCount, TargetLevel, Required (JSON `{ "Operator": 2 }`), Order, Active, UpdatedAt, UpdatedBy |
+| `SkillLevels` | EmployeeId, SkillId, Level (0–4), AssessedDate, Source (`manual` / `system`), Note, UpdatedAt, UpdatedBy |
+| `SkillLevelHistory` | Timestamp, EmployeeId, SkillId, OldLevel, NewLevel, AssessedDate, Source, By |
+| `SkillMatrixDocs` | Dept, SubDept, Title, DocNo, Rev, EffectiveDate, PreparedBy, CheckedBy, ApprovedBy, ReviewMonths, LastReviewDate, UpdatedAt, UpdatedBy |
+
+ทักษะที่ลบจากหน้าตั้งค่าจะถูกตั้ง `Active = FALSE` แต่ระดับที่บันทึกไว้ยังเก็บอยู่
+
+## API (Apps Script `doPost`)
+
+| action | สิทธิ์ | payload |
+|---|---|---|
+| `getSkillMatrix` | ทุกคน | – |
+| `saveSkillLevels` | engineer / supervisor ของแผนกพนักงาน, admin | `{ items: [{ employeeId, skillId, level (0–4 หรือ null = ล้าง) }], assessedDate }` |
+| `saveSkillCatalog` | engineer / supervisor ของแผนก, admin | `{ dept, scopes: [{ subDept, skills: [...] }] }` (แต่ละ scope ถูกแทนที่ทั้งชุด) |
+| `saveSkillMatrixDoc` | engineer / supervisor ของแผนก, admin | `{ doc: { dept, subDept, title, docNo, rev, ... } }` |
+
+action ที่บันทึกข้อมูลต้องส่ง `attendanceToken` (ได้จากการ login) และ backend เป็นคนตรวจสิทธิ์
+
+## เชื่อมกับระบบสอบ / เทรนนิ่งในอนาคต
+
+ระบบนั้นส่งข้อมูลมาเป็น **รหัสพนักงาน + SkillId + ระดับ** ได้เลย (รหัสพนักงานต้องตรงกับ `id` ในผังองค์กร) แถวที่มาจากระบบให้ใช้ `Source = system` หน้า Matrix จะแสดงจุดสีฟ้าที่ช่องนั้น
+สิ่งที่ต้องทำเพิ่มคือสร้าง action ใหม่ที่ยืนยันตัวตนด้วย API key ของระบบนั้น แทน `attendanceToken` ของผู้ใช้
