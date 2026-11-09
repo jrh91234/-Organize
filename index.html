@@ -480,6 +480,7 @@
             Alert: (p)=><IconBase {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></IconBase>, Paint: (p)=><IconBase {...p}><path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/><path d="m15 6.5 3 3"/><path d="M6 20h1a2 2 0 0 0 2-2V8a2 2 0 0 0-4 0v10a2 2 0 0 0 1 2Z"/></IconBase>, 
             FileText: (p)=><IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></IconBase>,
             FileSpreadsheet: (p)=><IconBase {...p}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></IconBase>, Chart: (p)=><IconBase {...p}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></IconBase>, 
+            GraduationCap: (p)=><IconBase {...p}><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2.5 9 2.5 12 0v-5"/><path d="M22 10v6"/></IconBase>, Target: (p)=><IconBase {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></IconBase>, 
             Image: (p)=><IconBase {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></IconBase>, Briefcase: (p)=><IconBase {...p}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></IconBase>, 
             CheckSquare: (p)=><IconBase {...p}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></IconBase>, Type: (p)=><IconBase {...p}><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></IconBase>, 
             Link: (p)=><IconBase {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></IconBase>, Search: (p)=><IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></IconBase>, 
@@ -1610,6 +1611,1019 @@
             );
         };
 
+        // ---- Skill Matrix (ISO 9001 / IATF 16949) — display board; levels are typed in here until the training system can push them ----
+        const SKILL_LEVEL_INFO = [
+            { level: 0, th: 'ยังไม่ได้อบรม', en: 'Not trained', criteria: 'ยังไม่ผ่านการอบรม WI ของสถานีนี้' },
+            { level: 1, th: 'อบรมแล้ว ทำงานได้ภายใต้การดูแล', en: 'Trained – under supervision', criteria: 'ผ่านการอบรม WI / OJT แล้ว ต้องมีพี่เลี้ยงดูแลขณะทำงาน' },
+            { level: 2, th: 'ทำงานได้เองตามมาตรฐาน', en: 'Works independently', criteria: 'ผ่านการประเมิน ทำงานได้เองตาม WI ไม่มี NG จากการทำงาน · ปล่อยงานได้' },
+            { level: 3, th: 'ทำงานได้เอง แก้ปัญหาได้', en: 'Solves problems', criteria: 'แก้ปัญหาเบื้องต้นได้ เข้าใจ Reaction plan / จุด CC-SC ของสถานี' },
+            { level: 4, th: 'สอนผู้อื่นได้ (Trainer)', en: 'Trainer', criteria: 'สอนและประเมินผู้อื่นได้ เป็น Trainer ของสถานี' }
+        ];
+        const SKILL_LEVEL_COLORS = ['#94a3b8', '#f59e0b', '#0ea5e9', '#10b981', '#6366f1'];
+        const SKILL_RELEASE_LEVEL = 2;
+        const SKILL_CATEGORIES = [
+            { key: 'process', label: 'Station / Process', head: 'bg-blue-600', soft: 'bg-blue-50', text: 'text-blue-700', hex: '2563EB' },
+            { key: 'machine', label: 'Machine / Tool', head: 'bg-violet-600', soft: 'bg-violet-50', text: 'text-violet-700', hex: '7C3AED' },
+            { key: 'quality', label: 'Quality', head: 'bg-emerald-600', soft: 'bg-emerald-50', text: 'text-emerald-700', hex: '059669' },
+            { key: 'safety', label: 'Safety', head: 'bg-amber-500', soft: 'bg-amber-50', text: 'text-amber-700', hex: 'F59E0B' },
+            { key: 'general', label: 'General', head: 'bg-slate-500', soft: 'bg-slate-50', text: 'text-slate-700', hex: '64748B' }
+        ];
+        const SKILL_CHART_COLORS = ['#ef4444', '#f97316', '#facc15', '#60a5fa', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#a3a3a3'];
+        const SKILL_NO_LINE_LABEL = 'ไม่ระบุไลน์';
+        const skillCategory = (key) => SKILL_CATEGORIES.find(c => c.key === key) || SKILL_CATEGORIES[0];
+        const skillCategoryIndex = (key) => Math.max(0, SKILL_CATEGORIES.findIndex(c => c.key === key));
+        const skillKey = (employeeId, skillId) => `${employeeId}|${skillId}`;
+        const skillLine = (value) => String(value || '').trim();
+        const skillSameText = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+        const newSkillId = () => `SK-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
+        const compareSkills = (a, b) => skillCategoryIndex(a.category) - skillCategoryIndex(b.category) || (a.subDept === '' ? 1 : 0) - (b.subDept === '' ? 1 : 0) || (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name));
+        // Skills that apply to one line: that line's own skills plus the department-wide ones (subDept '').
+        const skillsForLine = (catalog, dept, line) => (catalog || []).filter(s => s.active !== false && skillSameText(s.dept, dept) && (s.subDept === '' || s.subDept === line)).sort(compareSkills);
+        const requiredSkillLevel = (skill, position) => {
+            const required = skill?.required || {};
+            const key = Object.keys(required).find(k => skillSameText(k, position));
+            return key ? Number(required[key]) || 0 : 0;
+        };
+        const canEditSkillMatrix = (currentUser, dept) => {
+            if (!currentUser || !dept || dept === 'ALL') return false;
+            if (currentUser.role === 'admin') return true;
+            if (!['engineer', 'supervisor'].includes(currentUser.role)) return false;
+            return currentUser.dept === 'ALL' || skillSameText(currentUser.dept, dept);
+        };
+        const addMonthsToDay = (day, months) => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return '';
+            const [y, m, d] = day.split('-').map(Number);
+            const date = new Date(y, m - 1 + Number(months || 0), d);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        };
+        const SKILL_SAMPLE = [
+            { category: 'process', name: 'Lug assembly', code: 'P01', wi: 'WI-ASY-001', critical: 'CC', line: true },
+            { category: 'process', name: 'Screw torque', code: 'P02', wi: 'WI-ASY-002', critical: 'SC', line: true },
+            { category: 'process', name: 'Coil winding', code: 'P03', wi: 'WI-ASY-003', critical: '', line: true },
+            { category: 'process', name: 'Soldering', code: 'P04', wi: 'WI-ASY-004', critical: '', line: true },
+            { category: 'process', name: 'Final test', code: 'P05', wi: 'WI-ASY-005', critical: 'CC', line: true },
+            { category: 'process', name: 'Packing', code: 'P06', wi: 'WI-ASY-006', critical: '', line: true },
+            { category: 'machine', name: 'Electric screwdriver', code: 'M01', wi: 'WI-MC-001', critical: '', line: true },
+            { category: 'machine', name: 'Torque meter', code: 'M02', wi: 'WI-MC-002', critical: '', line: true },
+            { category: 'machine', name: 'Winding M/C', code: 'M03', wi: 'WI-MC-003', critical: '', line: true },
+            { category: 'quality', name: 'First piece inspection', code: 'Q01', wi: 'WI-QC-001', critical: '', line: true },
+            { category: 'quality', name: 'Visual inspection standard', code: 'Q02', wi: 'WI-QC-002', critical: '', line: true },
+            { category: 'quality', name: 'Gauge usage', code: 'Q03', wi: 'WI-QC-003', critical: '', line: true },
+            { category: 'quality', name: 'Poka-yoke check', code: 'Q04', wi: 'WI-QC-004', critical: '', line: true },
+            { category: 'safety', name: 'LOTO', code: 'S01', wi: 'WI-SF-001', critical: '', line: false },
+            { category: 'safety', name: 'PPE', code: 'S02', wi: 'WI-SF-002', critical: '', line: false },
+            { category: 'safety', name: 'Chemical handling', code: 'S03', wi: 'WI-SF-003', critical: '', line: false },
+            { category: 'general', name: '5S', code: 'G01', wi: '', critical: '', line: false },
+            { category: 'general', name: 'NG handling', code: 'G02', wi: '', critical: '', line: false },
+            { category: 'general', name: 'Reaction plan', code: 'G03', wi: '', critical: '', line: false }
+        ];
+        const sampleRequired = (category, positions) => {
+            const required = {};
+            positions.forEach(position => {
+                const p = String(position).toLowerCase();
+                const rank = getPositionRank(position);
+                if (rank >= 3) return; // Engineer and above are not rated on the line matrix by default.
+                const isLeader = p.includes('leader');
+                const isTech = p.includes('tech');
+                if (category === 'process' || category === 'quality') required[position] = isLeader || isTech ? 3 : 2;
+                else if (category === 'machine') required[position] = isTech ? 3 : 2;
+                else required[position] = 2;
+            });
+            return required;
+        };
+        const makeSampleSkills = (positions, forLine) => SKILL_SAMPLE.filter(s => s.line === forLine).map((s, index) => ({
+            id: newSkillId() + index, category: s.category, code: s.code, name: s.name, wi: s.wi, wiRev: s.wi ? '00' : '', critical: s.critical,
+            targetCount: forLine && s.category === 'process' ? 3 : 0, targetLevel: 3, required: sampleRequired(s.category, positions)
+        }));
+
+        const SkillPie = ({ level, size = 22, color, dashed = false }) => {
+            const c = size / 2, r = size / 2 - 1.5;
+            const fill = color || SKILL_LEVEL_COLORS[level] || SKILL_LEVEL_COLORS[0];
+            const point = (angle) => `${c + r * Math.cos(angle)},${c + r * Math.sin(angle)}`;
+            const quarter = (q) => { const a0 = -Math.PI / 2 + q * Math.PI / 2; return `M${c},${c} L${point(a0)} A${r},${r} 0 0 1 ${point(a0 + Math.PI / 2)} Z`; };
+            const filled = level === null || level === undefined ? 0 : Math.max(0, Math.min(4, level));
+            return (
+                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="shrink-0">
+                    <circle cx={c} cy={c} r={r} fill="#ffffff"/>
+                    {filled === 4 ? <circle cx={c} cy={c} r={r} fill={fill}/> : [0, 1, 2, 3].slice(0, filled).map(q => <path key={q} d={quarter(q)} fill={fill}/>)}
+                    <line x1={c} y1={c - r} x2={c} y2={c + r} stroke={filled === 4 ? '#ffffff' : '#cbd5e1'} strokeWidth="0.8" opacity={filled === 4 ? 0.5 : 1}/>
+                    <line x1={c - r} y1={c} x2={c + r} y2={c} stroke={filled === 4 ? '#ffffff' : '#cbd5e1'} strokeWidth="0.8" opacity={filled === 4 ? 0.5 : 1}/>
+                    <circle cx={c} cy={c} r={r} fill="none" stroke={level === null || level === undefined ? (dashed ? '#f43f5e' : '#e2e8f0') : '#475569'} strokeWidth="1.2" strokeDasharray={dashed && (level === null || level === undefined) ? '2 2' : undefined}/>
+                </svg>
+            );
+        };
+
+        const SkillAvatar = ({ employee, size = 32 }) => {
+            const [failed, setFailed] = useState(false);
+            const initials = String(employee?.name || '?').replace(/^(mr|mrs|ms|miss|นาย|นาง|นางสาว)\.?\s*/i, '').slice(0, 2).toUpperCase();
+            if (!employee?.image || failed) return <div className="flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-blue-100 font-bold text-violet-700" style={{ width: size, height: size, fontSize: size * 0.36 }}>{initials}</div>;
+            return <img src={formatDriveUrl(employee.image)} alt="" onError={() => setFailed(true)} referrerPolicy="no-referrer" className="shrink-0 rounded-full object-cover ring-2 ring-white" style={{ width: size, height: size }}/>;
+        };
+
+        // Everything the dashboard shows, from the employee list + catalog + levels, under the chosen filters.
+        const computeSkillStats = (employees, data, { dept, line, position, shift }) => {
+            const catalog = data.catalog || [];
+            const levelMap = new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l]));
+            const inDept = (e) => dept === 'ALL' || e.dept === dept;
+            const active = employees.filter(e => !isResignedEmployee(e) && inDept(e));
+            const inLine = active.filter(e => line === 'ALL' || skillLine(e.subDept) === line);
+            const people = inLine.filter(e => (position === 'ALL' || e.position === position) && (shift === 'ALL' || (e.shift || '-') === shift));
+            const skillsInScope = new Map();
+            const topGaps = new Map(), byPosition = new Map(), byLine = new Map();
+            const levelCounts = [0, 0, 0, 0, 0];
+            let unassessed = 0, multiSkilled = 0;
+            const rows = people.map(emp => {
+                const skills = skillsForLine(catalog, emp.dept, skillLine(emp.subDept));
+                let gapPoints = 0, gapSkills = 0, stations = 0, hasRequirement = false;
+                skills.forEach(skill => {
+                    skillsInScope.set(skill.id, skill);
+                    const rec = levelMap.get(skillKey(emp.id, skill.id));
+                    const level = rec ? rec.level : null;
+                    const req = requiredSkillLevel(skill, emp.position);
+                    if (req > 0) hasRequirement = true;
+                    if (level === null) { if (req > 0) unassessed++; } else levelCounts[level]++;
+                    if (skill.category === 'process' && (level ?? -1) >= 3) stations++;
+                    const gap = req > 0 ? Math.max(0, req - (level ?? 0)) : 0;
+                    if (gap > 0) {
+                        gapPoints += gap; gapSkills++;
+                        const t = topGaps.get(skill.name) || { name: skill.name, count: 0, critical: skill.critical };
+                        t.count++; topGaps.set(skill.name, t);
+                    }
+                });
+                if (stations >= 3) multiSkilled++;
+                const pos = emp.position || '-';
+                const p = byPosition.get(pos) || { name: pos, sum: 0, n: 0, required: false };
+                p.sum += gapPoints; p.n++; if (hasRequirement) p.required = true; byPosition.set(pos, p);
+                if (gapSkills > 0) {
+                    const lineName = `${dept === 'ALL' ? `${emp.dept} / ` : ''}${skillLine(emp.subDept) || SKILL_NO_LINE_LABEL}`;
+                    byLine.set(lineName, (byLine.get(lineName) || 0) + 1);
+                }
+                return { emp, gapPoints, gapSkills, stations };
+            });
+            // Station coverage (3x3): per line, how many people are at the target level and how many can be released per shift.
+            const coverage = [];
+            const lineGroups = new Map();
+            inLine.forEach(e => { const k = `${e.dept}\u0000${skillLine(e.subDept)}`; if (!lineGroups.has(k)) lineGroups.set(k, []); lineGroups.get(k).push(e); });
+            lineGroups.forEach((members, k) => {
+                const [d, l] = k.split('\u0000');
+                skillsForLine(catalog, d, l).filter(s => s.targetCount > 0).forEach(skill => {
+                    const levelOf = (e) => levelMap.get(skillKey(e.id, skill.id))?.level ?? -1;
+                    const qualified = members.filter(e => levelOf(e) >= (skill.targetLevel || 3)).length;
+                    const release = (s) => members.filter(e => (e.shift || '') === s && levelOf(e) >= SKILL_RELEASE_LEVEL).length;
+                    const trainers = members.filter(e => levelOf(e) >= 4).length;
+                    coverage.push({ skill, dept: d, line: l, qualified, target: skill.targetCount, shortage: Math.max(0, skill.targetCount - qualified), releaseA: release('A'), releaseB: release('B'), trainers });
+                });
+            });
+            coverage.sort((a, b) => b.shortage - a.shortage || (b.skill.critical ? 1 : 0) - (a.skill.critical ? 1 : 0) || a.line.localeCompare(b.line) || compareSkills(a.skill, b.skill));
+            const peopleIds = new Set(people.map(e => e.id));
+            const employeeById = new Map(employees.map(e => [e.id, e]));
+            const skillById = new Map(catalog.map(s => [s.id, s]));
+            const recent = (data.history || [])
+                .filter(h => h.newLevel !== null && h.newLevel > (h.oldLevel ?? 0) && peopleIds.has(h.employeeId) && skillById.has(h.skillId))
+                .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+                .slice(0, 6)
+                .map(h => ({ ...h, employee: employeeById.get(h.employeeId), skill: skillById.get(h.skillId), delta: h.newLevel - (h.oldLevel ?? 0) }));
+            const withGap = rows.filter(r => r.gapSkills > 0).length;
+            const skills = [...skillsInScope.values()];
+            return {
+                total: rows.length, withGap, meet: rows.length - withGap,
+                skillsTracked: skills.length, criticalCount: skills.filter(s => s.critical).length,
+                topGaps: [...topGaps.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+                byPosition: [...byPosition.values()].filter(p => p.n > 0 && p.required).map(p => ({ name: p.name, value: p.sum / p.n, n: p.n })).sort((a, b) => b.value - a.value).slice(0, 6),
+                byLine: [...byLine.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
+                coverage, shortStations: coverage.filter(c => c.shortage > 0).length,
+                trainingNeed: coverage.filter(c => c.shortage > 0).slice(0, 5),
+                recent, levelCounts, unassessed, multiSkilled,
+                lineCount: lineGroups.size
+            };
+        };
+
+        const SkillDonut = ({ items, total, label }) => {
+            const size = 150, stroke = 26, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+            const sum = items.reduce((s, i) => s + i.count, 0);
+            let offset = 0;
+            return (
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="relative" style={{ width: size, height: size }}>
+                        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+                            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke}/>
+                            {sum > 0 && items.map((item, i) => {
+                                const len = (item.count / sum) * circ;
+                                const seg = <circle key={item.name} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={SKILL_CHART_COLORS[i % SKILL_CHART_COLORS.length]} strokeWidth={stroke} strokeDasharray={`${Math.max(0, len - 2)} ${circ}`} strokeDashoffset={-offset}><title>{`${item.name}: ${item.count}`}</title></circle>;
+                                offset += len;
+                                return seg;
+                            })}
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-[11px] font-semibold text-gray-500">รวม</span>
+                            <span className="text-3xl font-extrabold leading-none text-gray-900">{total}</span>
+                            <span className="text-[11px] font-semibold text-gray-500">{label}</span>
+                        </div>
+                    </div>
+                    <ul className="min-w-0 flex-1 space-y-1.5 text-xs">
+                        {items.length === 0 && <li className="text-gray-400">ไม่มี Gap 🎉</li>}
+                        {items.slice(0, 8).map((item, i) => (
+                            <li key={item.name} className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: SKILL_CHART_COLORS[i % SKILL_CHART_COLORS.length] }}></span>
+                                <span className="min-w-0 flex-1 truncate text-gray-700">{item.name}</span>
+                                <span className="font-bold text-gray-900">{Math.round((item.count / Math.max(1, sum)) * 100)}%</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            );
+        };
+
+        const SkillCard = ({ icon, title, children, action, className = '' }) => (
+            <div className={`rounded-2xl border border-gray-100 bg-white p-4 shadow-sm ${className}`}>
+                <div className="mb-3 flex items-center gap-2">
+                    {icon && <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white">{icon}</span>}
+                    <h3 className="flex-1 text-sm font-bold text-gray-800">{title}</h3>
+                    {action}
+                </div>
+                {children}
+            </div>
+        );
+
+        const SkillDashboard = ({ stats, employees, onOpenMatrix, onOpenSettings, hasCatalog, canEdit }) => {
+            const pct = (n) => stats.total ? Math.round((n / stats.total) * 100) : 0;
+            if (!hasCatalog) return (
+                <div className="flex flex-col items-center rounded-3xl border border-dashed border-violet-200 bg-white px-6 py-14 text-center shadow-sm">
+                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg"><Icons.GraduationCap size={30}/></div>
+                    <h2 className="text-lg font-bold text-gray-900">ยังไม่มีรายการทักษะของแผนกนี้</h2>
+                    <p className="mt-1 max-w-md text-sm text-gray-500">เริ่มจากกำหนดสถานี / ทักษะ และระดับที่แต่ละตำแหน่งต้องมี แล้วจึงใส่ระดับของพนักงานในหน้า Matrix</p>
+                    <button type="button" onClick={onOpenSettings} className="mt-5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-violet-700">{canEdit ? 'ตั้งค่ารายการทักษะ' : 'ดูหน้าตั้งค่าทักษะ'}</button>
+                </div>
+            );
+            const kpis = [
+                { label: 'พนักงานทั้งหมด', value: stats.total, unit: 'คน', hint: `${stats.lineCount} ไลน์`, icon: <Icons.Users size={22}/>, tone: 'from-blue-50 to-blue-100/60 text-blue-700', iconTone: 'bg-blue-600' },
+                { label: 'พนักงานที่มี Skill Gap', value: stats.withGap, unit: `คน (${pct(stats.withGap)}%)`, hint: stats.unassessed ? `ยังไม่ประเมิน ${stats.unassessed} ช่อง` : 'ต่ำกว่าระดับที่ตำแหน่งต้องมี', icon: <Icons.Alert size={22}/>, tone: 'from-rose-50 to-rose-100/60 text-rose-600', iconTone: 'bg-rose-500' },
+                { label: 'ครบตาม Requirement', value: stats.meet, unit: `คน (${pct(stats.meet)}%)`, hint: `Multi-skill ≥3 สถานี: ${stats.multiSkilled} คน`, icon: <Icons.Check size={22}/>, tone: 'from-emerald-50 to-emerald-100/60 text-emerald-700', iconTone: 'bg-emerald-500' },
+                { label: 'ทักษะที่ติดตาม', value: stats.skillsTracked, unit: 'ทักษะ', hint: `CC/SC ${stats.criticalCount} · สถานีต่ำกว่าเป้า ${stats.shortStations}`, icon: <Icons.Target size={22}/>, tone: 'from-violet-50 to-violet-100/60 text-violet-700', iconTone: 'bg-violet-600' }
+            ];
+            const maxGap = Math.max(1, ...stats.topGaps.map(g => g.count));
+            const maxPos = Math.max(1, ...stats.byPosition.map(p => p.value));
+            const levelTotal = stats.levelCounts.reduce((a, b) => a + b, 0);
+            return (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        {kpis.map(k => (
+                            <div key={k.label} className={`rounded-2xl border border-white bg-gradient-to-br p-4 shadow-sm ${k.tone}`}>
+                                <div className="flex items-start gap-3">
+                                    <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow ${k.iconTone}`}>{k.icon}</span>
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-gray-600">{k.label}</div>
+                                        <div className="text-3xl font-extrabold leading-tight">{k.value}</div>
+                                        <div className="text-xs font-semibold">{k.unit}</div>
+                                    </div>
+                                </div>
+                                <div className="mt-2 truncate text-[11px] text-gray-500">{k.hint}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <SkillCard icon={<Icons.Alert size={15}/>} title="Top 5 Skill Gaps (จำนวนคน)">
+                            {stats.topGaps.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">ไม่มี Skill Gap</p> : stats.topGaps.map((g, i) => (
+                                <div key={g.name} className="mb-2.5 flex items-center gap-3">
+                                    <span className="w-40 shrink-0 truncate text-xs font-medium text-gray-700" title={g.name}>{g.name}{g.critical && <span className="ml-1 rounded bg-rose-600 px-1 text-[9px] font-bold text-white">{g.critical}</span>}</span>
+                                    <div className="h-4 flex-1 overflow-hidden rounded-md bg-gray-100"><div className="h-full rounded-md transition-all" style={{ width: `${(g.count / maxGap) * 100}%`, background: SKILL_CHART_COLORS[i] }}></div></div>
+                                    <span className="w-8 text-right text-sm font-bold text-gray-900">{g.count}</span>
+                                </div>
+                            ))}
+                        </SkillCard>
+                        <SkillCard icon={<Icons.Chart size={15}/>} title="Skill Gap by Position (ค่าเฉลี่ยระดับที่ขาดต่อคน)">
+                            {stats.byPosition.every(p => p.value === 0) ? <p className="py-6 text-center text-sm text-gray-400">ทุกตำแหน่งครบตาม Requirement</p> : (
+                                <div className="flex h-44 items-end gap-3 px-2">
+                                    {stats.byPosition.map((p, i) => (
+                                        <div key={p.name} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+                                            <span className="text-sm font-bold text-gray-800">{p.value.toFixed(1)}</span>
+                                            <div className="w-full max-w-[56px] rounded-t-lg" style={{ height: `${(p.value / maxPos) * 78}%`, minHeight: p.value ? 4 : 0, background: SKILL_CHART_COLORS[[0, 1, 4, 5, 3, 6][i] ?? i] }}></div>
+                                            <span className="mt-1 w-full truncate text-center text-[11px] text-gray-600" title={`${p.name} (${p.n} คน)`}>{p.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </SkillCard>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                        <SkillCard icon={<Icons.Grid size={15}/>} title="Skill Gap by Line (คนที่มี Gap)">
+                            <SkillDonut items={stats.byLine} total={stats.withGap} label="คน"/>
+                        </SkillCard>
+                        <SkillCard icon={<Icons.Target size={15}/>} title="Training Need (สถานีที่คนไม่ถึงเป้า)">
+                            {stats.trainingNeed.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">ทุกสถานีมีคนถึงเป้าแล้ว</p> : (
+                                <ul className="divide-y divide-gray-100">
+                                    {stats.trainingNeed.map(c => (
+                                        <li key={`${c.dept}|${c.line}|${c.skill.id}`} className="flex items-center gap-2 py-2 text-xs">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate font-semibold text-gray-800">{c.skill.name}{c.skill.critical && <span className="ml-1 rounded bg-rose-600 px-1 text-[9px] font-bold text-white">{c.skill.critical}</span>}</div>
+                                                <div className="truncate text-[11px] text-gray-400">{c.line || SKILL_NO_LINE_LABEL} · มี L{c.skill.targetLevel}+ {c.qualified}/{c.target} คน</div>
+                                            </div>
+                                            <span className="rounded-full bg-rose-50 px-2 py-0.5 font-bold text-rose-600">ขาด {c.shortage}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </SkillCard>
+                        <SkillCard icon={<Icons.ArrowUp size={15}/>} title="Recent Skill Improvement">
+                            {stats.recent.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">ยังไม่มีการเลื่อนระดับใน 6 เดือนล่าสุด</p> : (
+                                <ul className="space-y-2">
+                                    {stats.recent.map(r => (
+                                        <li key={`${r.timestamp}|${r.employeeId}|${r.skillId}`} className="flex items-center gap-2 text-xs">
+                                            <SkillAvatar employee={r.employee} size={30}/>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="truncate font-semibold text-gray-800">{r.employee?.name || r.employeeId}</div>
+                                                <div className="truncate text-[11px] text-gray-400">{r.skill.name} · L{r.oldLevel ?? 0} → L{r.newLevel} · {formatDate(r.assessedDate || r.timestamp)}</div>
+                                            </div>
+                                            <span className="font-extrabold text-emerald-600">+{r.delta}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </SkillCard>
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                        <SkillCard className="lg:col-span-2" icon={<Icons.Users size={15}/>} title={`Station Coverage 3×3 — คนที่ถึงเป้าต่อสถานี และคนที่ "ปล่อยงานได้" (L${SKILL_RELEASE_LEVEL}+) ต่อกะ`} action={<button type="button" onClick={onOpenMatrix} className="text-xs font-semibold text-violet-600 hover:underline">ดู Matrix ›</button>}>
+                            {stats.coverage.length === 0 ? <p className="py-6 text-center text-sm text-gray-400">ยังไม่ได้ตั้งเป้าจำนวนคนต่อสถานี (ตั้งได้ในหน้าตั้งค่าทักษะ)</p> : (
+                                <div className="max-h-80 overflow-auto">
+                                    <table className="min-w-full text-xs">
+                                        <thead className="sticky top-0 bg-white text-left text-[11px] text-gray-500"><tr>{['สถานี', 'ไลน์', 'ถึงเป้า', 'กะ A', 'กะ B', 'Trainer', 'สถานะ'].map(h => <th key={h} className="cursor-default px-2 py-1.5 font-bold hover:bg-white">{h}</th>)}</tr></thead>
+                                        <tbody>
+                                            {stats.coverage.map(c => {
+                                                const ratio = c.target ? c.qualified / c.target : 1;
+                                                const status = c.shortage === 0 ? ['ผ่าน', 'bg-emerald-100 text-emerald-700'] : ratio >= 0.5 ? ['เฝ้าระวัง', 'bg-amber-100 text-amber-700'] : ['เสี่ยง', 'bg-rose-100 text-rose-700'];
+                                                return (
+                                                    <tr key={`${c.dept}|${c.line}|${c.skill.id}`} className="border-t border-gray-100">
+                                                        <td className="px-2 py-1.5 font-semibold text-gray-800">{c.skill.name}{c.skill.critical && <span className="ml-1 rounded bg-rose-600 px-1 text-[9px] font-bold text-white">{c.skill.critical}</span>}</td>
+                                                        <td className="px-2 py-1.5 text-gray-500">{c.line || SKILL_NO_LINE_LABEL}</td>
+                                                        <td className="px-2 py-1.5"><div className="flex items-center gap-2"><div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-100"><div className={`h-full rounded-full ${c.shortage ? 'bg-rose-400' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, ratio * 100)}%` }}></div></div><span className="font-bold">{c.qualified}/{c.target}</span></div></td>
+                                                        <td className={`px-2 py-1.5 font-bold ${c.releaseA ? 'text-gray-800' : 'text-rose-500'}`}>{c.releaseA}</td>
+                                                        <td className={`px-2 py-1.5 font-bold ${c.releaseB ? 'text-gray-800' : 'text-rose-500'}`}>{c.releaseB}</td>
+                                                        <td className={`px-2 py-1.5 font-bold ${c.trainers ? 'text-indigo-600' : 'text-gray-300'}`}>{c.trainers}</td>
+                                                        <td className="px-2 py-1.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${status[1]}`}>{status[0]}</span></td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </SkillCard>
+                        <SkillCard icon={<Icons.Chart size={15}/>} title="สัดส่วนระดับทักษะ (ทุกช่องที่ประเมินแล้ว)">
+                            <div className="flex h-4 overflow-hidden rounded-full bg-gray-100">
+                                {stats.levelCounts.map((n, level) => n > 0 && <div key={level} style={{ width: `${(n / Math.max(1, levelTotal)) * 100}%`, background: SKILL_LEVEL_COLORS[level] }} title={`L${level}: ${n}`}></div>)}
+                            </div>
+                            <ul className="mt-3 space-y-1.5 text-xs">
+                                {SKILL_LEVEL_INFO.map(info => (
+                                    <li key={info.level} className="flex items-center gap-2">
+                                        <SkillPie level={info.level} size={18}/>
+                                        <span className="w-6 font-bold text-gray-700">L{info.level}</span>
+                                        <span className="min-w-0 flex-1 truncate text-gray-500">{info.th}</span>
+                                        <span className="font-bold text-gray-900">{stats.levelCounts[info.level]}</span>
+                                    </li>
+                                ))}
+                                <li className="flex items-center gap-2 border-t pt-1.5"><SkillPie level={null} size={18} dashed/><span className="min-w-0 flex-1 text-gray-500">ต้องมีแต่ยังไม่ประเมิน</span><span className="font-bold text-rose-500">{stats.unassessed}</span></li>
+                            </ul>
+                        </SkillCard>
+                    </div>
+                </div>
+            );
+        };
+
+        const SkillDocModal = ({ doc, onSave, onClose, saving }) => {
+            const [form, setForm] = useState(doc);
+            const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+            const field = (k, label, type = 'text') => (
+                <label className="block text-xs font-semibold text-gray-600">{label}
+                    <input type={type} value={form[k] ?? ''} onChange={e => set(k, e.target.value)} className="mt-1 w-full rounded-lg border p-2 text-sm font-normal text-gray-900 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"/>
+                </label>
+            );
+            return (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+                    <form className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); onSave(form); }}>
+                        <h3 className="mb-1 text-lg font-bold text-gray-900">หัวเอกสาร Skill Matrix</h3>
+                        <p className="mb-4 text-xs text-gray-500">{form.dept} / {form.subDept || SKILL_NO_LINE_LABEL} — เปลี่ยน WI หรือกระบวนการเมื่อไร ให้ขึ้น Rev. ใหม่และใส่วันที่ทบทวน</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">{field('title', 'ชื่อเอกสาร')}</div>
+                            {field('docNo', 'เลขที่เอกสาร')}
+                            {field('rev', 'Rev.')}
+                            {field('effectiveDate', 'วันที่มีผล', 'date')}
+                            <label className="block text-xs font-semibold text-gray-600">รอบการทบทวน
+                                <select value={form.reviewMonths} onChange={e => set('reviewMonths', Number(e.target.value))} className="mt-1 w-full rounded-lg border p-2 text-sm font-normal">{[1, 3, 6, 12].map(m => <option key={m} value={m}>ทุก {m} เดือน</option>)}</select>
+                            </label>
+                            {field('lastReviewDate', 'วันที่ทบทวนล่าสุด', 'date')}
+                            {field('preparedBy', 'ผู้จัดทำ')}
+                            {field('checkedBy', 'ผู้ตรวจสอบ')}
+                            {field('approvedBy', 'ผู้อนุมัติ')}
+                        </div>
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
+                            <button type="submit" disabled={saving} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+                        </div>
+                    </form>
+                </div>
+            );
+        };
+
+        const SkillLevelPicker = ({ employee, skill, current, required, onPick, onClose }) => (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+                <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="mb-4 flex items-center gap-3">
+                        <SkillAvatar employee={employee} size={44}/>
+                        <div className="min-w-0">
+                            <div className="truncate font-bold text-gray-900">{employee.name}</div>
+                            <div className="truncate text-xs text-gray-500">{employee.id} · {employee.position}</div>
+                            <div className="mt-0.5 truncate text-sm font-semibold text-violet-700">{skill.name}{skill.critical && <span className="ml-1 rounded bg-rose-600 px-1 text-[9px] font-bold text-white">{skill.critical}</span>}{required > 0 && <span className="ml-2 text-xs font-normal text-gray-500">ตำแหน่งนี้ต้องมี L{required}</span>}</div>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        {SKILL_LEVEL_INFO.map(info => (
+                            <button key={info.level} type="button" autoFocus={info.level === (current ?? 0)} onClick={() => onPick(info.level)} className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition hover:border-violet-300 hover:bg-violet-50 ${current === info.level ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-200' : 'border-gray-200'}`}>
+                                <SkillPie level={info.level} size={30}/>
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-bold text-gray-900">L{info.level} · {info.th}</div>
+                                    <div className="truncate text-[11px] text-gray-500">{info.criteria}</div>
+                                </div>
+                                {required > 0 && info.level < required && <span className="rounded bg-rose-50 px-1.5 text-[10px] font-bold text-rose-600">Gap</span>}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="mt-4 flex justify-between">
+                        <button type="button" onClick={() => onPick(null)} className="rounded-lg px-3 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-100">ล้างค่า (ยังไม่ประเมิน)</button>
+                        <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">ปิด</button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-gray-400">ทางลัด: เลือกช่องในตารางแล้วกดเลข 0–4 ได้เลย, Delete = ล้างค่า</p>
+                </div>
+            </div>
+        );
+
+        // The printable sheet (doc header + matrix + legend), used for both the on-screen table and the PDF.
+        const SkillMatrixSheet = ({ dept, line, doc, skills, rows, levelOf, draft, editMode, onCellClick, onCellKey, printMode = false, onEditDoc, canEdit }) => {
+            const groups = [];
+            skills.forEach(skill => { const last = groups[groups.length - 1]; if (last && last.key === skill.category) last.count++; else groups.push({ key: skill.category, count: 1 }); });
+            const nextReview = addMonthsToDay(doc.lastReviewDate || doc.effectiveDate, doc.reviewMonths || 6);
+            const today = getLocalDateValue();
+            const reviewState = !nextReview ? null : nextReview < today ? ['เลยกำหนดทบทวน', 'bg-rose-100 text-rose-700'] : nextReview <= addMonthsToDay(today, 1) ? ['ใกล้ถึงรอบทบทวน', 'bg-amber-100 text-amber-700'] : ['เป็นปัจจุบัน', 'bg-emerald-100 text-emerald-700'];
+            const footer = skills.map(skill => {
+                const qualified = rows.filter(r => (levelOf(r.emp.id, skill.id) ?? -1) >= (skill.targetLevel || 3)).length;
+                const release = (s) => rows.filter(r => (r.emp.shift || '') === s && (levelOf(r.emp.id, skill.id) ?? -1) >= SKILL_RELEASE_LEVEL).length;
+                return { skill, qualified, releaseA: release('A'), releaseB: release('B') };
+            });
+            const stickyCell = printMode ? '' : 'sticky left-0 z-10';
+            const trunc = printMode ? 'whitespace-nowrap' : 'truncate';
+            const headerHeight = Math.min(170, Math.max(60, Math.max(0, ...skills.map(s => String(s.name).length)) * 6.6 + 6));
+            const headCell = 'border-b border-r border-gray-200 bg-white';
+            const docItems = [['เลขที่เอกสาร', doc.docNo || '-'], ['Rev.', doc.rev || '-'], ['วันที่มีผล', doc.effectiveDate ? formatDate(doc.effectiveDate) : '-'], ['ไลน์ / พื้นที่', `${dept} / ${line || SKILL_NO_LINE_LABEL}`], ['ผู้จัดทำ', doc.preparedBy || '-'], ['ผู้ตรวจสอบ', doc.checkedBy || '-'], ['ผู้อนุมัติ', doc.approvedBy || '-'], ['ทบทวนล่าสุด / ครั้งถัดไป', `${doc.lastReviewDate ? formatDate(doc.lastReviewDate) : '-'} / ${nextReview ? formatDate(nextReview) : '-'}`]];
+            return (
+                <div className={printMode ? 'bg-white p-6' : 'space-y-3'} style={printMode ? { width: Math.max(980, 300 + skills.length * 42 + 140), fontFamily: 'Sarabun, sans-serif' } : undefined}>
+                    <div className={`rounded-2xl border border-gray-200 bg-white ${printMode ? 'mb-3' : 'shadow-sm'}`}>
+                        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-3">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-blue-600 text-white"><Icons.GraduationCap size={18}/></span>
+                            <div className="min-w-0 flex-1">
+                                <div className="text-base font-extrabold text-gray-900">{doc.title || 'Skill Matrix'}</div>
+                                <div className="text-[11px] text-gray-500">ISO 9001 / IATF 16949 · {dept} / {line || SKILL_NO_LINE_LABEL} · ทบทวนทุก {doc.reviewMonths || 6} เดือน{doc.updatedAt ? ` · แก้ไขล่าสุด ${formatDateTime(doc.updatedAt)}${doc.updatedBy ? ` โดย ${doc.updatedBy}` : ''}` : ''}</div>
+                            </div>
+                            {reviewState && <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${reviewState[1]}`}>{reviewState[0]}</span>}
+                            {!printMode && canEdit && <button type="button" onClick={onEditDoc} className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">แก้หัวเอกสาร</button>}
+                        </div>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 text-xs sm:grid-cols-4">
+                            {docItems.map(([k, v]) => <div key={k} className="min-w-0"><dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{k}</dt><dd className={`${trunc} font-semibold text-gray-800`}>{v}</dd></div>)}
+                        </dl>
+                    </div>
+                    <div className={`rounded-2xl border border-gray-200 bg-white ${printMode ? '' : 'max-h-[68vh] overflow-auto shadow-sm'}`}>
+                        <table className="border-separate border-spacing-0 text-xs">
+                            <thead className={printMode ? '' : 'sticky top-0 z-20'}>
+                                <tr>
+                                    <th rowSpan={2} className={`${stickyCell} z-30 cursor-default ${headCell} min-w-[230px] px-3 py-2 text-left align-bottom text-[11px] font-bold text-gray-500 hover:bg-white`}>พนักงาน ({rows.length})</th>
+                                    {groups.map((g, i) => { const cat = skillCategory(g.key); return <th key={`${g.key}${i}`} colSpan={g.count} className={`cursor-default border-b border-r border-white/40 px-2 py-1.5 text-center text-[11px] font-bold text-white ${cat.head}`}>{cat.label}</th>; })}
+                                    <th colSpan={2} className="cursor-default border-b border-gray-200 bg-gray-800 px-2 py-1.5 text-center text-[11px] font-bold text-white">สรุป</th>
+                                </tr>
+                                <tr>
+                                    {skills.map(skill => (
+                                        <th key={skill.id} className={`cursor-default ${headCell} w-10 px-1 pb-2 pt-1 align-bottom hover:bg-white ${skillCategory(skill.category).soft}`} title={`${skill.name}${skill.wi ? ` · ${skill.wi}${skill.wiRev ? ` Rev.${skill.wiRev}` : ''}` : ''}${skill.subDept === '' ? ' · ทักษะร่วมทั้งแผนก' : ''}`}>
+                                            <div className="flex flex-col items-center gap-1">
+                                                {skill.critical ? <span className="rounded bg-rose-600 px-1 text-[9px] font-bold leading-4 text-white">{skill.critical}</span> : <span className="h-4"></span>}
+                                                <div className="relative" style={{ width: 16, height: headerHeight }}>
+                                                    <span className="absolute whitespace-nowrap text-[11px] font-semibold text-gray-700" style={{ left: '50%', top: '100%', marginLeft: -7, lineHeight: '14px', transformOrigin: '0 0', transform: 'rotate(-90deg)' }}>{skill.name}</span>
+                                                </div>
+                                                {skill.code && <span className="text-[9px] font-medium text-gray-400">{skill.code}</span>}
+                                            </div>
+                                        </th>
+                                    ))}
+                                    <th className={`cursor-default ${headCell} w-14 px-1 pb-2 align-bottom text-[10px] font-bold text-gray-500 hover:bg-white`}>สถานี<br/>L3+</th>
+                                    <th className={`cursor-default ${headCell} w-12 px-1 pb-2 align-bottom text-[10px] font-bold text-gray-500 hover:bg-white`}>Gap</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.length === 0 && <tr><td colSpan={skills.length + 3} className="px-4 py-10 text-center text-gray-400">ไม่มีพนักงานในไลน์นี้ตามตัวกรอง</td></tr>}
+                                {rows.map(row => (
+                                    <tr key={row.emp.id} className="group">
+                                        <td className={`${stickyCell} border-b border-r border-gray-200 bg-white px-3 py-1.5 group-hover:bg-violet-50/60`}>
+                                            <div className="flex items-center gap-2">
+                                                {!printMode && <SkillAvatar employee={row.emp} size={30}/>}
+                                                <div className="min-w-0">
+                                                    <div className={`${trunc} font-semibold text-gray-900`}>{row.emp.name}</div>
+                                                    <div className={`${trunc} text-[10px] text-gray-500`}>{row.emp.id} · {row.emp.position || '-'}{row.emp.shift ? ` · กะ ${row.emp.shift}` : ''}{row.emp.startDate ? ` · ${calculateTenure(row.emp.startDate)}` : ''}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        {row.cells.map(cell => {
+                                            const key = skillKey(row.emp.id, cell.skill.id);
+                                            const changed = draft && Object.prototype.hasOwnProperty.call(draft, key);
+                                            const gap = cell.req > 0 && (cell.level ?? 0) < cell.req;
+                                            const info = cell.level === null ? 'ยังไม่ประเมิน' : `L${cell.level} ${SKILL_LEVEL_INFO[cell.level].th}`;
+                                            const title = `${row.emp.name} · ${cell.skill.name}\n${info}${cell.req ? `\nตำแหน่งนี้ต้องมี L${cell.req}` : ''}${cell.rec && !changed ? `\nประเมิน ${cell.rec.assessedDate || '-'} โดย ${cell.rec.updatedBy || '-'}${cell.rec.source === 'system' ? ' (จากระบบอบรม)' : ''}` : ''}`;
+                                            return (
+                                                <td key={cell.skill.id} className={`border-b border-r border-gray-100 p-0 text-center ${gap ? 'bg-rose-50' : ''} ${changed ? 'bg-violet-100' : ''}`}>
+                                                    {printMode ? <div className="flex h-9 items-center justify-center"><SkillPie level={cell.level} size={20} dashed={cell.req > 0}/></div> : (
+                                                        <button type="button" title={title} aria-label={title} disabled={!editMode} onClick={() => onCellClick(row.emp, cell)} onKeyDown={e => onCellKey(e, row.emp, cell)}
+                                                            className={`relative flex h-10 w-10 items-center justify-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-violet-500 ${editMode ? 'cursor-pointer hover:bg-violet-50' : 'cursor-default'}`}>
+                                                            <SkillPie level={cell.level} size={22} dashed={cell.req > 0}/>
+                                                            {gap && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-rose-500"></span>}
+                                                            {cell.rec?.source === 'system' && !changed && <span className="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-sky-500"></span>}
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                        <td className={`border-b border-r border-gray-100 text-center font-bold ${row.stations >= 3 ? 'text-emerald-600' : 'text-gray-400'}`}>{row.stations}</td>
+                                        <td className={`border-b border-gray-100 text-center font-bold ${row.gapSkills ? 'text-rose-600' : 'text-emerald-600'}`}>{row.gapSkills || '✓'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            {rows.length > 0 && (
+                                <tfoot className="text-[11px]">
+                                    {[
+                                        ['เป้าหมาย (คน)', f => f.skill.targetCount ? `${f.skill.targetCount}` : '–', () => 'text-gray-500'],
+                                        ['ถึงระดับเป้า', f => f.skill.targetCount ? `${f.qualified}` : `${f.qualified}`, f => !f.skill.targetCount ? 'text-gray-500' : f.qualified >= f.skill.targetCount ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'],
+                                        [`ปล่อยงานได้ กะ A (L${SKILL_RELEASE_LEVEL}+)`, f => `${f.releaseA}`, f => f.releaseA ? 'text-gray-800' : 'text-rose-400'],
+                                        [`ปล่อยงานได้ กะ B (L${SKILL_RELEASE_LEVEL}+)`, f => `${f.releaseB}`, f => f.releaseB ? 'text-gray-800' : 'text-rose-400']
+                                    ].map(([label, value, tone], i) => (
+                                        <tr key={label}>
+                                            <td className={`${stickyCell} border-b border-r border-gray-200 bg-gray-50 px-3 py-1.5 text-right font-bold text-gray-600`}>{label}{i === 1 && <span className="ml-1 font-normal text-gray-400">(L ตามเป้าของสถานี)</span>}</td>
+                                            {footer.map(f => <td key={f.skill.id} className={`border-b border-r border-gray-100 bg-gray-50/60 py-1.5 text-center font-bold ${tone(f)}`}>{value(f)}</td>)}
+                                            <td colSpan={2} className="border-b border-gray-100 bg-gray-50/60"></td>
+                                        </tr>
+                                    ))}
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                    <div className={`rounded-2xl border border-gray-200 bg-white px-4 py-3 ${printMode ? 'mt-3' : 'shadow-sm'}`}>
+                        <div className="mb-2 text-xs font-bold text-gray-700">เกณฑ์ระดับทักษะ (Skill Level Criteria)</div>
+                        <div className="grid gap-2 text-[11px] sm:grid-cols-5">
+                            {SKILL_LEVEL_INFO.map(info => (
+                                <div key={info.level} className="flex items-start gap-2">
+                                    <SkillPie level={info.level} size={22}/>
+                                    <div><div className="font-bold text-gray-800">L{info.level} · {info.th}</div><div className="text-gray-500">{info.criteria}</div></div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-[10px] text-gray-500">
+                            <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-rose-500"></span>ต่ำกว่าระดับที่ตำแหน่งต้องมี (Gap)</span>
+                            <span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-full border border-dashed border-rose-500 align-middle"></span>ต้องมีแต่ยังไม่ประเมิน</span>
+                            <span><span className="mr-1 inline-block rounded bg-rose-600 px-1 font-bold text-white">CC/SC</span>Critical / Special characteristic</span>
+                            <span>หลัก 3×3: แต่ละสถานีมีคน L3+ อย่างน้อยตามเป้า และแต่ละคนทำได้ ≥ 3 สถานี · คนที่ทำงานที่สถานีต้องอยู่ระดับ ≥ L{SKILL_RELEASE_LEVEL}</span>
+                            {printMode && <span className="ml-auto">พิมพ์เมื่อ {formatDateTime(new Date().toISOString())}</span>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SkillMatrixView = ({ employees, data, dept, line, canEdit, call, onReload, searchTerm }) => {
+            const [shift, setShift] = useState('ALL');
+            const [position, setPosition] = useState('ALL');
+            const [editMode, setEditMode] = useState(false);
+            const [draft, setDraft] = useState({});
+            const [picker, setPicker] = useState(null);
+            const [assessedDate, setAssessedDate] = useState(getLocalDateValue());
+            const [saving, setSaving] = useState(false);
+            const [message, setMessage] = useState(null);
+            const [docOpen, setDocOpen] = useState(false);
+            const [exporting, setExporting] = useState(false);
+            const printRef = useRef(null);
+            useEffect(() => { setDraft({}); setEditMode(false); setMessage(null); }, [dept, line]);
+            const levelMap = useMemo(() => new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l])), [data.levels]);
+            const levelOf = useCallback((employeeId, skillId) => {
+                const key = skillKey(employeeId, skillId);
+                if (Object.prototype.hasOwnProperty.call(draft, key)) return draft[key];
+                return levelMap.get(key)?.level ?? null;
+            }, [draft, levelMap]);
+            const skills = useMemo(() => skillsForLine(data.catalog, dept, line), [data.catalog, dept, line]);
+            const lineEmployees = useMemo(() => employees.filter(e => !isResignedEmployee(e) && e.dept === dept && skillLine(e.subDept) === line), [employees, dept, line]);
+            const positionsHere = [...new Set(lineEmployees.map(e => e.position).filter(Boolean))].sort((a, b) => getPositionRank(b) - getPositionRank(a) || a.localeCompare(b));
+            const query = String(searchTerm || '').trim().toLowerCase();
+            const rows = lineEmployees
+                .filter(e => (shift === 'ALL' || (e.shift || '-') === shift) && (position === 'ALL' || e.position === position) && (!query || `${e.name} ${e.id} ${e.position}`.toLowerCase().includes(query)))
+                .sort((a, b) => getPositionRank(b.position) - getPositionRank(a.position) || String(a.shift || 'Z').localeCompare(String(b.shift || 'Z')) || String(a.id).localeCompare(String(b.id)))
+                .map(emp => {
+                    let gapSkills = 0, stations = 0;
+                    const cells = skills.map(skill => {
+                        const level = levelOf(emp.id, skill.id);
+                        const req = requiredSkillLevel(skill, emp.position);
+                        if (req > 0 && (level ?? 0) < req) gapSkills++;
+                        if (skill.category === 'process' && (level ?? -1) >= 3) stations++;
+                        return { skill, level, req, rec: levelMap.get(skillKey(emp.id, skill.id)) };
+                    });
+                    return { emp, cells, gapSkills, stations };
+                });
+            const savedDoc = (data.docs || []).find(d => skillSameText(d.dept, dept) && d.subDept === line);
+            const doc = savedDoc || { dept, subDept: line, title: `Skill Matrix — ${line || dept}`, docNo: '', rev: '00', effectiveDate: '', preparedBy: '', checkedBy: '', approvedBy: '', reviewMonths: 6, lastReviewDate: '' };
+            const draftCount = Object.keys(draft).length;
+            const setLevel = (emp, skill, level) => {
+                const key = skillKey(emp.id, skill.id);
+                const original = levelMap.get(key)?.level ?? null;
+                setDraft(prev => { const next = { ...prev }; if (level === original) delete next[key]; else next[key] = level; return next; });
+            };
+            const onCellClick = (emp, cell) => { if (editMode) setPicker({ emp, skill: cell.skill, req: cell.req }); };
+            const onCellKey = (e, emp, cell) => {
+                if (!editMode) return;
+                if (/^[0-4]$/.test(e.key)) { e.preventDefault(); setLevel(emp, cell.skill, Number(e.key)); }
+                else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); setLevel(emp, cell.skill, null); }
+            };
+            const save = async () => {
+                if (!draftCount) return;
+                setSaving(true); setMessage(null);
+                try {
+                    const items = Object.entries(draft).map(([key, level]) => { const [employeeId, skillId] = key.split('|'); return { employeeId, skillId, level }; });
+                    const result = await call('saveSkillLevels', { items, assessedDate });
+                    if (result?.status !== 'success') throw new Error(result?.message || 'บันทึกไม่สำเร็จ');
+                    await onReload();
+                    setDraft({});
+                    setMessage({ ok: !result.errors?.length, text: result.errors?.length ? `บันทึกแล้ว ${result.changed} ช่อง · ${result.errors.join(' · ')}` : `บันทึกแล้ว ${result.changed} ช่อง` });
+                } catch (error) {
+                    setMessage({ ok: false, text: error?.message || 'บันทึกไม่สำเร็จ' });
+                } finally { setSaving(false); }
+            };
+            const saveDoc = async (form) => {
+                setSaving(true); setMessage(null);
+                try {
+                    const result = await call('saveSkillMatrixDoc', { doc: { ...form, dept, subDept: line } });
+                    if (result?.status !== 'success') throw new Error(result?.message || 'บันทึกหัวเอกสารไม่สำเร็จ');
+                    await onReload();
+                    setDocOpen(false);
+                    setMessage({ ok: true, text: 'บันทึกหัวเอกสารแล้ว' });
+                } catch (error) { setMessage({ ok: false, text: error?.message || 'บันทึกหัวเอกสารไม่สำเร็จ' }); }
+                finally { setSaving(false); }
+            };
+            const fileBase = `skill_matrix_${dept}_${line || 'no-line'}_Rev${doc.rev || '00'}`.replace(/[^\w.-]+/g, '_');
+            const exportExcel = async () => {
+                if (!window.ExcelJS) { alert('โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ กรุณารีเฟรชหน้าแล้วลองใหม่'); return; }
+                const wb = new window.ExcelJS.Workbook();
+                const ws = wb.addWorksheet('Skill Matrix', { pageSetup: { paperSize: 8, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+                const firstSkillCol = 5, lastCol = firstSkillCol + skills.length + 1;
+                ws.columns = [{ width: 10 }, { width: 28 }, { width: 16 }, { width: 6 }, ...skills.map(() => ({ width: 5 })), { width: 8 }, { width: 6 }];
+                const thin = { style: 'thin', color: { argb: 'FFD1D5DB' } };
+                const border = { top: thin, left: thin, bottom: thin, right: thin };
+                ws.mergeCells(1, 1, 1, lastCol);
+                ws.getCell(1, 1).value = doc.title || 'Skill Matrix';
+                ws.getCell(1, 1).font = { bold: true, size: 16 };
+                const meta = [['Doc No.', doc.docNo], ['Rev.', doc.rev], ['Effective', doc.effectiveDate], ['Line', `${dept} / ${line || SKILL_NO_LINE_LABEL}`], ['Prepared', doc.preparedBy], ['Checked', doc.checkedBy], ['Approved', doc.approvedBy], ['Last review', doc.lastReviewDate], ['Review cycle', `${doc.reviewMonths || 6} months`]];
+                ws.getCell(2, 1).value = meta.map(([k, v]) => `${k}: ${v || '-'}`).join('    ');
+                ws.mergeCells(2, 1, 2, lastCol);
+                ws.getCell(2, 1).font = { size: 9, color: { argb: 'FF4B5563' } };
+                const catRow = 4, nameRow = 5;
+                let col = firstSkillCol;
+                const groups = [];
+                skills.forEach(s => { const last = groups[groups.length - 1]; if (last && last.key === s.category) last.count++; else groups.push({ key: s.category, count: 1 }); });
+                groups.forEach(g => {
+                    const cat = skillCategory(g.key);
+                    if (g.count > 1) ws.mergeCells(catRow, col, catRow, col + g.count - 1);
+                    const cell = ws.getCell(catRow, col);
+                    cell.value = cat.label; cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${cat.hex}` } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    col += g.count;
+                });
+                ['ID', 'Name', 'Position', 'Shift'].forEach((h, i) => { const c = ws.getCell(nameRow, i + 1); c.value = h; c.font = { bold: true }; c.alignment = { vertical: 'bottom' }; c.border = border; });
+                skills.forEach((s, i) => {
+                    const c = ws.getCell(nameRow, firstSkillCol + i);
+                    c.value = `${s.critical ? `[${s.critical}] ` : ''}${s.name}`;
+                    c.alignment = { textRotation: 90, horizontal: 'center', vertical: 'bottom', wrapText: true };
+                    c.font = { size: 9, bold: !!s.critical, color: { argb: s.critical ? 'FFE11D48' : 'FF111827' } };
+                    c.border = border;
+                });
+                [['Stations L3+', lastCol - 1], ['Gap', lastCol]].forEach(([h, c]) => { const cell = ws.getCell(nameRow, c); cell.value = h; cell.font = { bold: true, size: 9 }; cell.alignment = { textRotation: 90, horizontal: 'center', vertical: 'bottom' }; cell.border = border; });
+                ws.getRow(nameRow).height = 120;
+                const fillFor = ['FFF1F5F9', 'FFFEF3C7', 'FFE0F2FE', 'FFD1FAE5', 'FFE0E7FF'];
+                rows.forEach((row, r) => {
+                    const excelRow = nameRow + 1 + r;
+                    [row.emp.id, row.emp.name, row.emp.position || '', row.emp.shift || ''].forEach((v, i) => { const c = ws.getCell(excelRow, i + 1); c.value = v; c.border = border; });
+                    row.cells.forEach((cell, i) => {
+                        const c = ws.getCell(excelRow, firstSkillCol + i);
+                        c.value = cell.level === null ? '' : cell.level;
+                        c.alignment = { horizontal: 'center' };
+                        c.border = border;
+                        const gap = cell.req > 0 && (cell.level ?? 0) < cell.req;
+                        if (cell.level !== null) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor[cell.level] } };
+                        if (gap) { c.font = { bold: true, color: { argb: 'FFE11D48' } }; if (cell.level === null) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE4E6' } }; }
+                        if (cell.req) c.note = `Required L${cell.req}`;
+                    });
+                    ws.getCell(excelRow, lastCol - 1).value = row.stations;
+                    ws.getCell(excelRow, lastCol).value = row.gapSkills;
+                    [lastCol - 1, lastCol].forEach(c => { ws.getCell(excelRow, c).border = border; ws.getCell(excelRow, c).alignment = { horizontal: 'center' }; });
+                });
+                let footRow = nameRow + rows.length + 1;
+                [['Target (people)', s => s.targetCount || ''], ['At target level', s => rows.filter(r => (levelOf(r.emp.id, s.id) ?? -1) >= (s.targetLevel || 3)).length], [`Release shift A (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => r.emp.shift === 'A' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length], [`Release shift B (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => r.emp.shift === 'B' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length]].forEach(([label, fn]) => {
+                    ws.mergeCells(footRow, 1, footRow, 4);
+                    ws.getCell(footRow, 1).value = label; ws.getCell(footRow, 1).font = { bold: true }; ws.getCell(footRow, 1).alignment = { horizontal: 'right' };
+                    skills.forEach((s, i) => { const c = ws.getCell(footRow, firstSkillCol + i); c.value = fn(s); c.alignment = { horizontal: 'center' }; c.border = border; c.font = { bold: true }; });
+                    footRow++;
+                });
+                footRow++;
+                ws.getCell(footRow, 1).value = 'Skill level criteria'; ws.getCell(footRow, 1).font = { bold: true };
+                SKILL_LEVEL_INFO.forEach((info, i) => { ws.mergeCells(footRow + 1 + i, 1, footRow + 1 + i, lastCol); const c = ws.getCell(footRow + 1 + i, 1); c.value = `L${info.level} = ${info.th} (${info.en}) — ${info.criteria}`; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillFor[info.level] } }; });
+                ws.views = [{ state: 'frozen', xSplit: 2, ySplit: nameRow }];
+                const buffer = await wb.xlsx.writeBuffer();
+                const url = window.URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+                const link = document.createElement('a');
+                link.href = url; link.download = `${fileBase}.xlsx`;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            };
+            const exportPdf = async () => {
+                setExporting(true);
+                try {
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    const [html2canvas, { jsPDF }] = await Promise.all([
+                        loadAttendanceLibrary('html2canvas', 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+                        loadAttendanceLibrary('jspdf', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
+                    ]);
+                    if (document.fonts?.ready) await document.fonts.ready;
+                    const el = printRef.current;
+                    if (!el) throw new Error('ไม่พบตาราง');
+                    // html2canvas draws Sarabun a little lower than the browser, so give text badges room at the bottom.
+                    el.querySelectorAll('span').forEach(span => { if (/\brounded/.test(span.className) && span.textContent.trim()) { span.style.paddingTop = '0px'; span.style.paddingBottom = '3px'; span.style.lineHeight = '13px'; } });
+                    const w = el.scrollWidth, h = el.scrollHeight;
+                    const scale = Math.max(0.5, Math.min(2, 14000 / w, 14000 / h));
+                    const canvas = await html2canvas(el, { scale, backgroundColor: '#ffffff', logging: false, width: w, height: h, windowWidth: w + 100 });
+                    const pdf = new jsPDF({ unit: 'mm', format: 'a3', orientation: 'landscape' });
+                    const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight(), margin = 8;
+                    const imgW = pageW - margin * 2;
+                    const pxPerMm = canvas.width / imgW;
+                    const sliceH = Math.floor((pageH - margin * 2) * pxPerMm);
+                    for (let y = 0, page = 0; y < canvas.height; y += sliceH, page++) {
+                        const part = document.createElement('canvas');
+                        part.width = canvas.width; part.height = Math.min(sliceH, canvas.height - y);
+                        part.getContext('2d').drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
+                        if (page > 0) pdf.addPage();
+                        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin, imgW, part.height / pxPerMm);
+                    }
+                    pdf.save(`${fileBase}.pdf`);
+                } catch (error) {
+                    alert('สร้าง PDF ไม่สำเร็จ: ' + (error?.message || error));
+                } finally { setExporting(false); }
+            };
+            if (skills.length === 0) return (
+                <div className="rounded-3xl border border-dashed border-violet-200 bg-white px-6 py-12 text-center text-sm text-gray-500 shadow-sm">ไลน์นี้ยังไม่มีรายการทักษะ — ไปที่แท็บ <b>ตั้งค่าทักษะ</b> เพื่อเพิ่มสถานี / ทักษะก่อน</div>
+            );
+            return (
+                <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select value={shift} onChange={e => setShift(e.target.value)} aria-label="กะ" className="rounded-lg border bg-white px-2 py-1.5 text-xs font-semibold">
+                            <option value="ALL">ทุกกะ</option><option value="A">กะ A</option><option value="B">กะ B</option><option value="-">ไม่ระบุกะ</option>
+                        </select>
+                        <select value={position} onChange={e => setPosition(e.target.value)} aria-label="ตำแหน่ง" className="rounded-lg border bg-white px-2 py-1.5 text-xs font-semibold">
+                            <option value="ALL">ทุกตำแหน่ง</option>{positionsHere.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
+                            <button type="button" onClick={exportExcel} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50"><Icons.FileSpreadsheet size={15}/>Excel</button>
+                            <button type="button" onClick={exportPdf} disabled={exporting} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{exporting ? <Icons.Loader size={15}/> : <Icons.FileText size={15}/>}PDF (A3)</button>
+                            {canEdit && <button type="button" onClick={() => { if (editMode && draftCount && !window.confirm('ยกเลิกการแก้ไขที่ยังไม่บันทึก?')) return; setEditMode(!editMode); setDraft({}); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm ${editMode ? 'bg-gray-800 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}><Icons.Paint size={15}/>{editMode ? 'ออกจากโหมดแก้ไข' : 'แก้ไขระดับ'}</button>}
+                        </div>
+                    </div>
+                    {message && <div className={`rounded-xl border px-4 py-2 text-sm font-semibold ${message.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div>}
+                    {editMode && <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs text-violet-800">โหมดแก้ไข: คลิกที่ช่องเพื่อเลือกระดับ หรือเลือกช่องแล้วกดเลข <b>0–4</b> · ยังไม่บันทึกจนกว่าจะกดปุ่ม <b>บันทึก</b> ด้านล่าง</div>}
+                    <SkillMatrixSheet dept={dept} line={line} doc={doc} skills={skills} rows={rows} levelOf={levelOf} draft={draft} editMode={editMode} onCellClick={onCellClick} onCellKey={onCellKey} onEditDoc={() => setDocOpen(true)} canEdit={canEdit}/>
+                    {editMode && draftCount > 0 && (
+                        <div className="sticky bottom-3 z-30 mx-auto flex w-fit flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
+                            <span className="text-sm font-bold text-violet-700">แก้ไข {draftCount} ช่อง</span>
+                            <label className="flex items-center gap-1.5 text-xs text-gray-600">วันที่ประเมิน<input type="date" value={assessedDate} onChange={e => setAssessedDate(e.target.value)} className="rounded border p-1 text-xs"/></label>
+                            <button type="button" onClick={() => setDraft({})} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
+                            <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+                        </div>
+                    )}
+                    {picker && <SkillLevelPicker employee={picker.emp} skill={picker.skill} required={picker.req} current={levelOf(picker.emp.id, picker.skill.id)} onPick={level => { setLevel(picker.emp, picker.skill, level); setPicker(null); }} onClose={() => setPicker(null)}/>}
+                    {docOpen && <SkillDocModal doc={doc} saving={saving} onSave={saveDoc} onClose={() => setDocOpen(false)}/>}
+                    {exporting && (
+                        <div style={{ position: 'fixed', left: 0, top: 0, width: 0, height: 0, overflow: 'hidden', zIndex: -1 }} aria-hidden="true">
+                            <div ref={printRef} style={{ position: 'absolute', left: 0, top: 0, width: 'max-content', background: '#fff' }}>
+                                <SkillMatrixSheet printMode dept={dept} line={line} doc={doc} skills={skills} rows={rows} levelOf={levelOf} draft={{}} editMode={false} onCellClick={() => {}} onCellKey={() => {}}/>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SkillSettingsView = ({ employees, data, dept, line, positions, canEdit, call, onReload }) => {
+            const pick = (subDept) => (data.catalog || []).filter(s => s.active !== false && skillSameText(s.dept, dept) && s.subDept === subDept).sort(compareSkills).map(s => ({ ...s, required: { ...(s.required || {}) } }));
+            const [lineSkills, setLineSkills] = useState(() => line ? pick(line) : []);
+            const [sharedSkills, setSharedSkills] = useState(() => pick(''));
+            const [dirty, setDirty] = useState(false);
+            const [saving, setSaving] = useState(false);
+            const [message, setMessage] = useState(null);
+            useEffect(() => { setLineSkills(line ? pick(line) : []); setSharedSkills(pick('')); setDirty(false); }, [dept, line, data.catalog]);
+            const deptPositions = useMemo(() => {
+                const used = [...new Set(employees.filter(e => !isResignedEmployee(e) && e.dept === dept).map(e => e.position).filter(Boolean))];
+                const list = used.length ? used : positions;
+                return list.filter(p => getPositionRank(p) <= 3).sort((a, b) => getPositionRank(a) - getPositionRank(b) || a.localeCompare(b));
+            }, [employees, dept, positions]);
+            const update = (setter) => (index, patch) => { setter(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s)); setDirty(true); };
+            const move = (setter) => (index, delta) => { setter(prev => { const next = [...prev]; const target = index + delta; if (target < 0 || target >= next.length) return prev; [next[index], next[target]] = [next[target], next[index]]; return next; }); setDirty(true); };
+            const remove = (setter) => (index) => { setter(prev => prev.filter((_, i) => i !== index)); setDirty(true); };
+            const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', code: '', name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', deptPositions) }]); setDirty(true); };
+            const addSamples = () => {
+                const names = new Set([...lineSkills, ...sharedSkills].map(s => s.name.toLowerCase()));
+                if (line) setLineSkills(prev => [...prev, ...makeSampleSkills(deptPositions, true).filter(s => !names.has(s.name.toLowerCase()))]);
+                setSharedSkills(prev => [...prev, ...makeSampleSkills(deptPositions, false).filter(s => !names.has(s.name.toLowerCase()))]);
+                setDirty(true);
+            };
+            const save = async () => {
+                const all = [...lineSkills, ...sharedSkills];
+                if (all.some(s => !String(s.name || '').trim())) { setMessage({ ok: false, text: 'กรุณาใส่ชื่อทักษะให้ครบทุกแถว' }); return; }
+                setSaving(true); setMessage(null);
+                try {
+                    const clean = list => list.map(s => ({ id: s.id, category: s.category, code: s.code, name: String(s.name).trim(), wi: s.wi, wiRev: s.wiRev, critical: s.critical, targetCount: Number(s.targetCount) || 0, targetLevel: Number(s.targetLevel) || 3, required: s.required }));
+                    const scopes = [{ subDept: '', skills: clean(sharedSkills) }];
+                    if (line) scopes.unshift({ subDept: line, skills: clean(lineSkills) });
+                    const result = await call('saveSkillCatalog', { dept, scopes });
+                    if (result?.status !== 'success') throw new Error(result?.message || 'บันทึกไม่สำเร็จ');
+                    await onReload();
+                    setDirty(false);
+                    setMessage({ ok: true, text: `บันทึกรายการทักษะแล้ว (${result.saved} ทักษะ)` });
+                } catch (error) { setMessage({ ok: false, text: error?.message || 'บันทึกไม่สำเร็จ' }); }
+                finally { setSaving(false); }
+            };
+            const input = 'w-full rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100 disabled:border-transparent disabled:bg-transparent';
+            const SkillTable = ({ title, hint, list, setter, forLine }) => {
+                const onUpdate = update(setter), onMove = move(setter), onRemove = remove(setter);
+                return (
+                    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
+                        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+                            <div className="min-w-0 flex-1"><h3 className="text-sm font-bold text-gray-800">{title} <span className="font-normal text-gray-400">({list.length})</span></h3><p className="text-[11px] text-gray-500">{hint}</p></div>
+                            {canEdit && <button type="button" onClick={() => add(setter, forLine)} className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-100"><Icons.Plus size={14}/>เพิ่มทักษะ</button>}
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-xs">
+                                <thead className="bg-gray-50 text-left text-[10px] uppercase tracking-wide text-gray-500">
+                                    <tr>
+                                        {['', 'หมวด', 'รหัส', 'ชื่อสถานี / ทักษะ', 'WI', 'Rev.', 'CC/SC', 'เป้า (คน)', 'ระดับเป้า'].map(h => <th key={h} className="cursor-default whitespace-nowrap px-2 py-2 font-bold hover:bg-gray-50">{h}</th>)}
+                                        {deptPositions.map(p => <th key={p} className="cursor-default whitespace-nowrap px-2 py-2 text-center font-bold text-violet-600 hover:bg-gray-50" title="ระดับที่ตำแหน่งนี้ต้องมี (ว่าง = ไม่บังคับ)">{p}</th>)}
+                                        <th className="cursor-default hover:bg-gray-50"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {list.length === 0 && <tr><td colSpan={10 + deptPositions.length} className="px-4 py-6 text-center text-gray-400">ยังไม่มีรายการ</td></tr>}
+                                    {list.map((s, i) => (
+                                        <tr key={s.id} className="border-t border-gray-100 align-middle">
+                                            <td className="whitespace-nowrap px-1">{canEdit && <span className="flex flex-col"><button type="button" aria-label="เลื่อนขึ้น" onClick={() => onMove(i, -1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowUp size={12}/></button><button type="button" aria-label="เลื่อนลง" onClick={() => onMove(i, 1)} className="text-gray-400 hover:text-violet-600"><Icons.ArrowDown size={12}/></button></span>}</td>
+                                            <td className="px-1 py-1.5"><select disabled={!canEdit} value={s.category} onChange={e => onUpdate(i, { category: e.target.value })} className={`${input} min-w-[120px] font-semibold ${skillCategory(s.category).text}`}>{SKILL_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}</select></td>
+                                            <td className="px-1"><input disabled={!canEdit} value={s.code} onChange={e => onUpdate(i, { code: e.target.value })} className={`${input} w-14`} placeholder="P01"/></td>
+                                            <td className="px-1"><input disabled={!canEdit} value={s.name} onChange={e => onUpdate(i, { name: e.target.value })} className={`${input} min-w-[180px] font-semibold`} placeholder="เช่น Screw torque"/></td>
+                                            <td className="px-1"><input disabled={!canEdit} value={s.wi} onChange={e => onUpdate(i, { wi: e.target.value })} className={`${input} w-28`} placeholder="WI-xxx"/></td>
+                                            <td className="px-1"><input disabled={!canEdit} value={s.wiRev} onChange={e => onUpdate(i, { wiRev: e.target.value })} className={`${input} w-12`}/></td>
+                                            <td className="px-1"><select disabled={!canEdit} value={s.critical} onChange={e => onUpdate(i, { critical: e.target.value })} className={`${input} w-16 ${s.critical ? 'font-bold text-rose-600' : ''}`}><option value="">-</option><option value="CC">CC</option><option value="SC">SC</option></select></td>
+                                            <td className="px-1"><input disabled={!canEdit} type="number" min="0" max="99" value={s.targetCount} onChange={e => onUpdate(i, { targetCount: e.target.value })} className={`${input} w-14 text-center`}/></td>
+                                            <td className="px-1"><select disabled={!canEdit} value={s.targetLevel} onChange={e => onUpdate(i, { targetLevel: Number(e.target.value) })} className={`${input} w-14`}>{[1, 2, 3, 4].map(l => <option key={l} value={l}>L{l}</option>)}</select></td>
+                                            {deptPositions.map(p => (
+                                                <td key={p} className="px-1 text-center">
+                                                    <select disabled={!canEdit} value={s.required?.[p] || ''} onChange={e => onUpdate(i, { required: { ...(s.required || {}), [p]: e.target.value ? Number(e.target.value) : undefined } })} className={`${input} w-14 text-center ${s.required?.[p] ? 'font-bold text-violet-700' : 'text-gray-300'}`}>
+                                                        <option value="">–</option>{[1, 2, 3, 4].map(l => <option key={l} value={l}>L{l}</option>)}
+                                                    </select>
+                                                </td>
+                                            ))}
+                                            <td className="px-1">{canEdit && <button type="button" aria-label="ลบทักษะ" title="ลบ (ระดับที่บันทึกไว้จะยังเก็บอยู่)" onClick={() => onRemove(i)} className="rounded p-1 text-gray-300 hover:bg-rose-50 hover:text-rose-600"><Icons.Trash2 size={14}/></button>}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            };
+            return (
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-violet-100 bg-gradient-to-r from-violet-50 to-blue-50 px-4 py-3">
+                        <div className="min-w-0 flex-1 text-xs text-gray-600">
+                            <b className="text-gray-800">กำหนดสถานี / ทักษะ</b> แยกตามไลน์ ส่วน Safety / 5S ที่ใช้ทุกไลน์ให้ใส่ใน "ทักษะร่วมทั้งแผนก" ·
+                            <b> เป้า (คน)</b> = จำนวนคนที่ต้องถึงระดับเป้าต่อสถานี (หลัก 3×3) · คอลัมน์ตำแหน่ง = ระดับขั้นต่ำที่ตำแหน่งนั้นต้องมี ใช้คำนวณ Skill Gap
+                            {!canEdit && <div className="mt-1 font-semibold text-amber-700">ดูได้อย่างเดียว — แก้ไขได้เฉพาะ Engineer / Supervisor / Admin ของแผนก {dept}</div>}
+                        </div>
+                        {canEdit && <button type="button" onClick={addSamples} className="rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">+ ใส่ชุดตัวอย่าง</button>}
+                    </div>
+                    {message && <div className={`rounded-xl border px-4 py-2 text-sm font-semibold ${message.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div>}
+                    {line && SkillTable({ title: `ทักษะเฉพาะไลน์ ${line}`, hint: 'สถานี / เครื่องจักร / Quality ของไลน์นี้', list: lineSkills, setter: setLineSkills, forLine: true })}
+                    {SkillTable({ title: `ทักษะร่วมทั้งแผนก ${dept}`, hint: 'แสดงในทุกไลน์ของแผนกนี้ เช่น LOTO, PPE, 5S, การจัดการ NG', list: sharedSkills, setter: setSharedSkills, forLine: false })}
+                    {canEdit && dirty && (
+                        <div className="sticky bottom-3 z-30 mx-auto flex w-fit items-center gap-3 rounded-2xl border border-violet-200 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
+                            <span className="text-sm font-bold text-violet-700">มีการเปลี่ยนแปลงที่ยังไม่บันทึก</span>
+                            <button type="button" onClick={() => { setLineSkills(line ? pick(line) : []); setSharedSkills(pick('')); setDirty(false); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
+                            <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : 'บันทึกรายการทักษะ'}</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const SKILL_CACHE_KEY = 'skillMatrixCache';
+        const SkillMatrixPage = ({ employees, currentDept, departments, subDepartments, positions, currentUser, driveUrl, apiCall, onSessionExpired, searchTerm }) => {
+            const [tab, setTab] = useState('dashboard');
+            const [data, setData] = useState(() => { const cached = safeLocalLoad(SKILL_CACHE_KEY, null); return cached && Array.isArray(cached.catalog) ? cached : { catalog: [], levels: [], history: [], docs: [] }; });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [loadedAt, setLoadedAt] = useState(null);
+            const [dept, setDept] = useState(currentDept);
+            const [line, setLine] = useState('ALL');
+            const [position, setPosition] = useState('ALL');
+            const [shift, setShift] = useState('ALL');
+            useEffect(() => { setDept(currentDept); setLine('ALL'); setPosition('ALL'); }, [currentDept]);
+            const call = useCallback(async (action, payload) => {
+                const result = await apiCall(driveUrl, action, payload);
+                if (result?.code === 'session_expired') { onSessionExpired(); throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่'); }
+                return result;
+            }, [apiCall, driveUrl, onSessionExpired]);
+            const load = useCallback(async () => {
+                if (!driveUrl) { setError('ยังไม่ได้ตั้งค่า URL ของระบบ'); return; }
+                setLoading(true); setError('');
+                try {
+                    const result = await call('getSkillMatrix', {});
+                    if (result?.status !== 'success') throw new Error(result?.message || (result?.error ? `Backend: ${result.error}` : 'โหลด Skill Matrix ไม่สำเร็จ'));
+                    const next = { catalog: result.catalog || [], levels: result.levels || [], history: result.history || [], docs: result.docs || [] };
+                    setData(next);
+                    setLoadedAt(Date.now());
+                    try { localStorage.setItem(SKILL_CACHE_KEY, JSON.stringify(next)); } catch (e) { /* cache is optional */ }
+                } catch (err) {
+                    setError(err?.message || 'โหลด Skill Matrix ไม่สำเร็จ');
+                } finally { setLoading(false); }
+            }, [call, driveUrl]);
+            useEffect(() => { void load(); }, [load]);
+            const activeEmployees = useMemo(() => employees.filter(e => !isResignedEmployee(e)), [employees]);
+            // Matrix and settings work on one department; when the header is on "ALL" fall back to the first department that has people.
+            const workDept = dept !== 'ALL' ? dept : (departments.find(d => activeEmployees.some(e => e.dept === d)) || departments[0] || '');
+            const deptForLines = tab === 'dashboard' ? dept : workDept;
+            const lineOptions = useMemo(() => {
+                const set = new Set();
+                const inDept = (d) => deptForLines === 'ALL' || d === deptForLines;
+                Object.entries(subDepartments || {}).forEach(([d, list]) => { if (inDept(d)) (list || []).forEach(l => set.add(skillLine(l))); });
+                activeEmployees.forEach(e => { if (inDept(e.dept)) set.add(skillLine(e.subDept)); });
+                (data.catalog || []).forEach(s => { if (s.active !== false && s.subDept && inDept(s.dept)) set.add(s.subDept); });
+                const hasNoLine = set.has('');
+                set.delete('');
+                const list = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                if (hasNoLine) list.push('');
+                return list;
+            }, [subDepartments, activeEmployees, data.catalog, deptForLines]);
+            const workLine = line !== 'ALL' && lineOptions.includes(line) ? line : (lineOptions.find(l => activeEmployees.some(e => e.dept === workDept && skillLine(e.subDept) === l)) ?? lineOptions[0] ?? '');
+            const stats = useMemo(() => computeSkillStats(employees, data, { dept, line, position, shift }), [employees, data, dept, line, position, shift]);
+            const hasCatalog = (data.catalog || []).some(s => s.active !== false && (dept === 'ALL' || skillSameText(s.dept, dept)));
+            const canEdit = canEditSkillMatrix(currentUser, workDept);
+            const positionOptions = [...new Set(activeEmployees.filter(e => dept === 'ALL' || e.dept === dept).map(e => e.position).filter(Boolean))].sort((a, b) => getPositionRank(b) - getPositionRank(a) || a.localeCompare(b));
+            const tabs = [['dashboard', 'Dashboard', <Icons.Chart size={15}/>], ['matrix', 'Matrix', <Icons.Grid size={15}/>], ['settings', 'ตั้งค่าทักษะ', <Icons.Settings size={15}/>]];
+            const select = 'rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-200';
+            return (
+                <section className="mx-auto w-full max-w-7xl space-y-4 pb-10">
+                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-violet-900 to-blue-800 px-5 py-5 text-white shadow-lg sm:px-6">
+                        <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"></div>
+                        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-fuchsia-400/20 blur-3xl"></div>
+                        <div className="relative flex flex-wrap items-start gap-4">
+                            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Icons.GraduationCap size={26}/></span>
+                            <div className="min-w-0 flex-1">
+                                <div className="text-xs font-semibold uppercase tracking-widest text-violet-200">Skill Matrix · ISO 9001 / IATF 16949</div>
+                                <h1 className="text-xl font-extrabold sm:text-2xl">ทักษะพนักงาน — {tab === 'dashboard' ? (dept === 'ALL' ? 'ทุกแผนก' : dept) : `${workDept} / ${workLine || SKILL_NO_LINE_LABEL}`}</h1>
+                                <p className="mt-0.5 text-xs text-violet-100/80">ใครอยู่ระดับไหน ขาดทักษะอะไร และแต่ละสถานีมีคนพร้อมปล่อยงานพอไหม{loadedAt ? ` · อัปเดต ${new Date(loadedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}` : ''}</p>
+                            </div>
+                            <button type="button" onClick={() => void load()} disabled={loading} className="flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold ring-1 ring-white/20 hover:bg-white/25 disabled:opacity-60">{loading ? <Icons.Loader size={14}/> : <Icons.RefreshCw size={14}/>}รีเฟรช</button>
+                        </div>
+                        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+                            <div className="flex rounded-xl bg-black/20 p-1" role="tablist" aria-label="Skill Matrix">
+                                {tabs.map(([key, label, icon]) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${tab === key ? 'bg-white text-violet-800 shadow' : 'text-violet-100 hover:bg-white/10'}`}>{icon}{label}</button>)}
+                            </div>
+                            <div className="ml-auto flex flex-wrap items-center gap-2">
+                                <select value={tab === 'dashboard' ? dept : workDept} onChange={e => { setDept(e.target.value); setLine('ALL'); setPosition('ALL'); }} aria-label="แผนก" className={select}>
+                                    {tab === 'dashboard' && <option value="ALL">ทุกแผนก</option>}
+                                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                                <select value={tab === 'dashboard' ? line : workLine} onChange={e => setLine(e.target.value)} aria-label="ไลน์" className={select}>
+                                    {tab === 'dashboard' && <option value="ALL">ทุกไลน์</option>}
+                                    {lineOptions.map(l => <option key={l || '__none'} value={l}>{l || SKILL_NO_LINE_LABEL}</option>)}
+                                </select>
+                                {tab === 'dashboard' && <>
+                                    <select value={position} onChange={e => setPosition(e.target.value)} aria-label="ตำแหน่ง" className={select}><option value="ALL">ทุกตำแหน่ง</option>{positionOptions.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                    <select value={shift} onChange={e => setShift(e.target.value)} aria-label="กะ" className={select}><option value="ALL">ทุกกะ</option><option value="A">กะ A</option><option value="B">กะ B</option><option value="-">ไม่ระบุกะ</option></select>
+                                </>}
+                            </div>
+                        </div>
+                    </div>
+                    {error && <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700"><span>{error}</span><button type="button" onClick={() => void load()} className="rounded-lg bg-white px-3 py-1 text-xs font-bold text-rose-700 ring-1 ring-rose-200">ลองใหม่</button></div>}
+                    {loading && !loadedAt && !hasCatalog && <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-500"><Icons.Loader size={18}/>กำลังโหลด Skill Matrix...</div>}
+                    {!(loading && !loadedAt && !hasCatalog) && tab === 'dashboard' && <SkillDashboard stats={stats} employees={employees} hasCatalog={hasCatalog} canEdit={canEdit} onOpenMatrix={() => setTab('matrix')} onOpenSettings={() => setTab('settings')}/>}
+                    {tab === 'matrix' && <SkillMatrixView employees={employees} data={data} dept={workDept} line={workLine} canEdit={canEdit} call={call} onReload={load} searchTerm={searchTerm}/>}
+                    {tab === 'settings' && <SkillSettingsView employees={employees} data={data} dept={workDept} line={workLine} positions={positions} canEdit={canEdit} call={call} onReload={load}/>}
+                </section>
+            );
+        };
+
         const AttendanceMonitor = ({ data, loading, error, onRefresh, lastUpdated }) => {
             const employees = Array.isArray(data?.employees) ? data.employees : [];
             const records = Array.isArray(data?.records) ? data.records : [];
@@ -2235,7 +3249,7 @@
                     dept: currentUser.dept || 'ALL'
                 } : { username: 'System', name: 'Login/System', role: '-', dept: '-' };
                 const requestBody = { action, ...payload, executor };
-                if (action === 'getAttendance' || action === 'recordAttendance' || action === 'recordAttendanceBatch' || action === 'translateText') {
+                if (action === 'getAttendance' || action === 'recordAttendance' || action === 'recordAttendanceBatch' || action === 'translateText' || action === 'saveSkillCatalog' || action === 'saveSkillLevels' || action === 'saveSkillMatrixDoc') {
                     requestBody.attendanceToken = currentUser?.attendanceToken || '';
                 }
 
@@ -3289,6 +4303,8 @@
             }, [employees]);
 
 
+            const handleSkillSessionExpired = useCallback(() => { localStorage.removeItem('currentUser'); setCurrentUser(null); }, []);
+
             // *** FIXED ZONE: ALL HOOKS ARE ABOVE THIS LINE ***
 
             const allEmployeesWithIds = employees.filter(e => e.id);
@@ -3361,6 +4377,7 @@
                                 <button onClick={()=>setViewMode('attendance')} aria-label="เช็คชื่อ" title="เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">เช็คชื่อ</span></button>
                                 <button onClick={()=>setViewMode('monitor')} aria-label="Monitor เช็คชื่อ" title="Monitor เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='monitor'?'bg-blue-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Chart size={15}/><span className="hidden 2xl:inline">Monitor</span></button>
                                 {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>setViewMode('turnover')} aria-label="Staff Turnover" title="Staff Turnover" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='turnover'?'bg-rose-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Users size={15}/><span className="hidden 2xl:inline">Turnover</span></button>}
+                                <button onClick={()=>setViewMode('skills')} aria-label="Skill Matrix" title="Skill Matrix" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='skills'?'bg-violet-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.GraduationCap size={15}/><span className="hidden 2xl:inline">Skill Matrix</span></button>
                             </div>
 
                             <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true"></div>
@@ -3379,7 +4396,7 @@
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>{setViewMode('turnover'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 font-bold text-rose-700"><Icons.Users/> Staff Turnover</button>} <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>{setViewMode('turnover'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 font-bold text-rose-700"><Icons.Users/> Staff Turnover</button>} <button onClick={()=>{setViewMode('skills'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-violet-50 p-3 font-bold text-violet-700"><Icons.GraduationCap/> Skill Matrix</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
@@ -3400,9 +4417,11 @@
                             </>
                         )}
 
-                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' || viewMode === 'turnover' ? 'p-4 sm:p-6' : 'p-8'}`}>
+                        <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' || viewMode === 'turnover' || viewMode === 'skills' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
-                            {viewMode === 'turnover' ? (
+                            {viewMode === 'skills' ? (
+                                <SkillMatrixPage employees={allEmployeesWithIds} currentDept={currentDept} departments={departments} subDepartments={subDepartments} positions={positions} currentUser={currentUser} driveUrl={driveUrl} apiCall={appApiCall} onSessionExpired={handleSkillSessionExpired} searchTerm={searchTerm} />
+                            ) : viewMode === 'turnover' ? (
                                 <TurnoverDashboard employees={allEmployeesWithIds} currentDept={currentDept} />
                             ) : viewMode === 'monitor' ? (
                                 <AttendanceMonitor data={attendanceData} loading={attendanceLoading} error={attendanceError} onRefresh={reloadAttendance} lastUpdated={attendanceUpdatedAt} />

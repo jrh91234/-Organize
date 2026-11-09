@@ -33,7 +33,7 @@ function doPost(e) {
     }
 
     // [VERIFIED] Logging แบบใหม่ บันทึกละเอียดขึ้น ไม่บันทึกการ Read data
-    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance' && data.action !== 'getAttendanceCounts' && data.action !== 'translateText') {
+    if (data.action !== 'getData' && data.action !== 'getUsers' && data.action !== 'getAttendance' && data.action !== 'getAttendanceCounts' && data.action !== 'translateText' && data.action !== 'getSkillMatrix') {
       let detailStr = data.logDetail || '';
       
       // กรณี Update/Delete ให้บันทึกรายละเอียดพนักงานที่ถูกแก้ไข (ชื่อ, รหัส, แผนก, ตำแหน่ง)
@@ -54,6 +54,12 @@ function doPost(e) {
         detailStr = `เช็คชื่อ: ${data.type === 'ot' ? 'เริ่ม OT' : 'เข้างาน'}`;
       } else if (data.action === 'recordAttendanceBatch') {
         detailStr = `เช็คชื่อ ${Array.isArray(data.items) ? data.items.length : 0} รายการ${data.workDate ? ` · ย้อนหลังรอบวันที่ ${data.workDate} เวลา ${data.time || '08:00'}` : ''}`;
+      } else if (data.action === 'saveSkillLevels') {
+        detailStr = `Skill Matrix: บันทึกระดับทักษะ ${Array.isArray(data.items) ? data.items.length : 0} รายการ`;
+      } else if (data.action === 'saveSkillCatalog') {
+        detailStr = `Skill Matrix: รายการทักษะ ${data.dept || '-'} (${(Array.isArray(data.scopes) ? data.scopes : []).map(s => (s.subDept || 'ทั้งแผนก') + ' ' + ((s.skills || []).length) + ' ทักษะ').join(', ')})`;
+      } else if (data.action === 'saveSkillMatrixDoc') {
+        detailStr = `Skill Matrix: หัวเอกสาร ${(data.doc && data.doc.dept) || '-'} / ${(data.doc && data.doc.subDept) || 'ทั้งแผนก'} Rev.${(data.doc && data.doc.rev) || '-'}`;
       } else if (!detailStr && (data.user || data.updates)) {
         // Fallback ใส่รายละเอียดเท่าที่มี
         detailStr = JSON.stringify(data.user || data.updates || {});
@@ -77,6 +83,10 @@ function doPost(e) {
       case 'recordAttendance': return recordAttendance(data);
       case 'recordAttendanceBatch': return recordAttendanceBatch(data);
       case 'recoverOrgData': return recoverOrgData(data);
+      case 'getSkillMatrix': return getSkillMatrix();
+      case 'saveSkillCatalog': return saveSkillCatalog(data);
+      case 'saveSkillLevels': return saveSkillLevels(data);
+      case 'saveSkillMatrixDoc': return saveSkillMatrixDoc(data);
       default: return createJSONOutput({ status: 'error', message: 'Unknown action' });
     }
   } catch (error) {
@@ -1103,4 +1113,247 @@ function recordAttendanceItems_(data, items, allowSelfFallback) {
     sheet.getRange(firstRow, 1, writes.length, 11).setValues(writes);
   }
   return { status: 'success', date: today, backdated: resolved.backdated, items: outcomes };
+}
+
+// --- SKILL MATRIX (ISO 9001 / IATF 16949) ---
+// Display board only: levels are entered here by Engineer/Supervisor/Admin for now.
+// A training/exam system can later push levels with the same keys (EmployeeId + SkillId) and Source = 'system'.
+const SKILL_EDIT_ROLES = ['admin', 'supervisor', 'engineer'];
+const SKILL_SHEETS = {
+  catalog: { name: 'SkillCatalog', headers: ['SkillId', 'Dept', 'SubDept', 'Category', 'Code', 'Name', 'WI', 'WIRev', 'Critical', 'TargetCount', 'TargetLevel', 'Required', 'Order', 'Active', 'UpdatedAt', 'UpdatedBy'] },
+  levels: { name: 'SkillLevels', headers: ['EmployeeId', 'SkillId', 'Level', 'AssessedDate', 'Source', 'Note', 'UpdatedAt', 'UpdatedBy'] },
+  history: { name: 'SkillLevelHistory', headers: ['Timestamp', 'EmployeeId', 'SkillId', 'OldLevel', 'NewLevel', 'AssessedDate', 'Source', 'By'] },
+  docs: { name: 'SkillMatrixDocs', headers: ['Dept', 'SubDept', 'Title', 'DocNo', 'Rev', 'EffectiveDate', 'PreparedBy', 'CheckedBy', 'ApprovedBy', 'ReviewMonths', 'LastReviewDate', 'UpdatedAt', 'UpdatedBy'] }
+};
+const SKILL_CATEGORY_KEYS = ['process', 'machine', 'quality', 'safety', 'general'];
+
+function getSkillSheet_(key) {
+  const def = SKILL_SHEETS[key];
+  const sheet = getSheet(def.name);
+  if (sheet.getLastRow() === 0) {
+    // Keep everything as text so IDs like "007" and dates are not re-typed by Sheets.
+    sheet.getRange(1, 1, sheet.getMaxRows(), def.headers.length).setNumberFormat('@');
+    sheet.getRange(1, 1, 1, def.headers.length).setValues([def.headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function skillRows_(key) {
+  const sheet = getSkillSheet_(key);
+  const width = SKILL_SHEETS[key].headers.length;
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, width).getValues();
+}
+
+function writeSkillRows_(key, rows) {
+  const sheet = getSkillSheet_(key);
+  const width = SKILL_SHEETS[key].headers.length;
+  const last = sheet.getLastRow();
+  if (last >= 2) sheet.getRange(2, 1, last - 1, width).clearContent();
+  if (rows.length > 0) {
+    const range = sheet.getRange(2, 1, rows.length, width);
+    range.setNumberFormat('@');
+    range.setValues(rows);
+  }
+}
+
+function skillText_(value) {
+  if (value instanceof Date) return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return value === null || value === undefined ? '' : String(value).trim();
+}
+
+function skillDate_(value) {
+  const text = skillText_(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+}
+
+function skillLevel_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const level = Number(value);
+  return Number.isInteger(level) && level >= 0 && level <= 4 ? level : null;
+}
+
+function skillInt_(value, fallback, min, max) {
+  const number = Math.round(Number(value));
+  if (value === '' || value === null || value === undefined || isNaN(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function skillSameDept_(a, b) {
+  return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+}
+
+function canEditSkillDept_(actor, dept) {
+  if (!actor || SKILL_EDIT_ROLES.indexOf(actor.role) < 0) return false;
+  if (actor.role === 'admin' || String(actor.dept || '').toUpperCase() === 'ALL') return true;
+  return skillSameDept_(actor.dept, dept);
+}
+
+function skillAuthError_(actor) {
+  if (!actor) return createJSONOutput({ status: 'error', code: 'session_expired', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' });
+  return createJSONOutput({ status: 'error', code: 'forbidden', message: 'เฉพาะ Engineer / Supervisor / Admin ของแผนกนี้ที่แก้ Skill Matrix ได้' });
+}
+
+function getSkillMatrix() {
+  const catalog = skillRows_('catalog').filter(r => skillText_(r[0])).map(r => {
+    let required = {};
+    try { required = JSON.parse(skillText_(r[11]) || '{}') || {}; } catch (e) { required = {}; }
+    return {
+      id: skillText_(r[0]), dept: skillText_(r[1]), subDept: skillText_(r[2]), category: skillText_(r[3]) || 'process',
+      code: skillText_(r[4]), name: skillText_(r[5]), wi: skillText_(r[6]), wiRev: skillText_(r[7]), critical: skillText_(r[8]),
+      targetCount: skillInt_(r[9], 0, 0, 99), targetLevel: skillInt_(r[10], 3, 1, 4), required: required,
+      order: skillInt_(r[12], 0, 0, 100000), active: skillText_(r[13]).toUpperCase() !== 'FALSE',
+      updatedAt: skillText_(r[14]), updatedBy: skillText_(r[15])
+    };
+  });
+  const levels = skillRows_('levels').filter(r => skillText_(r[0]) && skillText_(r[1]) && skillLevel_(r[2]) !== null).map(r => ({
+    employeeId: skillText_(r[0]), skillId: skillText_(r[1]), level: skillLevel_(r[2]), assessedDate: skillDate_(r[3]),
+    source: skillText_(r[4]) || 'manual', note: skillText_(r[5]), updatedAt: skillText_(r[6]), updatedBy: skillText_(r[7])
+  }));
+  // Only recent history is needed for the dashboard ("Recent Skill Improvement").
+  const since = Date.now() - 180 * 24 * 60 * 60 * 1000;
+  const history = skillRows_('history').map(r => ({
+    timestamp: skillText_(r[0]), employeeId: skillText_(r[1]), skillId: skillText_(r[2]),
+    oldLevel: skillLevel_(r[3]), newLevel: skillLevel_(r[4]), assessedDate: skillDate_(r[5]), source: skillText_(r[6]), by: skillText_(r[7])
+  })).filter(h => h.employeeId && h.skillId && new Date(h.timestamp).getTime() >= since).slice(-500);
+  const docs = skillRows_('docs').filter(r => skillText_(r[0])).map(r => ({
+    dept: skillText_(r[0]), subDept: skillText_(r[1]), title: skillText_(r[2]), docNo: skillText_(r[3]), rev: skillText_(r[4]),
+    effectiveDate: skillDate_(r[5]), preparedBy: skillText_(r[6]), checkedBy: skillText_(r[7]), approvedBy: skillText_(r[8]),
+    reviewMonths: skillInt_(r[9], 6, 1, 36), lastReviewDate: skillDate_(r[10]), updatedAt: skillText_(r[11]), updatedBy: skillText_(r[12])
+  }));
+  return createJSONOutput({ status: 'success', catalog: catalog, levels: levels, history: history, docs: docs, serverTime: new Date().toISOString() });
+}
+
+// data: { dept, scopes: [{ subDept, skills: [...] }] } — each scope is replaced as a whole; skills missing from it are deactivated (levels are kept).
+function saveSkillCatalog(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  const dept = String((data && data.dept) || '').trim();
+  if (!actor || !canEditSkillDept_(actor, dept)) return skillAuthError_(actor);
+  const scopes = Array.isArray(data.scopes) ? data.scopes : [];
+  if (!dept || scopes.length === 0) return createJSONOutput({ status: 'error', message: 'ข้อมูลรายการทักษะไม่ครบ' });
+
+  const now = new Date().toISOString();
+  const rows = skillRows_('catalog').filter(r => skillText_(r[0]));
+  const indexById = new Map(rows.map((r, i) => [skillText_(r[0]), i]));
+  let saved = 0;
+  for (let s = 0; s < scopes.length; s++) {
+    const subDept = String(scopes[s].subDept || '').trim();
+    const skills = Array.isArray(scopes[s].skills) ? scopes[s].skills : [];
+    const keep = new Set();
+    for (let i = 0; i < skills.length; i++) {
+      const skill = skills[i] || {};
+      const id = String(skill.id || '').trim();
+      const name = String(skill.name || '').trim();
+      if (!id || !name) continue;
+      if (indexById.has(id)) {
+        const existing = rows[indexById.get(id)];
+        if (!skillSameDept_(existing[1], dept) || skillText_(existing[2]) !== subDept) {
+          return createJSONOutput({ status: 'error', message: 'รหัสทักษะ ' + id + ' เป็นของไลน์อื่น' });
+        }
+      }
+      const required = {};
+      if (skill.required && typeof skill.required === 'object') {
+        Object.keys(skill.required).forEach(position => {
+          const level = skillLevel_(skill.required[position]);
+          if (level) required[String(position).trim()] = level;
+        });
+      }
+      const row = [
+        id, dept, subDept,
+        SKILL_CATEGORY_KEYS.indexOf(skill.category) >= 0 ? skill.category : 'process',
+        String(skill.code || '').trim(), name, String(skill.wi || '').trim(), String(skill.wiRev || '').trim(),
+        ['CC', 'SC'].indexOf(skill.critical) >= 0 ? skill.critical : '',
+        String(skillInt_(skill.targetCount, 0, 0, 99)), String(skillInt_(skill.targetLevel, 3, 1, 4)),
+        JSON.stringify(required), String(i), 'TRUE', now, actor.name || actor.username
+      ];
+      if (indexById.has(id)) rows[indexById.get(id)] = row;
+      else { indexById.set(id, rows.length); rows.push(row); }
+      keep.add(id);
+      saved++;
+    }
+    rows.forEach((r, index) => {
+      if (skillSameDept_(r[1], dept) && skillText_(r[2]) === subDept && !keep.has(skillText_(r[0])) && skillText_(r[13]).toUpperCase() !== 'FALSE') {
+        const updated = r.slice();
+        updated[13] = 'FALSE';
+        updated[14] = now;
+        updated[15] = actor.name || actor.username;
+        rows[index] = updated;
+      }
+    });
+  }
+  writeSkillRows_('catalog', rows.map(r => r.map(v => skillText_(v))));
+  return createJSONOutput({ status: 'success', saved: saved });
+}
+
+// data: { items: [{ employeeId, skillId, level (0-4, or null to clear), note }], assessedDate }
+function saveSkillLevels(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  if (!actor || SKILL_EDIT_ROLES.indexOf(actor.role) < 0) return skillAuthError_(actor);
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (items.length === 0) return createJSONOutput({ status: 'error', message: 'ไม่มีรายการที่ต้องบันทึก' });
+
+  const employees = new Map(getAttendanceOrgEmployees_().map(e => [attendanceEmployeeId_(e), e]));
+  const skills = new Map(skillRows_('catalog').map(r => [skillText_(r[0]), { dept: skillText_(r[1]) }]));
+  const defaultDate = skillDate_(data.assessedDate) || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const now = new Date().toISOString();
+  const by = actor.name || actor.username;
+
+  const rows = skillRows_('levels').filter(r => skillText_(r[0]) && skillText_(r[1]));
+  const indexByKey = new Map(rows.map((r, i) => [skillText_(r[0]) + '|' + skillText_(r[1]), i]));
+  const removed = new Set();
+  const history = [];
+  const errors = [];
+  items.forEach(item => {
+    const employeeId = String((item && item.employeeId) || '').trim();
+    const skillId = String((item && item.skillId) || '').trim();
+    const employee = employees.get(employeeId);
+    const skill = skills.get(skillId);
+    if (!employee || !skill) { errors.push(employeeId + '/' + skillId + ': ไม่พบพนักงานหรือทักษะ'); return; }
+    if (!canEditSkillDept_(actor, employee.dept) || !skillSameDept_(skill.dept, employee.dept)) { errors.push((employee.name || employeeId) + ': ไม่มีสิทธิ์แก้แผนกนี้'); return; }
+    const clear = item.level === null || item.level === '';
+    const level = skillLevel_(item.level);
+    if (!clear && level === null) { errors.push((employee.name || employeeId) + ': ระดับต้องเป็น 0-4'); return; }
+    const key = employeeId + '|' + skillId;
+    const index = indexByKey.has(key) ? indexByKey.get(key) : -1;
+    const oldLevel = index >= 0 && !removed.has(index) ? skillLevel_(rows[index][2]) : null;
+    if (clear) {
+      if (index >= 0) removed.add(index);
+    } else {
+      const row = [employeeId, skillId, String(level), skillDate_(item.assessedDate) || defaultDate, 'manual', String(item.note || '').trim(), now, by];
+      if (index >= 0) { rows[index] = row; removed.delete(index); }
+      else { indexByKey.set(key, rows.length); rows.push(row); }
+    }
+    const newLevel = clear ? null : level;
+    if (oldLevel !== newLevel) history.push([now, employeeId, skillId, oldLevel === null ? '' : String(oldLevel), newLevel === null ? '' : String(newLevel), clear ? '' : (skillDate_(item.assessedDate) || defaultDate), 'manual', by]);
+  });
+
+  writeSkillRows_('levels', rows.filter((r, i) => !removed.has(i)).map(r => r.map(v => skillText_(v))));
+  if (history.length > 0) {
+    const sheet = getSkillSheet_('history');
+    const range = sheet.getRange(sheet.getLastRow() + 1, 1, history.length, SKILL_SHEETS.history.headers.length);
+    range.setNumberFormat('@');
+    range.setValues(history);
+  }
+  return createJSONOutput({ status: errors.length && history.length === 0 && errors.length === items.length ? 'error' : 'success', changed: history.length, errors: errors, message: errors.join(' · ') });
+}
+
+function saveSkillMatrixDoc(data) {
+  const actor = getAttendanceActor_(data && data.attendanceToken);
+  const doc = (data && data.doc) || {};
+  const dept = String(doc.dept || '').trim();
+  if (!actor || !canEditSkillDept_(actor, dept)) return skillAuthError_(actor);
+  if (!dept) return createJSONOutput({ status: 'error', message: 'ไม่ระบุแผนก' });
+  const subDept = String(doc.subDept || '').trim();
+  const row = [
+    dept, subDept, String(doc.title || '').trim(), String(doc.docNo || '').trim(), String(doc.rev || '').trim(),
+    skillDate_(doc.effectiveDate), String(doc.preparedBy || '').trim(), String(doc.checkedBy || '').trim(), String(doc.approvedBy || '').trim(),
+    String(skillInt_(doc.reviewMonths, 6, 1, 36)), skillDate_(doc.lastReviewDate), new Date().toISOString(), actor.name || actor.username
+  ];
+  const rows = skillRows_('docs').filter(r => skillText_(r[0])).map(r => r.map(v => skillText_(v)));
+  const index = rows.findIndex(r => skillSameDept_(r[0], dept) && r[1] === subDept);
+  if (index >= 0) rows[index] = row; else rows.push(row);
+  writeSkillRows_('docs', rows);
+  return createJSONOutput({ status: 'success' });
 }
