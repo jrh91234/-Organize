@@ -2507,7 +2507,7 @@
                 const list = deptPositions.filter(p => used.has(p));
                 return list.length ? list : deptPositions;
             }, [employees, dept, line, deptPositions]);
-            const update = (setter) => (index, patch) => { setter(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s)); setDirty(true); };
+            const update = (setter) => (index, patch) => { setter(prev => prev.map((s, i) => i === index ? { ...s, ...patch } : s)); setDirty(true); setMessage(null); };
             const move = (setter) => (index, delta) => { setter(prev => { const next = [...prev]; const target = index + delta; if (target < 0 || target >= next.length) return prev; [next[index], next[target]] = [next[target], next[index]]; return next; }); setDirty(true); };
             const remove = (setter) => (index) => { setter(prev => prev.filter((_, i) => i !== index)); setDirty(true); };
             // Codes are unique across the department: saved skills of every line plus the rows being edited here.
@@ -2541,6 +2541,10 @@
             const SkillTable = ({ title, hint, list, setter, forLine }) => {
                 const onUpdate = update(setter), onMove = move(setter), onRemove = remove(setter);
                 const cols = forLine ? linePositions : deptPositions;
+                // Who makes each position column appear, so a wrong sub-department / extra line is easy to spot.
+                const members = employees.filter(e => !isResignedEmployee(e) && e.dept === dept && (!forLine || inSkillLine(e, line)));
+                const holders = (position) => members.filter(e => e.position === position);
+                const holderTitle = (position) => holders(position).map(e => `${e.name} (${e.id}) — ไลน์หลัก ${skillLine(e.subDept) || SKILL_NO_LINE_LABEL}${forLine && skillLine(e.subDept) !== line ? ' · เลือกดูแลไลน์นี้เพิ่ม' : ''}`).join('\n');
                 const onSetColumn = (position, level) => { setter(prev => prev.map(s => ({ ...s, required: { ...(s.required || {}), [position]: level } }))); setDirty(true); };
                 return (
                     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -2556,6 +2560,9 @@
                                         {cols.map(p => (
                                             <th key={p} className="cursor-default whitespace-nowrap px-2 py-2 text-center align-top font-bold text-violet-600 hover:bg-gray-50" title="ระดับที่ตำแหน่งนี้ต้องมี (– = ไม่บังคับ)">
                                                 <div>{p}</div>
+                                                <div className="cursor-help text-[9px] font-semibold normal-case tracking-normal text-gray-400" title={holderTitle(p) || 'ไม่มีพนักงานตำแหน่งนี้'}>
+                                                    {holders(p).length} คน{forLine && holders(p).some(e => skillLine(e.subDept) !== line) ? ` · ${holders(p).filter(e => skillLine(e.subDept) !== line).length} ดูแลเพิ่ม` : ''} ⓘ
+                                                </div>
                                                 {canEdit && list.length > 0 && (
                                                     <select value="" aria-label={`ตั้งทั้งคอลัมน์ ${p}`} title="ตั้งค่าเดียวกันให้ทุกแถวในตารางนี้" onChange={e => { if (e.target.value !== '') onSetColumn(p, e.target.value === 'none' ? undefined : Number(e.target.value)); }}
                                                         className="mt-1 w-full min-w-[96px] rounded-md border border-dashed border-violet-300 bg-violet-50 px-1 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-violet-700 hover:bg-violet-100 focus:outline-none">
