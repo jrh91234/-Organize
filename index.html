@@ -2513,6 +2513,28 @@
             // Codes are unique across the department: saved skills of every line plus the rows being edited here.
             const usedCodeSkills = (exceptId) => [...(data.catalog || []).filter(c => c.active !== false && skillSameText(c.dept, dept)), ...lineSkills, ...sharedSkills].filter(c => c.id !== exceptId);
             const add = (setter, forLine) => { setter(prev => [...prev, { id: newSkillId(), category: forLine ? 'process' : 'safety', autoCode: true, code: nextSkillCode(forLine ? 'process' : 'safety', [...usedCodeSkills(), ...prev]), name: '', wi: '', wiRev: '', critical: '', targetCount: forLine ? 3 : 0, targetLevel: 3, required: sampleRequired(forLine ? 'process' : 'safety', forLine ? linePositions : deptPositions) }]); setDirty(true); };
+            // Other lines of this department that already have their own saved skills, to copy from.
+            const copySourceLines = useMemo(() => {
+                const counts = new Map();
+                (data.catalog || []).forEach(c => { if (c.active !== false && skillSameText(c.dept, dept) && c.subDept && c.subDept !== line) counts.set(c.subDept, (counts.get(c.subDept) || 0) + 1); });
+                return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
+            }, [data.catalog, dept, line]);
+            const copyFromLine = (source) => {
+                const sourceSkills = (data.catalog || []).filter(c => c.active !== false && skillSameText(c.dept, dept) && c.subDept === source).sort(compareSkills);
+                const existing = new Set(lineSkills.map(s => String(s.name || '').trim().toLowerCase()));
+                const fresh = sourceSkills.filter(s => !existing.has(String(s.name || '').trim().toLowerCase()));
+                if (!fresh.length) { setMessage({ ok: false, text: `ไลน์ ${line} มีทักษะทุกตัวของ ${source} อยู่แล้ว` }); return; }
+                if (!window.confirm(`คัดลอก ${fresh.length} ทักษะจากไลน์ ${source} มาที่ไลน์ ${line}?\n(ทักษะที่ชื่อซ้ำจะข้ามไป · ยังไม่บันทึกจนกว่าจะกดบันทึก)`)) return;
+                // Keep code / WI / CC-SC / targets; keep the required level only for positions that exist on this line.
+                const keepPositions = new Set(linePositions);
+                setLineSkills(prev => [...prev, ...fresh.map(s => ({
+                    id: newSkillId(), category: s.category, code: s.code, name: s.name, wi: s.wi, wiRev: s.wiRev, critical: s.critical,
+                    targetCount: s.targetCount, targetLevel: s.targetLevel,
+                    required: Object.fromEntries(Object.entries(s.required || {}).filter(([position]) => keepPositions.has(position)))
+                }))]);
+                setDirty(true);
+                setMessage({ ok: true, text: `คัดลอก ${fresh.length} ทักษะจากไลน์ ${source} แล้ว ตรวจระดับในคอลัมน์ตำแหน่ง แล้วกด "บันทึกรายการทักษะ"` });
+            };
             const addSamples = () => {
                 const names = new Set([...lineSkills, ...sharedSkills].map(s => s.name.toLowerCase()));
                 if (line) setLineSkills(prev => [...prev, ...makeSampleSkills(linePositions, true).filter(s => !names.has(s.name.toLowerCase()))]);
@@ -2550,6 +2572,12 @@
                     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
                         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
                             <div className="min-w-0 flex-1"><h3 className="text-sm font-bold text-gray-800">{title} <span className="font-normal text-gray-400">({list.length})</span></h3><p className="text-[11px] text-gray-500">{hint}</p></div>
+                            {canEdit && forLine && copySourceLines.length > 0 && (
+                                <select value="" aria-label="คัดลอกทักษะจากไลน์อื่น" onChange={e => { if (e.target.value) copyFromLine(e.target.value); }} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-100 focus:outline-none">
+                                    <option value="">⧉ คัดลอกจากไลน์อื่น…</option>
+                                    {copySourceLines.map(([name, count]) => <option key={name} value={name}>{name} ({count} ทักษะ)</option>)}
+                                </select>
+                            )}
                             {canEdit && <button type="button" onClick={() => add(setter, forLine)} className="flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-100"><Icons.Plus size={14}/>เพิ่มทักษะ</button>}
                         </div>
                         <div className="overflow-x-auto">
