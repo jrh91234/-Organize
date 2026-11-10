@@ -3291,7 +3291,21 @@
             if (canvas) return canvas.toDataURL('image/png');
             return host.querySelector('img')?.src || '';
         };
-        const buildIdCardsHtml = (people, { layout, withBack, qrMap }) => {
+        // Static SVG string of the card radar (same look as the org-chart mini radar) for the printable card back.
+        const idCardRadarSvg = (axes) => {
+            const width = 210, height = 118, radius = 40, n = axes.length;
+            const point = (i, value, extra = 0) => {
+                const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+                const r = (Math.max(0, Math.min(SKILL_MAX_LEVEL, value)) / SKILL_MAX_LEVEL) * radius + extra;
+                return [width / 2 + r * Math.cos(angle), height / 2 + r * Math.sin(angle), Math.cos(angle)];
+            };
+            const polygon = (fn) => axes.map((a, i) => point(i, fn(a)).slice(0, 2).map(v => v.toFixed(1)).join(',')).join(' ');
+            const rings = [2, 4].map(l => `<polygon points="${polygon(() => l)}" fill="none" stroke="#cbd5e1" stroke-width="1"${l === SKILL_RELEASE_LEVEL ? ' stroke-dasharray="3 2"' : ''}/>`).join('');
+            const spokes = axes.map((a, i) => { const [x, y] = point(i, SKILL_MAX_LEVEL); return `<line x1="${width / 2}" y1="${height / 2}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e2e8f0" stroke-width="1"/>`; }).join('');
+            const labels = axes.map((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 8); return `<text x="${x.toFixed(1)}" y="${(y + 3).toFixed(1)}" font-size="9" font-weight="600" fill="#475569" text-anchor="${cos > 0.25 ? 'start' : cos < -0.25 ? 'end' : 'middle'}">${idCardEsc(a.label)}</text>`; }).join('');
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" style="width:100%;height:100%">${rings}${spokes}<polygon points="${polygon(a => a.required)}" fill="none" stroke="#f97316" stroke-width="1.6" stroke-dasharray="4 3"/><polygon points="${polygon(a => a.value)}" fill="#22c55e44" stroke="#16a34a" stroke-width="2"/>${labels}</svg>`;
+        };
+        const buildIdCardsHtml = (people, { layout, withBack, qrMap, summaries }) => {
             const cardFront = (e) => {
                 const sub = isSubcontractEmployee(e);
                 const color = sub ? '#c2410c' : '#1e3a8a';
@@ -3316,6 +3330,18 @@
                 const sub = isSubcontractEmployee(e);
                 const color = sub ? '#c2410c' : '#1e3a8a';
                 const qr = qrMap.get(e.id);
+                const sm = summaries && summaries.get(e.id);
+                if (sm && sm.radar) {
+                    return `<div class="card">
+                    <div class="band" style="background:${color}"><span class="bt">${idCardEsc(e.name)}</span></div>
+                    <div class="qr2">${qr ? `<img src="${qr}" style="width:100%;height:100%">` : ''}</div>
+                    <div class="idrow2"><span class="idl">ID</span><span class="idv" style="color:${color}">${idCardEsc(e.id)}</span></div>
+                    <div class="radar2">${idCardRadarSvg(sm.radar)}</div>
+                    <div class="legend2"><span style="color:#16a34a">━ ปัจจุบัน</span> <span style="color:#f97316">┅ ที่ต้องการ</span> <b style="color:#334155">Skill ${sm.met}/${sm.required}</b></div>
+                    <div class="ret2">หากพบบัตรนี้ กรุณาส่งคืนฝ่ายบุคคล / If found, please return to HR.</div>
+                    <div class="foot" style="background:${color}"></div>
+                </div>`;
+                }
                 return `<div class="card">
                     <div class="band" style="background:${color}"><span class="bt">${idCardEsc(e.name)}</span></div>
                     <div class="qr">${qr ? `<img src="${qr}" style="width:100%;height:100%">` : ''}</div>
@@ -3349,6 +3375,12 @@
                 .binfo{position:absolute;left:40mm;right:3mm;top:14mm}
                 .ret{margin-top:2.5mm;font-size:6.5pt;color:#6b7280;line-height:1.3}
                 .foot{position:absolute;left:0;right:0;bottom:0;height:2.5mm}
+                .qr2{position:absolute;left:4mm;top:12mm;width:22mm;height:22mm}
+                .idrow2{position:absolute;left:4mm;top:35mm;display:flex;align-items:baseline;gap:1.2mm}
+                .idrow2 .idv{font-size:11pt}
+                .radar2{position:absolute;left:28mm;right:2mm;top:11mm;height:28mm}
+                .legend2{position:absolute;left:28mm;right:3mm;top:39.5mm;display:flex;justify-content:space-between;font-size:6pt;white-space:nowrap}
+                .ret2{position:absolute;left:4mm;right:4mm;top:46mm;font-size:6pt;color:#6b7280;white-space:nowrap}
             `;
             const pageCss = layout === 'cr80'
                 ? `@page{size:85.6mm 54mm;margin:0} .sheet{width:85.6mm;height:54mm;page-break-after:always;break-after:page;overflow:hidden} .sheet:last-child{page-break-after:auto;break-after:auto} .card{border:none;border-radius:0}`
@@ -3375,11 +3407,13 @@
                 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
                 <style>${css}${pageCss}</style></head><body>${sheets.join('')}</body></html>`;
         };
-        const IdCardPrintModal = ({ employees, onClose }) => {
+        const IdCardPrintModal = ({ employees, skillData, onClose }) => {
             const [selected, setSelected] = useState(() => new Set());
             const [search, setSearch] = useState('');
             const [layout, setLayout] = useState('a4');
             const [withBack, setWithBack] = useState(true);
+            const [withRadar, setWithRadar] = useState(true);
+            const summaries = useMemo(() => computeSkillSummaries(employees, skillData), [employees, skillData]);
             const [html, setHtml] = useState('');
             const [busy, setBusy] = useState(false);
             const frameRef = useRef(null);
@@ -3401,10 +3435,10 @@
                             try { qrMap.set(e.id, await idCardQrDataUrl(`HRATTEND1:${encodeURIComponent(String(e.id))}`)); } catch (error) { /* card prints without QR */ }
                         }
                     }
-                    if (!cancelled) { setHtml(buildIdCardsHtml(people, { layout, withBack, qrMap })); setBusy(false); }
+                    if (!cancelled) { setHtml(buildIdCardsHtml(people, { layout, withBack, qrMap, summaries: withRadar ? summaries : null })); setBusy(false); }
                 })();
                 return () => { cancelled = true; };
-            }, [peopleKey, layout, withBack]);
+            }, [peopleKey, layout, withBack, withRadar, summaries]);
             const print = () => {
                 const w = frameRef.current?.contentWindow;
                 if (!w) return;
@@ -3453,6 +3487,7 @@
                                         </select>
                                     </label>
                                     <label className="flex items-center gap-1.5"><input type="checkbox" checked={withBack} onChange={e => setWithBack(e.target.checked)} />พิมพ์ด้านหลัง (QR เช็คชื่อ)</label>
+                                    {withBack && <label className="flex items-center gap-1.5"><input type="checkbox" checked={withRadar} onChange={e => setWithRadar(e.target.checked)} />แสดง Radar Skill</label>}
                                     <span className="text-xs text-gray-400">{sheetCount} หน้า</span>
                                     <button type="button" onClick={print} disabled={!html || busy} className="ml-auto rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'กำลังเตรียม…' : 'พิมพ์ / บันทึก PDF'}</button>
                                 </div>
@@ -5237,7 +5272,7 @@
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onRename={handleRenamePosition} canRename={currentUser?.role !== 'leader'} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
-                    {isIdCardOpen && <IdCardPrintModal employees={filteredAll} onClose={()=>setIsIdCardOpen(false)} />}
+                    {isIdCardOpen && <IdCardPrintModal employees={filteredAll} skillData={chartSkillData} onClose={()=>setIsIdCardOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={validEmployees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
             );
