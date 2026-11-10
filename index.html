@@ -660,6 +660,11 @@
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser, isAllDepts }) => {
             const isSub = isSubcontractEmployee(employee);
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
+            // With the Skill display on, anyone who has a skill radar gets the wide card: photo and details on the left, radar on the right.
+            const skillSummary = React.useContext(SkillSummaryContext)?.get(employee.id);
+            const wide = !isStaging && Boolean(skillSummary?.radar);
+            const Left = wide ? 'div' : React.Fragment;
+            const leftProps = wide ? { className: 'flex w-[116px] shrink-0 flex-col items-center' } : {};
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
             if (employee.customColor && THEMES[employee.customColor]) { const styles = THEMES[employee.customColor].lv0.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; } else if (className) { const styles = className.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; }
             if (employee.customShape && SHAPES[employee.customShape]) radiusClass = SHAPES[employee.customShape].cls;
@@ -678,7 +683,7 @@
             const canDrag = !isLocked || (isLeaderRole && canEditThis);
 
             return (
-                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col items-center p-3 border-b-4 shadow-sm w-36 sm:w-40 transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
+                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex ${wide ? 'w-[350px] flex-row items-center gap-2' : 'w-36 flex-col items-center sm:w-40'} p-3 border-b-4 shadow-sm transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
                     <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
 
                     {/* [V24] Department Badge for ALL DEPTS view */}
@@ -702,6 +707,7 @@
                         <div className="reorder-controls" style={{left: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, -4); }}><Icons.ArrowUp size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button> </div> 
                         <div className="reorder-controls" style={{right: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, 4); }}><Icons.ArrowDown size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={8}/></button> </div> 
                     </> )}
+                    <Left {...leftProps}>
                     <div className="relative"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/><div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
                     <div className="mt-2 text-center w-full" style={textColorStyle}>
                         <p className="text-[10px] sm:text-xs font-bold opacity-60">{employee.id}</p>
@@ -712,8 +718,15 @@
                         {employee.showPhone && employee.phone && <p className="text-[10px] bg-gray-100 rounded px-1 mt-0.5 inline-block text-gray-600">📞 {employee.phone}</p>}
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
-                        {!isStaging && <SkillCardStrip employeeId={employee.id} />}
+                        {!isStaging && !wide && <SkillCardStrip employeeId={employee.id} />}
                     </div>
+                    </Left>
+                    {wide && (
+                        <div className={`flex min-w-0 flex-1 flex-col items-center ${isLeader ? 'mt-4' : ''}`}>
+                            <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id}/>
+                            <SkillCardStrip employeeId={employee.id} />
+                        </div>
+                    )}
                     {!isStaging && !selectionMode && <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`absolute bottom-1 right-1 rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>}
                     {isStaging && canDrag && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
@@ -723,6 +736,7 @@
         const EmployeeNode = React.memo(({ employee, allEmployees, onEdit, onDelete, onDrop, onMoveSelect, moveTargetId, isLocked, isViewOnly, level = 0, themeConf, shapeClass, selectionMode, selectedIds, toggleSelection, onReorder, onAddChild, layoutThreshold, searchTerm, visitedIds = new Set(), onGridColChange, currentUser, isAllDepts }) => {
             const [isDragOver, setIsDragOver] = useState(false);
             const [isDragOverGroup, setIsDragOverGroup] = useState(false);
+            const skillSummaries = React.useContext(SkillSummaryContext);
             const gridScrollRef = useRef(null);
             const [scrollArrows, setScrollArrows] = useState({ left: false, right: false });
             const updateScrollArrows = useCallback(() => {
@@ -759,13 +773,15 @@
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
             const isGrid = isLeader; 
             
+            // Wide (radar) cards need wider grid columns than the 140-200px of the plain ones.
+            const hasWideKids = Boolean(skillSummaries) && allEmployees.some(e => e.reportsTo === employee.id && skillSummaries.get(e.id)?.radar);
             const cols = employee.gridCols || 0;
             const totalItems = allEmployees.filter(e => e.reportsTo === employee.id).length + 1;
             const gridStyle = isGrid ? {
                 display: 'grid',
                 gridTemplateColumns: cols > 0
-                    ? `repeat(${cols}, minmax(140px, 200px))`
-                    : `repeat(${totalItems}, minmax(140px, 200px))`,
+                    ? `repeat(${cols}, ${hasWideKids ? 'minmax(360px, 380px)' : 'minmax(140px, 200px)'})`
+                    : `repeat(${totalItems}, ${hasWideKids ? 'minmax(360px, 380px)' : 'minmax(140px, 200px)'})`,
                 gridAutoFlow: cols > 0 ? 'row' : 'column',
                 minWidth: 'min-content'
             } : {};
@@ -1691,7 +1707,9 @@
                     return `${req > 0 && (level ?? 0) < req ? '✗' : '•'} ${skill.name}: ${level === null ? '-' : `L${level}`}${req > 0 ? ` (ต้อง L${req})` : ''}`;
                 });
                 if (!required && !rated) return;
-                result.set(emp.id, { required, met, stations, rated, tooltip: lines.join('\n') });
+                // Category radar for the wide org-chart card; needs at least 3 categories to draw.
+                const axes = computeSkillRadar(emp, catalog, data.levels, [], 'category').axes;
+                result.set(emp.id, { required, met, stations, rated, tooltip: lines.join('\n'), radar: axes.length >= 3 ? axes : null });
             });
             return result;
         };
@@ -1856,6 +1874,30 @@
             });
             const rows = skills.map(sk => ({ skill: sk, level: hasLevel(sk) ? levelOf(employee, sk) : null, required: requiredSkillLevel(sk, employee.position) }));
             return { axes, rows, colleagues: others.length };
+        };
+        // Compact radar for the org-chart card: levels 0-4, current (green) vs required for the position (orange dashed). Click opens the full radar.
+        const SkillMiniRadar = ({ axes, employeeId }) => {
+            // Wider than tall so the axis names beside the chart are not clipped.
+            const width = 196;
+            const height = 164;
+            const radius = 56;
+            const n = axes.length;
+            const point = (i, value, extra = 0) => {
+                const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+                const r = (Math.max(0, Math.min(SKILL_MAX_LEVEL, value)) / SKILL_MAX_LEVEL) * radius + extra;
+                return [width / 2 + r * Math.cos(angle), height / 2 + r * Math.sin(angle), Math.cos(angle)];
+            };
+            const polygon = (fn) => axes.map((a, i) => point(i, fn(a)).slice(0, 2).map(v => v.toFixed(1)).join(',')).join(' ');
+            return (
+                <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="max-w-full cursor-pointer" role="button" aria-label="Skill radar" onClick={(e) => { e.stopPropagation(); openSkillRadar(employeeId); }}>
+                    <title>คลิกเพื่อดู Skill Radar ขนาดใหญ่</title>
+                    {[2, 4].map(level => <polygon key={level} points={polygon(() => level)} fill="none" stroke="#cbd5e1" strokeWidth="1" strokeDasharray={level === SKILL_RELEASE_LEVEL ? '3 2' : undefined}/>)}
+                    {axes.map((a, i) => { const [x, y] = point(i, SKILL_MAX_LEVEL); return <line key={a.label} x1={width / 2} y1={height / 2} x2={x} y2={y} stroke="#e2e8f0" strokeWidth="1"/>; })}
+                    <polygon points={polygon(a => a.required)} fill="none" stroke="#f97316" strokeWidth="1.5" strokeDasharray="4 3"/>
+                    <polygon points={polygon(a => a.value)} fill="#22c55e44" stroke="#16a34a" strokeWidth="2"/>
+                    {axes.map((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 9); return <text key={a.label} x={x} y={y + 3} fontSize="8" fontWeight="600" fill="#475569" textAnchor={cos > 0.25 ? 'start' : cos < -0.25 ? 'end' : 'middle'}>{a.label}</text>; })}
+                </svg>
+            );
         };
         const SkillRadarChart = ({ axes, showAverage, size = 380 }) => {
             const center = size / 2;
