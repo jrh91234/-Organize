@@ -84,6 +84,10 @@
 
         // --- Utils ---
         const formatDriveUrl = (url) => { if (!url) return "https://placehold.co/100x100?text=No+Img"; if (url.includes('drive.google.com') || url.includes('docs.google.com')) { let id = null; const idMatch1 = url.match(/id=([a-zA-Z0-9_-]+)/); if (idMatch1) id = idMatch1[1]; else { const idMatch2 = url.match(/\/d\/([a-zA-Z0-9_-]+)/); if (idMatch2) id = idMatch2[1]; } if (id) return `https://lh3.googleusercontent.com/d/${id}`; } return url; };
+        // Per-employee photo framing: zoom (1-3) + focus point (% of the image), shared by cards, PDF and Excel.
+        const clampNum = (v, min, max, fallback) => { const n = Number(v); return Number.isFinite(n) && v !== '' && v !== null && v !== undefined ? Math.min(max, Math.max(min, n)) : fallback; };
+        const photoFrame = (e) => ({ zoom: clampNum(e && e.imageZoom, 1, 3, 1), x: clampNum(e && e.imagePosX, 0, 100, 50), y: clampNum(e && e.imagePosY, 0, 100, 35) });
+        const photoImgStyle = (e) => { const f = photoFrame(e); return { objectPosition: `${f.x}% ${f.y}%`, transform: f.zoom === 1 ? undefined : `scale(${f.zoom})`, transformOrigin: `${f.x}% ${f.y}%` }; };
         const compressImage = (file, targetSizeKB = 512) => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600; if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality); while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); } resolve(dataUrl); }; img.onerror = reject; }; reader.onerror = reject; }); };
         const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
         const formatDateTime = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
@@ -177,7 +181,8 @@
                     teamSubcontract: team.subcontract,
                     jobDescription: employee.jobDescription || '',
                     jobDescriptionTh: employee.jobDescriptionTh || '',
-                    image: employee.image || ''
+                    image: employee.image || '',
+                    imageZoom: employee.imageZoom, imagePosX: employee.imagePosX, imagePosY: employee.imagePosY
                 });
                 employees.filter(e => e.reportsTo === employee.id).sort(compareEmployeeCategoryOrder).forEach(child => walk(child, level + 1, seen));
             };
@@ -205,7 +210,7 @@
             return `FF${hex || fallback}`;
         };
         // Photo -> 96px circle with a white ring and a thin outline (transparent corners), as a PNG data URL for the Excel chart.
-        const circlePhotoDataUrl = (src) => new Promise((resolve, reject) => {
+        const circlePhotoDataUrl = (src, frameSource) => new Promise((resolve, reject) => {
             const probe = new Image();
             probe.crossOrigin = 'anonymous';
             probe.referrerPolicy = 'no-referrer';
@@ -218,7 +223,10 @@
                     const canvas = document.createElement('canvas');
                     canvas.width = canvas.height = size;
                     const ctx = canvas.getContext('2d');
-                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight);
+                    const fr = photoFrame(frameSource);
+                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight) / fr.zoom;
+                    const sx = (probe.naturalWidth - crop) * fr.x / 100;
+                    const sy = (probe.naturalHeight - crop) * fr.y / 100;
                     ctx.beginPath();
                     ctx.arc(size / 2, size / 2, size / 2 - 1, 0, Math.PI * 2);
                     ctx.fillStyle = '#ffffff';
@@ -230,7 +238,7 @@
                     ctx.beginPath();
                     ctx.arc(size / 2, size / 2, size / 2 - 1 - ring, 0, Math.PI * 2);
                     ctx.clip();
-                    ctx.drawImage(probe, (probe.naturalWidth - crop) / 2, (probe.naturalHeight - crop) / 2, crop, crop, ring, ring, size - ring * 2, size - ring * 2);
+                    ctx.drawImage(probe, sx, sy, crop, crop, ring, ring, size - ring * 2, size - ring * 2);
                     ctx.restore();
                     resolve(canvas.toDataURL('image/png'));
                 } catch (error) { reject(error); }
@@ -758,7 +766,7 @@
                             <div className="flex">
                                 <div className="flex w-[150px] shrink-0 flex-col rounded-bl-[9px] border-r border-slate-200 bg-slate-50 p-3" style={textColorStyle}>
                                     <p className="mb-1.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Profile</p>
-                                    <div className="relative"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="pointer-events-none h-[108px] w-full rounded-md border border-slate-200 bg-slate-200 object-cover object-top"/><div className="absolute bottom-1.5 right-1.5 rounded-full bg-white p-0.5 shadow"><div className={`h-2.5 w-2.5 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
+                                    <div className="relative aspect-square w-full overflow-hidden rounded-md border border-slate-200 bg-slate-200"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} style={photoImgStyle(employee)} className="pointer-events-none h-full w-full object-cover"/><div className="absolute bottom-1.5 right-1.5 rounded-full bg-white p-0.5 shadow"><div className={`h-2.5 w-2.5 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
                                     <div className="mt-2 min-w-0 text-left">
                                         <h3 className="text-sm font-bold leading-tight text-slate-900" title={employee.name}>{employee.name}</h3>
                                         <p className="text-[11px] leading-tight text-slate-600">{employee.position}</p>
@@ -791,7 +799,7 @@
                         </>
                     ) : (
                         <>
-                    <div className="relative"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/><div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
+                    <div className="relative"><div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white shadow-sm bg-gray-200"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} style={photoImgStyle(employee)} className="h-full w-full object-cover pointer-events-none"/></div><div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
                     <div className="mt-2 text-center w-full" style={textColorStyle}>
                         <p className="text-[10px] sm:text-xs font-bold opacity-60">{employee.id}</p>
                         <h3 className="text-xs sm:text-sm font-bold leading-tight truncate w-full">{employee.name}</h3>
@@ -1055,7 +1063,20 @@
                         <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>General Info</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Details & Style</button></div>
                         <form className="p-6 space-y-4 overflow-y-auto grow" onSubmit={e=>e.preventDefault()}>
                             {tab === 'info' ? (<> 
-                            <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} /></div>
+                            <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} style={photoImgStyle(formData)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                {formData.image && (() => { const fr = photoFrame(formData); const setFrame = (k, v) => setFormData(prev => ({ ...prev, [k]: Number(v) })); return (
+                                    <div className="mt-3 w-full rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-gray-300 bg-gray-200"><img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" style={photoImgStyle(formData)} className="h-full w-full object-cover"/></div>
+                                            <div className="flex-1 space-y-1 text-xs text-gray-600">
+                                                <div className="flex items-center justify-between font-semibold text-gray-700"><span>ปรับตำแหน่งรูป</span><button type="button" onClick={()=>setFormData(prev=>{ const n={...prev}; delete n.imageZoom; delete n.imagePosX; delete n.imagePosY; return n; })} className="text-blue-600 hover:underline">รีเซ็ต</button></div>
+                                                <label className="flex items-center gap-2"><span className="w-14">ซูม</span><input type="range" min="1" max="3" step="0.05" value={fr.zoom} onChange={e=>setFrame('imageZoom', e.target.value)} className="flex-1"/><span className="w-9 text-right">{fr.zoom.toFixed(2)}×</span></label>
+                                                <label className="flex items-center gap-2"><span className="w-14">ซ้าย-ขวา</span><input type="range" min="0" max="100" step="1" value={fr.x} onChange={e=>setFrame('imagePosX', e.target.value)} className="flex-1"/></label>
+                                                <label className="flex items-center gap-2"><span className="w-14">บน-ล่าง</span><input type="range" min="0" max="100" step="1" value={fr.y} onChange={e=>setFrame('imagePosY', e.target.value)} className="flex-1"/></label>
+                                            </div>
+                                        </div>
+                                    </div>); })()}
+                            </div>
                             <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">แผนกหลัก</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value, subDept: ''})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
                             <div>
                                 <label className="text-xs text-gray-500">แผนกย่อย / ทีม</label>
@@ -4508,7 +4529,7 @@
                 const photos = new Map();
                 await Promise.all(rows.map(async r => {
                     if (!r.image) return;
-                    try { photos.set(r.id, await circlePhotoDataUrl(formatDriveUrl(r.image))); } catch (error) { /* no photo */ }
+                    try { photos.set(r.id, await circlePhotoDataUrl(formatDriveUrl(r.image), r)); } catch (error) { /* no photo */ }
                 }));
                 const wrap = document.createElement('div');
                 wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:Sarabun,sans-serif;color:#111827;';
@@ -4561,7 +4582,7 @@
                 await Promise.all(layout.cards.map(async ({ employee }) => {
                     if (!employee.image) return;
                     try {
-                        const dataUrl = await circlePhotoDataUrl(formatDriveUrl(employee.image));
+                        const dataUrl = await circlePhotoDataUrl(formatDriveUrl(employee.image), employee);
                         photoIds.set(employee.id, workbook.addImage({ base64: dataUrl, extension: 'png' }));
                     } catch (error) { /* no photo for this card */ }
                 }));
@@ -4668,8 +4689,9 @@
                     // html2canvas ignores `object-fit: cover` and squashes non-square photos into the avatar circle, so crop each photo to a square ourselves.
                     // The photo is re-requested with CORS (same requirement html2canvas has); if that fails the original is left untouched.
                     const squareCache = new Map();
-                    const toSquareDataUrl = (src) => {
-                        if (!squareCache.has(src)) squareCache.set(src, new Promise((resolve, reject) => {
+                    const toSquareDataUrl = (src, fr = { zoom: 1, x: 50, y: 50 }) => {
+                        const cacheKey = `${src}|${fr.zoom}|${fr.x}|${fr.y}`;
+                        if (!squareCache.has(cacheKey)) squareCache.set(cacheKey, new Promise((resolve, reject) => {
                             const probe = new Image();
                             probe.crossOrigin = 'anonymous';
                             probe.referrerPolicy = 'no-referrer';
@@ -4678,20 +4700,23 @@
                                     const side = Math.min(probe.naturalWidth, probe.naturalHeight, 192);
                                     const c = document.createElement('canvas');
                                     c.width = c.height = side;
-                                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight);
-                                    c.getContext('2d').drawImage(probe, (probe.naturalWidth - crop) / 2, (probe.naturalHeight - crop) / 2, crop, crop, 0, 0, side, side);
+                                    const crop = Math.min(probe.naturalWidth, probe.naturalHeight) / fr.zoom;
+                                    c.getContext('2d').drawImage(probe, (probe.naturalWidth - crop) * fr.x / 100, (probe.naturalHeight - crop) * fr.y / 100, crop, crop, 0, 0, side, side);
                                     resolve(c.toDataURL('image/jpeg', 0.92));
                                 } catch (error) { reject(error); }
                             };
                             probe.onerror = reject;
                             probe.src = src;
                         }));
-                        return squareCache.get(src);
+                        return squareCache.get(cacheKey);
                     };
                     await Promise.all([...clone.querySelectorAll('img')].map(async img => {
                         if (!img.naturalWidth || getComputedStyle(img).objectFit !== 'cover') return;
                         try {
-                            img.src = await toSquareDataUrl(img.currentSrc || img.src);
+                            const pos = (img.style.objectPosition || '50% 50%').split(/\s+/).map(parseFloat);
+                            const zoomMatch = /scale\(([\d.]+)\)/.exec(img.style.transform || '');
+                            img.src = await toSquareDataUrl(img.currentSrc || img.src, { zoom: zoomMatch ? parseFloat(zoomMatch[1]) : 1, x: Number.isFinite(pos[0]) ? pos[0] : 50, y: Number.isFinite(pos[1]) ? pos[1] : 50 });
+                            img.style.transform = 'none';
                             img.style.objectFit = 'fill';
                             await img.decode().catch(() => {});
                         } catch (error) { /* keep the original photo */ }
