@@ -3280,6 +3280,196 @@
             );
         };
 
+        // ---------- Employee ID cards (CR80 85.6 x 54 mm) ----------
+        // Engineer and above (engineer, supervisor, admin) may print cards, limited to their own department; the card carries personal data.
+        const canPrintIdCards = (currentUser) => Boolean(currentUser) && ['admin', 'supervisor', 'engineer'].includes(currentUser.role);
+        const idCardEsc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const idCardQrDataUrl = async (text) => {
+            const QRCode = await loadAttendanceLibrary('QRCode', 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+            const host = document.createElement('div');
+            new QRCode(host, { text, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.M });
+            const canvas = host.querySelector('canvas');
+            if (canvas) return canvas.toDataURL('image/png');
+            return host.querySelector('img')?.src || '';
+        };
+        const buildIdCardsHtml = (people, { layout, withBack, qrMap }) => {
+            const cardFront = (e) => {
+                const sub = isSubcontractEmployee(e);
+                const color = sub ? '#c2410c' : '#1e3a8a';
+                const f = photoFrame(e);
+                const dept = [e.dept, e.subDept].filter(Boolean).join(' / ');
+                const photo = e.image
+                    ? `<img src="${idCardEsc(formatDriveUrl(e.image))}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;object-position:${f.x}% ${f.y}%;${f.zoom === 1 ? '' : `transform:scale(${f.zoom});transform-origin:${f.x}% ${f.y}%;`}">`
+                    : '<div style="width:100%;height:100%;background:#e5e7eb"></div>';
+                return `<div class="card">
+                    <div class="band" style="background:${color}"><span class="pill" style="color:${color}">${sub ? 'S' : 'P'}</span><span class="bt">${sub ? 'SUBCONTRACT' : 'PERMANENT'}</span>${sub && e.company ? `<span class="bc">${idCardEsc(e.company)}</span>` : ''}</div>
+                    <div class="photo" style="border-color:${color}">${photo}</div>
+                    <div class="info">
+                        <div class="name">${idCardEsc(e.name)}</div>
+                        <div class="pos">${idCardEsc(e.position)}</div>
+                        <div class="dept">${idCardEsc(dept)}</div>
+                        <div class="idrow"><span class="idl">ID</span><span class="idv" style="color:${color}">${idCardEsc(e.id)}</span></div>
+                    </div>
+                    <div class="foot" style="background:${color}"></div>
+                </div>`;
+            };
+            const cardBack = (e) => {
+                const sub = isSubcontractEmployee(e);
+                const color = sub ? '#c2410c' : '#1e3a8a';
+                const qr = qrMap.get(e.id);
+                return `<div class="card">
+                    <div class="band" style="background:${color}"><span class="bt">${idCardEsc(e.name)}</span></div>
+                    <div class="qr">${qr ? `<img src="${qr}" style="width:100%;height:100%">` : ''}</div>
+                    <div class="binfo">
+                        <div class="idrow"><span class="idl">ID</span><span class="idv" style="color:${color}">${idCardEsc(e.id)}</span></div>
+                        ${e.company ? `<div class="dept">${idCardEsc(e.company)}</div>` : ''}
+                        ${e.startDate ? `<div class="dept">เริ่มงาน / Start: ${idCardEsc(e.startDate)}</div>` : ''}
+                        <div class="ret">หากพบบัตรนี้ กรุณาส่งคืนฝ่ายบุคคล<br>If found, please return to HR.</div>
+                    </div>
+                    <div class="foot" style="background:${color}"></div>
+                </div>`;
+            };
+            const css = `
+                *{box-sizing:border-box;margin:0;padding:0}
+                body{font-family:'Sarabun','Noto Sans Thai',sans-serif;color:#111827;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+                .card{position:relative;width:85.6mm;height:54mm;overflow:hidden;border-radius:3mm;background:#fff;border:0.2mm solid #cbd5e1}
+                .band{position:absolute;left:0;right:0;top:0;height:10mm;display:flex;align-items:center;gap:2mm;padding:0 4mm;color:#fff}
+                .pill{display:inline-flex;align-items:center;justify-content:center;width:6mm;height:6mm;border-radius:50%;background:#fff;font-weight:800;font-size:10pt}
+                .bt{font-weight:700;font-size:9pt;letter-spacing:.3mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+                .bc{margin-left:auto;font-size:7pt;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34mm}
+                .photo{position:absolute;left:4mm;top:14mm;width:26mm;height:30mm;overflow:hidden;border-radius:2mm;border:0.5mm solid;background:#e5e7eb}
+                .info{position:absolute;left:33mm;right:3mm;top:14mm;height:34mm}
+                .name{font-size:12.5pt;font-weight:800;line-height:1.15;max-height:10mm;overflow:hidden}
+                .pos{margin-top:1mm;font-size:9pt;font-weight:600;color:#374151;line-height:1.2}
+                .dept{margin-top:.8mm;font-size:7.5pt;color:#6b7280;line-height:1.2}
+                .idrow{position:absolute;left:0;bottom:0;display:flex;align-items:baseline;gap:1.5mm}
+                .binfo .idrow{position:static;margin-bottom:1mm}
+                .idl{font-size:7pt;font-weight:700;color:#6b7280}
+                .idv{font-size:14pt;font-weight:800;letter-spacing:.3mm;font-family:'Courier New',monospace}
+                .qr{position:absolute;left:5mm;top:14mm;width:30mm;height:30mm}
+                .binfo{position:absolute;left:40mm;right:3mm;top:14mm}
+                .ret{margin-top:2.5mm;font-size:6.5pt;color:#6b7280;line-height:1.3}
+                .foot{position:absolute;left:0;right:0;bottom:0;height:2.5mm}
+            `;
+            const pageCss = layout === 'cr80'
+                ? `@page{size:85.6mm 54mm;margin:0} .sheet{width:85.6mm;height:54mm;page-break-after:always;break-after:page;overflow:hidden} .sheet:last-child{page-break-after:auto;break-after:auto} .card{border:none;border-radius:0}`
+                : `@page{size:A4;margin:0} .sheet{width:210mm;height:297mm;padding:10mm 12mm;display:grid;grid-template-columns:repeat(2,85.6mm);grid-auto-rows:54mm;gap:6mm 4mm;justify-content:center;align-content:start;page-break-after:always;break-after:page} .sheet:last-child{page-break-after:auto;break-after:auto} .card{outline:0.2mm dashed #94a3b8;outline-offset:1mm}`;
+            const sheets = [];
+            if (layout === 'cr80') {
+                people.forEach(e => {
+                    sheets.push(`<div class="sheet">${cardFront(e)}</div>`);
+                    if (withBack) sheets.push(`<div class="sheet">${cardBack(e)}</div>`);
+                });
+            } else {
+                for (let i = 0; i < people.length; i += 8) {
+                    const chunk = people.slice(i, i + 8);
+                    sheets.push(`<div class="sheet">${chunk.map(cardFront).join('')}</div>`);
+                    if (withBack) {
+                        // Backs mirrored left-right so they line up when the sheet is flipped on its long edge (duplex printing).
+                        const mirrored = [];
+                        for (let j = 0; j < chunk.length; j += 2) { if (chunk[j + 1]) mirrored.push(chunk[j + 1]); mirrored.push(chunk[j]); }
+                        sheets.push(`<div class="sheet">${mirrored.map(cardBack).join('')}</div>`);
+                    }
+                }
+            }
+            return `<!doctype html><html><head><meta charset="utf-8"><title>Employee ID Cards</title>
+                <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+                <style>${css}${pageCss}</style></head><body>${sheets.join('')}</body></html>`;
+        };
+        const IdCardPrintModal = ({ employees, onClose }) => {
+            const [selected, setSelected] = useState(() => new Set());
+            const [search, setSearch] = useState('');
+            const [layout, setLayout] = useState('a4');
+            const [withBack, setWithBack] = useState(true);
+            const [html, setHtml] = useState('');
+            const [busy, setBusy] = useState(false);
+            const frameRef = useRef(null);
+            const subDepts = useMemo(() => [...new Set(employees.map(e => e.subDept).filter(Boolean))].sort(), [employees]);
+            const term = search.trim().toLowerCase();
+            const visible = employees.filter(e => !term || [e.name, e.id, e.position, e.dept, e.subDept].some(v => String(v || '').toLowerCase().includes(term)));
+            const toggle = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+            const addMany = (list) => setSelected(prev => { const n = new Set(prev); list.forEach(e => n.add(e.id)); return n; });
+            const people = employees.filter(e => selected.has(e.id));
+            const peopleKey = people.map(e => `${e.id}|${e.name}|${e.position}|${e.image}|${e.imageZoom}|${e.imagePosX}|${e.imagePosY}`).join(',');
+            useEffect(() => {
+                let cancelled = false;
+                if (people.length === 0) { setHtml(''); return; }
+                setBusy(true);
+                (async () => {
+                    const qrMap = new Map();
+                    if (withBack) {
+                        for (const e of people) {
+                            try { qrMap.set(e.id, await idCardQrDataUrl(`HRATTEND1:${encodeURIComponent(String(e.id))}`)); } catch (error) { /* card prints without QR */ }
+                        }
+                    }
+                    if (!cancelled) { setHtml(buildIdCardsHtml(people, { layout, withBack, qrMap })); setBusy(false); }
+                })();
+                return () => { cancelled = true; };
+            }, [peopleKey, layout, withBack]);
+            const print = () => {
+                const w = frameRef.current?.contentWindow;
+                if (!w) return;
+                w.focus();
+                w.print();
+            };
+            const sheetCount = layout === 'cr80' ? people.length * (withBack ? 2 : 1) : Math.ceil(people.length / 8) * (withBack ? 2 : 1);
+            return (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" aria-label="พิมพ์บัตรพนักงาน">
+                    <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b bg-gray-50 px-5 py-3">
+                            <div><h2 className="font-bold text-gray-900">พิมพ์บัตรพนักงาน</h2><p className="text-xs text-gray-500">ขนาด CR80 (85.6 × 54 มม.) · เลือก {people.length} คน</p></div>
+                            <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-gray-500 hover:bg-gray-100">ปิด</button>
+                        </div>
+                        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+                            <div className="flex min-h-0 w-full flex-col border-b md:w-[22rem] md:border-b-0 md:border-r">
+                                <div className="space-y-2 p-3">
+                                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหาชื่อ / รหัส / ตำแหน่ง" className="w-full rounded-lg border px-3 py-2 text-sm" />
+                                    <div className="flex flex-wrap gap-1.5 text-xs">
+                                        <button type="button" onClick={() => addMany(visible)} className="rounded-md border px-2 py-1 font-semibold text-blue-700 hover:bg-blue-50">เลือกที่แสดงทั้งหมด</button>
+                                        <button type="button" onClick={() => setSelected(new Set())} className="rounded-md border px-2 py-1 font-semibold text-gray-600 hover:bg-gray-50">ล้าง</button>
+                                        {subDepts.length > 0 && (
+                                            <select value="" onChange={e => { if (e.target.value) addMany(employees.filter(x => x.subDept === e.target.value)); }} className="rounded-md border px-2 py-1 text-gray-700">
+                                                <option value="">+ เลือกทั้งแผนกย่อย…</option>
+                                                {subDepts.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="min-h-0 flex-1 overflow-y-auto border-t">
+                                    {visible.length === 0 && <p className="p-4 text-center text-sm text-gray-400">ไม่พบพนักงาน</p>}
+                                    {visible.map(e => (
+                                        <label key={e.id} className="flex cursor-pointer items-center gap-2 border-b px-3 py-2 text-sm hover:bg-gray-50">
+                                            <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} />
+                                            <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-gray-800">{e.name}</span><span className="block truncate text-xs text-gray-500">{e.id} · {e.position} · {e.subDept || e.dept}</span></span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm">
+                                    <label className="flex items-center gap-1.5"><span className="text-gray-600">รูปแบบ</span>
+                                        <select value={layout} onChange={e => setLayout(e.target.value)} className="rounded-md border px-2 py-1">
+                                            <option value="a4">A4 (8 ใบ/หน้า พร้อมเส้นตัด)</option>
+                                            <option value="cr80">1 บัตร/หน้า (CR80 สำหรับเครื่องพิมพ์บัตร)</option>
+                                        </select>
+                                    </label>
+                                    <label className="flex items-center gap-1.5"><input type="checkbox" checked={withBack} onChange={e => setWithBack(e.target.checked)} />พิมพ์ด้านหลัง (QR เช็คชื่อ)</label>
+                                    <span className="text-xs text-gray-400">{sheetCount} หน้า</span>
+                                    <button type="button" onClick={print} disabled={!html || busy} className="ml-auto rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? 'กำลังเตรียม…' : 'พิมพ์ / บันทึก PDF'}</button>
+                                </div>
+                                <div className="min-h-0 flex-1 bg-gray-200">
+                                    {html
+                                        ? <iframe ref={frameRef} title="ตัวอย่างบัตร" srcDoc={html} className="h-full w-full bg-white" />
+                                        : <div className="flex h-full items-center justify-center text-sm text-gray-500">เลือกพนักงานทางซ้ายเพื่อดูตัวอย่างบัตร</div>}
+                                </div>
+                                {layout === 'a4' && withBack && <p className="border-t px-4 py-1.5 text-[11px] text-gray-500">พิมพ์สองหน้า: เลือก "พลิกด้านขอบยาว" (Flip on long edge) ด้านหลังจะตรงกับด้านหน้า</p>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const AttendanceQRCodeModal = ({ employee, onClose }) => {
             const qrRef = useRef(null);
             const [qrLoading, setQrLoading] = useState(true);
@@ -3663,6 +3853,7 @@
             const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
             const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
             const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+            const [isIdCardOpen, setIsIdCardOpen] = useState(false);
             const [appTheme, setAppTheme] = useState('blue');
             const [appShape, setAppShape] = useState(SHAPES.rounded);
             const [layoutThreshold, setLayoutThreshold] = useState(4);
@@ -4883,6 +5074,7 @@
                                 {viewMode === 'chart' && <button onClick={exportChartPDF} disabled={isExportingChartPdf} aria-label="บันทึกผังเป็น PDF" title="บันทึกผังเป็น PDF" className="flex h-7 w-8 items-center justify-center rounded-md text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"><Icons.FileText size={18}/></button>}
                                 {viewMode === 'chart' && <button onClick={exportChartExcel} aria-label="ส่งออกผังเป็น Excel" title="ส่งออกผังเป็น Excel" className="flex h-7 w-8 items-center justify-center rounded-md text-green-700 transition-colors hover:bg-green-50"><Icons.FileSpreadsheet size={18}/></button>}
                                 {viewMode === 'chart' && <button onClick={exportJobDescriptionsPDF} aria-label="ส่งออก Job Description เป็น PDF" title="ส่งออก Job Description เป็น PDF" className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-blue-700 transition-colors hover:bg-blue-50"><Icons.FileText size={16}/><span className="text-[10px] font-bold">JD</span></button>}
+                                {canPrintIdCards(currentUser) && <button onClick={()=>setIsIdCardOpen(true)} aria-label="พิมพ์บัตรพนักงาน" title="พิมพ์บัตรพนักงาน" className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-indigo-700 transition-colors hover:bg-indigo-50"><Icons.Users size={16}/><span className="text-[10px] font-bold">บัตร</span></button>}
                                 <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
                                 <button onClick={()=>setShowRulers(!showRulers)} aria-label={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} title={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showRulers?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.RulerIcon size={18}/></button>
                                 {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} aria-label="ตั้งค่าผู้ดูแล" title="ตั้งค่าผู้ดูแล" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Settings size={18}/></button>}
@@ -5046,6 +5238,7 @@
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onRename={handleRenamePosition} canRename={currentUser?.role !== 'leader'} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
+                    {isIdCardOpen && <IdCardPrintModal employees={validEmployees.filter(e => e.reportsTo !== 'STAGING' && e.status === 'Active' && (currentUser.dept === 'ALL' || e.dept === currentUser.dept) && (currentDept === 'ALL' || e.dept === currentDept))} onClose={()=>setIsIdCardOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={validEmployees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
             );
