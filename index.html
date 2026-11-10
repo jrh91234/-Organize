@@ -1702,7 +1702,7 @@
             const ratio = summary.required ? summary.met / summary.required : 1;
             const tone = !summary.required ? ['bg-slate-400', 'text-slate-600', 'bg-slate-50 border-slate-200'] : ratio >= 1 ? ['bg-emerald-500', 'text-emerald-700', 'bg-emerald-50 border-emerald-200'] : ratio >= 0.5 ? ['bg-amber-400', 'text-amber-700', 'bg-amber-50 border-amber-200'] : ['bg-rose-500', 'text-rose-700', 'bg-rose-50 border-rose-200'];
             return (
-                <div className={`mb-3 mt-1 w-full rounded border px-1 py-0.5 ${tone[2]}`} title={`Skill Matrix\n${summary.tooltip}`}>
+                <div className={`mb-3 mt-1 w-full cursor-pointer rounded border px-1 py-0.5 ${tone[2]}`} title={`Skill Matrix (คลิกเพื่อดู Radar)\n${summary.tooltip}`} onClick={(e) => { e.stopPropagation(); openSkillRadar(employeeId); }} role="button">
                     <div className={`flex items-center justify-between gap-1 text-[9px] font-bold ${tone[1]}`}>
                         <span>🎓 Skill {summary.required ? `${summary.met}/${summary.required}` : `${summary.rated} ทักษะ`}</span>
                         {summary.stations > 0 && <span className="rounded bg-white/80 px-1 text-[8px] text-indigo-700" title="จำนวนสถานีที่ทำได้ระดับ 3 ขึ้นไป">★{summary.stations}</span>}
@@ -1830,6 +1830,137 @@
         };
 
         // Everything the dashboard shows, from the employee list + catalog + levels, under the chosen filters.
+        // ---- Skill radar: one person's levels (0-4) against what their position requires, optionally against the line average ----
+        const SKILL_MAX_LEVEL = 4;
+        const openSkillRadar = (employeeId) => window.dispatchEvent(new CustomEvent('open-skill-radar', { detail: { id: employeeId } }));
+        // mode 'category' = one axis per skill category (average level); 'skill' = one axis per skill. Missing levels count as 0.
+        const computeSkillRadar = (employee, catalog, levels, colleagues, mode) => {
+            const skills = skillsForEmployee(catalog, employee);
+            const levelMap = new Map((levels || []).map(l => [skillKey(l.employeeId, l.skillId), Number(l.level) || 0]));
+            const levelOf = (emp, skill) => levelMap.get(skillKey(emp.id, skill.id)) ?? 0;
+            const hasLevel = (skill) => levelMap.has(skillKey(employee.id, skill.id));
+            const avgOf = (skillList, fn) => skillList.length ? skillList.reduce((n, sk) => n + fn(sk), 0) / skillList.length : 0;
+            const others = (colleagues || []).filter(e => e.id !== employee.id);
+            const groups = mode === 'category'
+                ? SKILL_CATEGORIES.map(c => ({ label: c.label.split(' / ')[0], full: c.label, skills: skills.filter(sk => sk.category === c.key) })).filter(g => g.skills.length)
+                : skills.map((sk, i) => ({ label: sk.code || `#${i + 1}`, full: sk.name, skills: [sk] }));
+            const axes = groups.map(g => {
+                const requiredSkills = g.skills.filter(sk => requiredSkillLevel(sk, employee.position) > 0);
+                return {
+                    label: g.label, full: g.full, count: g.skills.length,
+                    value: avgOf(g.skills, sk => levelOf(employee, sk)),
+                    required: avgOf(requiredSkills, sk => requiredSkillLevel(sk, employee.position)),
+                    average: others.length ? avgOf(g.skills, sk => others.reduce((n, e) => n + levelOf(e, sk), 0) / others.length) : null,
+                    rated: g.skills.some(hasLevel)
+                };
+            });
+            const rows = skills.map(sk => ({ skill: sk, level: hasLevel(sk) ? levelOf(employee, sk) : null, required: requiredSkillLevel(sk, employee.position) }));
+            return { axes, rows, colleagues: others.length };
+        };
+        const SkillRadarChart = ({ axes, showAverage, size = 380 }) => {
+            const center = size / 2;
+            const radius = size / 2 - 70;
+            const n = axes.length;
+            const point = (i, value, extra = 0) => {
+                const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+                const r = (Math.max(0, Math.min(SKILL_MAX_LEVEL, value)) / SKILL_MAX_LEVEL) * radius + extra;
+                return [center + r * Math.cos(angle), center + r * Math.sin(angle), Math.cos(angle)];
+            };
+            const polygon = (fn) => axes.map((a, i) => point(i, fn(a)).slice(0, 2).map(v => v.toFixed(1)).join(',')).join(' ');
+            const ring = (level) => axes.map((a, i) => point(i, level).slice(0, 2).map(v => v.toFixed(1)).join(',')).join(' ');
+            const clip = (text) => String(text).length > 14 ? `${String(text).slice(0, 13)}…` : String(text);
+            return (
+                <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto w-full max-w-[420px]" role="img" aria-label="Skill radar chart">
+                    {[1, 2, 3, 4].map(level => <polygon key={level} points={ring(level)} fill={level === 2 ? '#f8fafc' : 'none'} stroke="#cbd5e1" strokeWidth="1" strokeDasharray={level === SKILL_RELEASE_LEVEL ? '4 3' : undefined}/>)}
+                    {axes.map((a, i) => { const [x, y] = point(i, SKILL_MAX_LEVEL); return <line key={a.label + i} x1={center} y1={center} x2={x} y2={y} stroke="#e2e8f0" strokeWidth="1"/>; })}
+                    {[1, 2, 3, 4].map(level => <text key={level} x={center + 3} y={center - (level / SKILL_MAX_LEVEL) * radius - 2} fontSize="9" fill="#94a3b8">L{level}</text>)}
+                    {showAverage && axes.every(a => a.average !== null) && <polygon points={polygon(a => a.average)} fill="#10b98122" stroke="#10b981" strokeWidth="2" strokeDasharray="2 3"/>}
+                    <polygon points={polygon(a => a.required)} fill="none" stroke="#f97316" strokeWidth="2" strokeDasharray="6 4"/>
+                    <polygon points={polygon(a => a.value)} fill="#3b82f633" stroke="#2563eb" strokeWidth="2.5"/>
+                    {axes.map((a, i) => { const [x, y] = point(i, a.value); return <circle key={a.label + i} cx={x} cy={y} r="3.5" fill="#2563eb"><title>{`${a.full}: ${(Math.round(a.value * 10) / 10)}${a.required ? ` (ต้อง ${Math.round(a.required * 10) / 10})` : ''}`}</title></circle>; })}
+                    {axes.map((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 16); return <text key={a.label + i} x={x} y={y + 3} fontSize="11" fontWeight="600" fill="#334155" textAnchor={cos > 0.25 ? 'start' : cos < -0.25 ? 'end' : 'middle'}>{clip(a.label)}<title>{a.full}</title></text>; })}
+                </svg>
+            );
+        };
+        const SkillRadarModal = ({ employee, employees, data, onClose }) => {
+            const catalog = data?.catalog || [];
+            const line = employeeSkillLines(employee)[0];
+            const colleagues = useMemo(() => (employees || []).filter(e => !isResignedEmployee(e) && skillSameText(e.dept, employee.dept) && inSkillLine(e, line)), [employees, employee, line]);
+            const categoryAxes = useMemo(() => computeSkillRadar(employee, catalog, data?.levels, colleagues, 'category').axes.length, [employee, catalog, data, colleagues]);
+            const [mode, setMode] = useState(categoryAxes >= 3 ? 'category' : 'skill');
+            const [showAverage, setShowAverage] = useState(false);
+            const radar = useMemo(() => computeSkillRadar(employee, catalog, data?.levels, colleagues, mode), [employee, catalog, data, colleagues, mode]);
+            const required = radar.rows.filter(r => r.required > 0);
+            const met = required.filter(r => (r.level ?? 0) >= r.required).length;
+            const stations = radar.rows.filter(r => r.skill.category === 'process' && (r.level ?? -1) >= 3).length;
+            const canDraw = radar.axes.length >= 3;
+            const modes = [['category', 'ตามหมวดทักษะ'], ['skill', 'ตามทักษะรายตัว']];
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+                    <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between border-b bg-gray-50 px-6 py-4">
+                            <div className="flex items-center gap-3">
+                                <SkillAvatar employee={employee} size={48}/>
+                                <div>
+                                    <h2 className="text-lg font-bold">Skill Radar</h2>
+                                    <p className="text-sm text-gray-600">{employee.name} · {employee.id}</p>
+                                    <p className="text-xs text-gray-500">{employee.position}{employee.dept ? ` · ${employee.dept}` : ''}{line ? ` / ${line}` : ''}</p>
+                                </div>
+                            </div>
+                            <button type="button" onClick={onClose} aria-label="ปิด"><Icons.X/></button>
+                        </div>
+                        <div className="grow overflow-y-auto p-6">
+                            {radar.rows.length === 0 ? <p className="py-10 text-center text-sm text-gray-400">ยังไม่มีทักษะที่กำหนดให้ไลน์ของพนักงานคนนี้ (ตั้งค่าได้ที่ Skill Matrix → Settings)</p> : <>
+                                <div className="mb-3 flex flex-wrap items-center gap-2">
+                                    {modes.map(([key, label]) => <button key={key} type="button" onClick={() => setMode(key)} className={`rounded-full border px-3 py-1 text-xs font-bold ${mode === key ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>)}
+                                    <label className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-gray-600"><input type="checkbox" checked={showAverage} onChange={e => setShowAverage(e.target.checked)} disabled={radar.colleagues === 0}/>เทียบค่าเฉลี่ยของไลน์ ({radar.colleagues} คน)</label>
+                                </div>
+                                <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold">
+                                    {required.length > 0 && <span className={`rounded-full px-3 py-1 ${met === required.length ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>ผ่านเกณฑ์ {met}/{required.length}</span>}
+                                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-indigo-700" title="สถานีที่ทำได้ระดับ 3 ขึ้นไป">★ {stations} สถานี</span>
+                                </div>
+                                {canDraw ? <SkillRadarChart axes={radar.axes} showAverage={showAverage}/> : <p className="py-6 text-center text-sm text-gray-400">ต้องมีอย่างน้อย 3 แกนจึงจะวาด Radar ได้ (ตอนนี้มี {radar.axes.length}) ดูรายละเอียดในตารางด้านล่าง</p>}
+                                <div className="mb-4 mt-2 flex flex-wrap justify-center gap-4 text-[11px] font-semibold text-gray-600">
+                                    <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-5 bg-blue-600"></i>ระดับปัจจุบัน</span>
+                                    <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-5 border-t-2 border-dashed border-orange-500"></i>ระดับที่ตำแหน่งต้องการ</span>
+                                    {showAverage && <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-5 border-t-2 border-dotted border-emerald-500"></i>ค่าเฉลี่ยไลน์</span>}
+                                </div>
+                                <table className="w-full text-xs">
+                                    <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">ทักษะ</th><th className="px-2">หมวด</th><th className="px-2 text-center">ระดับ</th><th className="px-2 text-center">ต้องการ</th><th className="pl-2 text-center">สถานะ</th></tr></thead>
+                                    <tbody>
+                                        {radar.rows.map(r => {
+                                            const category = skillCategory(r.skill.category);
+                                            const ok = r.required > 0 && (r.level ?? 0) >= r.required;
+                                            const gap = r.required > 0 && (r.level ?? 0) < r.required;
+                                            return (
+                                                <tr key={r.skill.id} className="border-t">
+                                                    <td className="py-1.5 pr-2 font-semibold text-gray-800">{r.skill.code ? <span className="mr-1 text-gray-400">{r.skill.code}</span> : null}{r.skill.name}</td>
+                                                    <td className={`px-2 ${category.text}`}>{category.label}</td>
+                                                    <td className="px-2 text-center font-bold" style={{ color: r.level === null ? '#94a3b8' : SKILL_LEVEL_COLORS[r.level] }}>{r.level === null ? '-' : `L${r.level}`}</td>
+                                                    <td className="px-2 text-center text-gray-600">{r.required > 0 ? `L${r.required}` : '-'}</td>
+                                                    <td className="pl-2 text-center">{ok ? <span className="font-bold text-emerald-600">✓</span> : gap ? <span className="font-bold text-rose-600">ต่ำกว่าเกณฑ์</span> : <span className="text-gray-300">-</span>}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        // Listens for 'open-skill-radar' (card strip, matrix rows) and shows the radar for that person with the given Skill Matrix data.
+        const SkillRadarHost = ({ employees, data }) => {
+            const [employeeId, setEmployeeId] = useState(null);
+            useEffect(() => {
+                const open = (event) => setEmployeeId(event.detail?.id ?? null);
+                window.addEventListener('open-skill-radar', open);
+                return () => window.removeEventListener('open-skill-radar', open);
+            }, []);
+            const employee = employeeId === null ? null : (employees || []).find(e => String(e.id) === String(employeeId));
+            return employee ? <SkillRadarModal key={employee.id} employee={employee} employees={employees} data={data} onClose={() => setEmployeeId(null)} /> : null;
+        };
         const computeSkillStats = (employees, data, { dept, line, position, shift }) => {
             const catalog = data.catalog || [];
             const levelMap = new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l]));
@@ -2228,7 +2359,7 @@
                                     <tr key={row.emp.id} className="group">
                                         <td className={`${stickyCell} border-b border-r border-gray-200 bg-white px-3 py-1.5 group-hover:bg-violet-50/60`}>
                                             <div className="flex items-center gap-2">
-                                                {!printMode && <SkillAvatar employee={row.emp} size={30}/>}
+                                                {!printMode && <button type="button" onClick={() => openSkillRadar(row.emp.id)} title="ดู Skill Radar" aria-label={`ดู Skill Radar ของ ${row.emp.name}`} className="shrink-0 rounded-full hover:ring-2 hover:ring-blue-400"><SkillAvatar employee={row.emp} size={30}/></button>}
                                                 <div className="min-w-0">
                                                     <div className={`${trunc} font-semibold text-gray-900`}>{row.emp.name}{skillLine(row.emp.subDept) !== line && <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-700" title={`ไลน์หลัก: ${skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL} · ดูแลไลน์นี้เพิ่ม`}>+ ไลน์หลัก {skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL}</span>}</div>
                                                     <div className={`${trunc} text-[10px] text-gray-500`}>{row.emp.id} · {row.emp.position || '-'}{row.emp.shift ? ` · กะ ${row.emp.shift}` : ''}{row.emp.startDate ? ` · ${calculateTenure(row.emp.startDate)}` : ''}</div>
@@ -2803,6 +2934,7 @@
                     {!(loading && !loadedAt && !hasCatalog) && tab === 'dashboard' && <SkillDashboard stats={stats} employees={employees} hasCatalog={hasCatalog} canEdit={canEdit} onOpenMatrix={() => setTab('matrix')} onOpenSettings={() => setTab('settings')}/>}
                     {tab === 'matrix' && <SkillMatrixView employees={employees} data={data} dept={workDept} line={workLine} canEdit={canEdit} call={call} onReload={load} searchTerm={searchTerm}/>}
                     {tab === 'settings' && <SkillSettingsView employees={employees} data={data} dept={workDept} line={workLine} positions={positions} canEdit={canEdit} call={call} onReload={load}/>}
+                    <SkillRadarHost employees={employees} data={data}/>
                 </section>
             );
         };
@@ -4716,6 +4848,7 @@
                         </main>
                     </div>
 
+                    {viewMode === 'chart' && <SkillRadarHost employees={employees} data={chartSkillData}/>}
                     {jobDescriptionId !== null && (() => {
                         const target = employees.find(e => String(e.id) === String(jobDescriptionId));
                         return target ? <JobDescriptionModal key={target.id} employee={target} manager={employees.find(e => String(e.id) === String(target.reportsTo))} canEdit={canEditJobDescription(currentUser, target)} onSave={handleSaveJobDescription} onTranslate={handleTranslateJobDescription} onClose={() => setJobDescriptionId(null)} /> : null;
