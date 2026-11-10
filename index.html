@@ -1764,6 +1764,16 @@
             const max = (skills || []).reduce((top, skill) => { const m = String(skill?.code || '').trim().match(pattern); return m ? Math.max(top, Number(m[1])) : top; }, 0);
             return `${prefix}${String(max + 1).padStart(2, '0')}`;
         };
+        // Split a skill name into at most two header lines of ~maxChars each (break at a space or "/" when possible, "…" if still too long).
+        const splitSkillName = (name, maxChars) => {
+            const text = String(name || '').trim();
+            if (text.length <= maxChars) return [text];
+            const cut = (str) => { const window = str.slice(0, maxChars + 1); const at = Math.max(window.lastIndexOf(' '), window.lastIndexOf('/') + 1); return at > maxChars * 0.4 ? at : maxChars; };
+            const first = cut(text);
+            let second = text.slice(first).trim();
+            if (second.length > maxChars) second = `${second.slice(0, maxChars - 1).trim()}…`;
+            return [text.slice(0, first).trim(), second];
+        };
         const SKILL_CHART_COLORS = ['#ef4444', '#f97316', '#facc15', '#60a5fa', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#a3a3a3'];
         const SKILL_NO_LINE_LABEL = 'ไม่ระบุไลน์';
         const skillCategory = (key) => SKILL_CATEGORIES.find(c => c.key === key) || SKILL_CATEGORIES[0];
@@ -2447,7 +2457,8 @@
             });
             const stickyCell = printMode ? '' : 'sticky left-0 z-10';
             const trunc = printMode ? 'whitespace-nowrap' : 'truncate';
-            const headerHeight = Math.min(170, Math.max(60, Math.max(0, ...skills.map(s => String(s.name).length)) * 6.6 + 6));
+            // Names wrap to at most two (rotated) lines inside this height; anything longer ends in "…" and the full name stays in the tooltip.
+            const headerHeight = Math.min(150, Math.max(60, Math.max(0, ...skills.map(s => String(s.name).length)) * 6.2 + 8));
             const headCell = 'border-b border-r border-gray-200 bg-white';
             const docItems = [['เลขที่เอกสาร', doc.docNo || '-'], ['Rev.', doc.rev || '-'], ['วันที่มีผล', doc.effectiveDate ? formatDate(doc.effectiveDate) : '-'], ['ไลน์ / พื้นที่', `${dept} / ${line || SKILL_NO_LINE_LABEL}`], ['ผู้จัดทำ', doc.preparedBy || '-'], ['ผู้ตรวจสอบ', doc.checkedBy || '-'], ['ผู้อนุมัติ', doc.approvedBy || '-'], ['ทบทวนล่าสุด / ครั้งถัดไป', `${doc.lastReviewDate ? formatDate(doc.lastReviewDate) : '-'} / ${nextReview ? formatDate(nextReview) : '-'}`]];
             return (
@@ -2479,8 +2490,10 @@
                                         <th key={skill.id} className={`cursor-default ${headCell} w-10 px-1 pb-2 pt-1 align-bottom hover:bg-white ${skillCategory(skill.category).soft}`} title={`${skill.name}${skill.wi ? ` · ${skill.wi}${skill.wiRev ? ` Rev.${skill.wiRev}` : ''}` : ''}${skill.subDept === '' ? ' · ทักษะร่วมทั้งแผนก' : ''}`}>
                                             <div className="flex flex-col items-center gap-1">
                                                 {skill.critical ? <span className="rounded bg-rose-600 px-1 text-[9px] font-bold leading-4 text-white">{skill.critical}</span> : <span className="h-4"></span>}
-                                                <div className="relative" style={{ width: 16, height: headerHeight }}>
-                                                    <span className="absolute whitespace-nowrap text-[11px] font-semibold text-gray-700" style={{ left: '50%', top: '100%', marginLeft: -7, lineHeight: '14px', transformOrigin: '0 0', transform: 'rotate(-90deg)' }}>{skill.name}</span>
+                                                <div className="relative" style={{ width: 26, height: headerHeight }}>
+                                                    <div className="absolute flex flex-col justify-center" style={{ left: '50%', top: '100%', width: headerHeight, height: 26, marginLeft: -13, transformOrigin: '0 0', transform: 'rotate(-90deg)' }}>
+                                                        {splitSkillName(skill.name, Math.floor((headerHeight - 6) / 6.8)).map((part, i) => <span key={i} className="block whitespace-nowrap text-[11px] font-semibold text-gray-700" style={{ lineHeight: '13px' }}>{part}</span>)}
+                                                    </div>
                                                 </div>
                                                 {skill.code && <span className="text-[9px] font-medium text-gray-400">{skill.code}</span>}
                                             </div>
