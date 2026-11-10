@@ -3323,7 +3323,7 @@
                     <div class="fdept">${idCardEsc([e.dept, e.subDept].filter(Boolean).join(' / '))}${sub && e.company ? ` · ${idCardEsc(e.company)}` : ''}</div>
                     <div class="fphoto" style="border-color:${color}">${photo}</div>
                     <div class="fradar">${idCardRadarSvg(sm.radar)}</div>
-                    <div class="flegend"><span style="color:#16a34a">━ ปัจจุบัน</span> <span style="color:#f97316">┅ ที่ต้องการ</span> <b style="color:#334155">Skill ${sm.met}/${sm.required}</b></div>
+                    <div class="flegend"><span><i class="lk" style="border-top:0.5mm solid #16a34a"></i>ปัจจุบัน</span><span><i class="lk" style="border-top:0.5mm dashed #f97316"></i>ที่ต้องการ</span></div>
                     <div class="foot" style="background:${color}"></div>
                 </div>`;
                 }
@@ -3381,7 +3381,9 @@
                 .fdept{position:absolute;left:4mm;right:27mm;top:20mm;font-size:7pt;color:#6b7280;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
                 .fphoto{position:absolute;left:4mm;top:25mm;width:20mm;height:23.5mm;overflow:hidden;border-radius:1.8mm;border:0.4mm solid;background:#e5e7eb}
                 .fradar{position:absolute;left:25mm;right:2mm;top:23mm;height:27mm}
-                .flegend{position:absolute;right:3mm;top:11.5mm;width:23mm;display:flex;flex-direction:column;align-items:flex-end;gap:.4mm;font-size:6pt;line-height:1.2;white-space:nowrap}
+                .flegend{position:absolute;right:3mm;top:12mm;width:20mm;display:flex;flex-direction:column;align-items:flex-start;gap:.8mm;font-size:6.5pt;line-height:1.2;white-space:nowrap;color:#334155}
+                .flegend span{display:flex;align-items:center;gap:1.2mm}
+                .flegend .lk{display:inline-block;width:5mm;height:0}
             `;
             const pageCss = layout === 'cr80'
                 ? `@page{size:85.6mm 54mm;margin:0} .sheet{width:85.6mm;height:54mm;page-break-after:always;break-after:page;overflow:hidden} .sheet:last-child{page-break-after:auto;break-after:auto} .card{border:none;border-radius:0}`
