@@ -713,8 +713,8 @@
             const renderJdButton = (position) => (
                 <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`${position} rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>
             );
-            // Wide (formal) card: neutral white card, the theme / custom colour only as the side stripe.
-            const stripeClass = String(borderClass).replace(/^border-/, 'bg-').replace(/-(?:100|200|300|400)$/, '-500');
+            // Wide (formal) card: white card with a dark header band in the theme / custom colour, a grey PROFILE panel and a white SKILL MATRIX panel.
+            const headerClass = /^border-[a-z]+-\d{2,3}$/.test(String(borderClass)) ? String(borderClass).replace(/^border-/, 'bg-').replace(/-\d{2,3}$/, '-800') : 'bg-slate-800';
             const scoreRatio = skillSummary?.required ? skillSummary.met / skillSummary.required : null;
             const scoreTone = scoreRatio === null ? 'text-slate-700' : scoreRatio >= 1 ? 'text-emerald-600' : scoreRatio >= 0.5 ? 'text-amber-600' : 'text-rose-600';
 
@@ -728,7 +728,7 @@
             const canDrag = !isLocked || (isLeaderRole && canEditThis);
 
             return (
-                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col ${wide ? 'w-[350px] rounded-md border border-slate-300 bg-white shadow-sm' : `w-36 items-center sm:w-40 p-3 border-b-4 shadow-sm ${bgClass} ${borderClass} ${radiusClass}`} transition-transform duration-200 cursor-pointer group ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${wide ? '' : className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
+                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col ${wide ? 'w-[350px] rounded-[10px] border border-slate-300 bg-white shadow-sm' : `w-36 items-center sm:w-40 p-3 border-b-4 shadow-sm ${bgClass} ${borderClass} ${radiusClass}`} transition-transform duration-200 cursor-pointer group ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${wide ? '' : className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
                     {!wide && <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>}
 
                     {/* [V24] Department Badge for ALL DEPTS view */}
@@ -748,33 +748,42 @@
                     </> )}
                     {wide ? (
                         <>
-                            <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 rounded-l-md ${stripeClass}`}></span>
-                            <div className="flex items-center gap-2.5 border-b border-slate-200 py-2.5 pl-4 pr-3" style={textColorStyle}>
-                                <div className="relative shrink-0"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="pointer-events-none h-[52px] w-[52px] rounded-md border border-slate-200 bg-slate-200 object-cover"/><div className="absolute -bottom-1 -right-1 rounded-full bg-white p-0.5 shadow"><div className={`h-2.5 w-2.5 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
-                                <div className="min-w-0 flex-1 text-left">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{employee.id} · {isSub ? 'Subcontract' : 'Permanent'}</p>
-                                    <h3 className="truncate text-sm font-bold leading-tight text-slate-900" title={employee.name}>{employee.name}</h3>
-                                    <p className="truncate text-[11px] text-slate-600">{[employee.position, employee.subDept].filter(Boolean).join(' · ')}</p>
-                                    {isSub && employee.company && <p className="truncate text-[10px] font-bold text-orange-600">{employee.company}</p>}
-                                </div>
-                                <div className="shrink-0 text-right text-[10px] leading-snug text-slate-600">
-                                    {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <div>กะ <b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></div>}
-                                    {employee.showPhone && employee.phone && <div>{employee.phone}</div>}
-                                    {employee.startDate && <div>{calculateTenure(employee.startDate)}</div>}
-                                    <div className="mt-0.5 flex items-center justify-end gap-1">
+                            <div className={`flex items-center justify-between rounded-t-[9px] px-3 py-1.5 text-white ${headerClass}`}>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Employee · {isSub ? 'S' : 'P'} · {employee.id}</span>
+                                <span className="ml-2 min-w-0 truncate text-[10px] opacity-90">{[employee.dept, employee.subDept].filter(Boolean).join(' / ')}</span>
+                            </div>
+                            <div className="flex">
+                                <div className="flex w-[150px] shrink-0 flex-col rounded-bl-[9px] border-r border-slate-200 bg-slate-50 p-3" style={textColorStyle}>
+                                    <p className="mb-1.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Profile</p>
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative shrink-0"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="pointer-events-none h-[46px] w-[46px] rounded-md border border-slate-200 bg-slate-200 object-cover"/><div className="absolute -bottom-1 -right-1 rounded-full bg-white p-0.5 shadow"><div className={`h-2 w-2 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
+                                        <div className="min-w-0 text-left">
+                                            <h3 className="text-xs font-bold leading-tight text-slate-900" title={employee.name}>{employee.name}</h3>
+                                            <p className="text-[11px] leading-tight text-slate-600">{employee.position}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-left text-[10px]">
+                                        {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <><span className="text-slate-400">กะ</span><b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></>}
+                                        {employee.showPhone && employee.phone && <><span className="text-slate-400">โทร</span><b className="text-slate-800">{employee.phone}</b></>}
+                                        {employee.startDate && <><span className="text-slate-400">อายุงาน</span><b className="text-slate-800">{calculateTenure(employee.startDate)}</b></>}
+                                        {isSub && employee.company && <><span className="text-slate-400">บริษัท</span><b className="text-orange-600">{employee.company}</b></>}
+                                    </div>
+                                    <div className="mt-auto flex items-center gap-1 pt-2">
                                         {isLeader && canDrag && !isViewOnly && renderGridPill('')}
                                         {!selectionMode && renderJdButton('')}
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex cursor-pointer items-center gap-2 rounded-b-md bg-slate-50 py-2 pl-4 pr-3" title={`Skill Matrix (คลิกเพื่อดู Radar)\n${skillSummary.tooltip}`} role="button" onClick={(e) => { e.stopPropagation(); openSkillRadar(employee.id); }}>
-                                <div className="min-w-0 flex-1 text-left">
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Skill Matrix</p>
-                                    <p className={`text-2xl font-extrabold leading-tight ${scoreTone}`}>{skillSummary.required ? `${skillSummary.met}/${skillSummary.required}` : skillSummary.rated}</p>
-                                    <p className="text-[10px] text-slate-500">{skillSummary.required ? 'ผ่านเกณฑ์' : 'ทักษะที่ประเมิน'}</p>
-                                    {skillSummary.stations > 0 && <p className="mt-1 text-[10px] font-bold text-indigo-700" title="จำนวนสถานีที่ทำได้ระดับ 3 ขึ้นไป">★ {skillSummary.stations} สถานี</p>}
+                                <div className="flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-br-[9px] p-3" title={`Skill Matrix (คลิกเพื่อดู Radar)\n${skillSummary.tooltip}`} role="button" onClick={(e) => { e.stopPropagation(); openSkillRadar(employee.id); }}>
+                                    <div className="flex w-full items-center justify-between">
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Skill Matrix</span>
+                                        <span className={`text-xs font-extrabold ${scoreTone}`} title={skillSummary.required ? 'ผ่านเกณฑ์ / ทักษะที่ตำแหน่งต้องการ' : 'ทักษะที่ประเมินแล้ว'}>{skillSummary.required ? `${skillSummary.met}/${skillSummary.required}` : skillSummary.rated}{skillSummary.stations > 0 && <span className="ml-1 text-[10px] text-indigo-700" title="สถานีที่ทำได้ระดับ 3 ขึ้นไป">★{skillSummary.stations}</span>}</span>
+                                    </div>
+                                    <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id} width={176} height={132} radius={44}/>
+                                    <div className="flex gap-3 text-[9px] text-slate-600">
+                                        <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-3 bg-green-600"></i>ปัจจุบัน</span>
+                                        <span className="flex items-center gap-1"><i className="inline-block h-0 w-3 border-t-2 border-dashed border-orange-500"></i>ที่ต้องการ</span>
+                                    </div>
                                 </div>
-                                <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id}/>
                             </div>
                         </>
                     ) : (
@@ -1942,11 +1951,8 @@
             return { axes, rows, colleagues: others.length };
         };
         // Compact radar for the org-chart card: levels 0-4, current (green) vs required for the position (orange dashed). Click opens the full radar.
-        const SkillMiniRadar = ({ axes, employeeId }) => {
+        const SkillMiniRadar = ({ axes, employeeId, width = 196, height = 164, radius = 56 }) => {
             // Wider than tall so the axis names beside the chart are not clipped.
-            const width = 196;
-            const height = 164;
-            const radius = 56;
             const n = axes.length;
             const point = (i, value, extra = 0) => {
                 const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
