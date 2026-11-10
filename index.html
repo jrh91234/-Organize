@@ -187,6 +187,7 @@
         // ---- Excel org chart: lays the chart out on a cell grid (each card = 12 rows x 1 "unit" of 3 columns) ----
         const ORG_PHOTO_ROWS = 4;
         const ORG_CARD_ROWS = 12;
+        const ORG_RADAR_ROWS = 8;
         const ORG_GAP_ROWS = 2;
         const TW_HEX = {
             blue: { 50: 'EFF6FF', 100: 'DBEAFE', 200: 'BFDBFE', 400: '60A5FA', 600: '2563EB' },
@@ -237,12 +238,37 @@
             probe.onerror = () => { clearTimeout(timer); reject(new Error('photo failed')); };
             probe.src = src;
         });
-        const buildOrgChartLayout = (employees, rootEmployees) => {
+        // The card radar drawn on a canvas (Excel cannot hold a live chart from ExcelJS, so the sheet gets a picture): green = current, orange dashed = required.
+        const skillRadarPngDataUrl = (axes) => {
+            const scale = 2, width = 196, height = 164, cx = width / 2, cy = height / 2, radius = 56, n = axes.length;
+            const canvas = document.createElement('canvas');
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+            const point = (i, value, extra = 0) => {
+                const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+                const r = (Math.max(0, Math.min(SKILL_MAX_LEVEL, value)) / SKILL_MAX_LEVEL) * radius + extra;
+                return [cx + r * Math.cos(angle), cy + r * Math.sin(angle), Math.cos(angle)];
+            };
+            const trace = (fn) => { ctx.beginPath(); axes.forEach((a, i) => { const [x, y] = point(i, fn(a)); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.closePath(); };
+            ctx.lineWidth = 1;
+            [2, 4].forEach(level => { trace(() => level); ctx.strokeStyle = '#cbd5e1'; ctx.setLineDash(level === SKILL_RELEASE_LEVEL ? [3, 2] : []); ctx.stroke(); });
+            ctx.setLineDash([]);
+            axes.forEach((a, i) => { const [x, y] = point(i, SKILL_MAX_LEVEL); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x, y); ctx.strokeStyle = '#e2e8f0'; ctx.stroke(); });
+            trace(a => a.required); ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+            trace(a => a.value); ctx.fillStyle = 'rgba(34,197,94,0.27)'; ctx.fill(); ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.font = '600 9px Tahoma, Arial, sans-serif';
+            ctx.fillStyle = '#475569';
+            axes.forEach((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 9); ctx.textAlign = cos > 0.25 ? 'left' : cos < -0.25 ? 'right' : 'center'; ctx.fillText(a.label, x, y + 3); });
+            return canvas.toDataURL('image/png');
+        };
+        const buildOrgChartLayout = (employees, rootEmployees, cardRows = ORG_CARD_ROWS) => {
             const measure = (employee, visited) => {
                 if (visited.has(employee.id)) return null;
                 const seen = new Set(visited).add(employee.id);
                 const kids = employees.filter(e => e.reportsTo === employee.id && !seen.has(e.id)).sort(compareEmployeeCategoryOrder).map(kid => measure(kid, seen)).filter(Boolean);
-                const node = { employee, kids, w: 1, h: ORG_CARD_ROWS, cols: 1, colW: [], rowH: [] };
+                const node = { employee, kids, w: 1, h: cardRows, cols: 1, colW: [], rowH: [] };
                 if (kids.length) {
                     // Leaders show their team in a grid (gridCols wide); everyone else spreads the team in one row.
                     const isGrid = String(employee.position || '').toLowerCase().includes('leader');
@@ -250,7 +276,7 @@
                     node.cols = isGrid ? Math.min(wanted, kids.length) : kids.length;
                     const rows = Math.ceil(kids.length / node.cols);
                     node.colW = Array(node.cols).fill(1);
-                    node.rowH = Array(rows).fill(ORG_CARD_ROWS);
+                    node.rowH = Array(rows).fill(cardRows);
                     kids.forEach((kid, i) => {
                         const c = i % node.cols;
                         const r = Math.floor(i / node.cols);
@@ -258,7 +284,7 @@
                         node.rowH[r] = Math.max(node.rowH[r], kid.h);
                     });
                     node.w = node.colW.reduce((a, b) => a + b, 0);
-                    node.h = ORG_CARD_ROWS + ORG_GAP_ROWS + node.rowH.reduce((a, b) => a + b, 0) + (rows - 1);
+                    node.h = cardRows + ORG_GAP_ROWS + node.rowH.reduce((a, b) => a + b, 0) + (rows - 1);
                 }
                 return node;
             };
@@ -266,7 +292,7 @@
             const vlines = [];
             const bars = [];
             const place = (node, u0, r0, level) => {
-                const top = r0 + ORG_CARD_ROWS + ORG_GAP_ROWS;
+                const top = r0 + cardRows + ORG_GAP_ROWS;
                 const firstRowCx = [];
                 node.kids.forEach((kid, i) => {
                     const c = i % node.cols;
@@ -300,9 +326,9 @@
                 unit += node.w + 1;
                 rows = Math.max(rows, node.h);
             });
-            return { cards, vlines, bars, units: Math.max(unit - 1, 1), rows };
+            return { cards, vlines, bars, units: Math.max(unit - 1, 1), rows, cardRows };
         };
-        const renderOrgChartSheet = (sheet, layout, theme, title, photoIds = new Map()) => {
+        const renderOrgChartSheet = (sheet, layout, theme, title, photoIds = new Map(), radarIds = new Map()) => {
             const COL0 = 2;
             const ROW0 = 3;
             const colL = unit => COL0 + unit * 3;
@@ -351,7 +377,7 @@
                     // Both halves of a merged row get the same border so the frame draws whichever cell the viewer treats as the master.
                     const border = { left: edgeSide, right: edgeSide };
                     if (rel === 0) border.top = edgeSide;
-                    if (rel === ORG_CARD_ROWS - 1) border.bottom = { style: 'medium', color: { argb: edge } };
+                    if (rel === layout.cardRows - 1) border.bottom = { style: 'medium', color: { argb: edge } };
                     cell.border = border;
                     return cell;
                 };
@@ -373,6 +399,13 @@
                     cell.alignment = { horizontal: 'center', vertical: 'middle', shrinkToFit: true };
                     if (line.note) cell.note = line.note;
                 });
+                // Radar block under the text (only when the export has skill data): one merged area with the picture centred in it.
+                if (layout.cardRows > ORG_CARD_ROWS) {
+                    sheet.mergeCells(cardTop + ORG_CARD_ROWS, colL(unit), cardTop + layout.cardRows - 1, colR(unit));
+                    for (let rel = ORG_CARD_ROWS; rel < layout.cardRows; rel++) { styleCell(cardTop + rel, colL(unit), rel); styleCell(cardTop + rel, colR(unit), rel); }
+                    const radarId = radarIds.get(employee.id);
+                    if (radarId !== undefined) sheet.addImage(radarId, { tl: { col: colL(unit) - 1 + 0.03, row: cardTop + ORG_CARD_ROWS - 1 + 0.1 }, ext: { width: 186, height: 150 } });
+                }
             });
             sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
         };
@@ -4476,7 +4509,11 @@
 
                 // 1) The chart itself, laid out like the on-screen cards (every cell is editable).
                 const chartSheet = workbook.addWorksheet('Org Chart', { views: [{ showGridLines: false }] });
-                const layout = buildOrgChartLayout(filteredAll, rootEmployees);
+                // Skill radars (from the Skill Matrix data loaded for the chart): drawn to a picture per person; the card grows to hold it.
+                const skillSummaries = computeSkillSummaries(filteredAll, chartSkillData);
+                const radarIds = new Map();
+                skillSummaries.forEach((summary, id) => { if (summary.radar) radarIds.set(id, workbook.addImage({ base64: skillRadarPngDataUrl(summary.radar), extension: 'png' })); });
+                const layout = buildOrgChartLayout(filteredAll, rootEmployees, radarIds.size > 0 ? ORG_CARD_ROWS + ORG_RADAR_ROWS : ORG_CARD_ROWS);
                 // Photos need a CORS-enabled load (same as the PDF export); anyone whose photo fails simply gets no picture.
                 const photoIds = new Map();
                 await Promise.all(layout.cards.map(async ({ employee }) => {
@@ -4486,7 +4523,7 @@
                         photoIds.set(employee.id, workbook.addImage({ base64: dataUrl, extension: 'png' }));
                     } catch (error) { /* no photo for this card */ }
                 }));
-                renderOrgChartSheet(chartSheet, layout, THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`, photoIds);
+                renderOrgChartSheet(chartSheet, layout, THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`, photoIds, radarIds);
 
                 // 2) The same people as a flat, filterable table.
                 const dataSheet = workbook.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -4497,6 +4534,22 @@
                 chartRows.forEach(r => dataSheet.addRow([r.level, r.id, `${'    '.repeat(r.level)}${r.name}`, r.position, r.dept, r.subDept, r.shift, r.type, r.company, r.reportsToId, r.reportsToName, r.phone, formatDate(r.startDate), r.teamTotal, r.teamRegular, r.teamSubcontract, r.jobDescriptionTh, r.jobDescription]));
                 dataSheet.getRow(1).font = { bold: true };
                 dataSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 18 } };
+
+                // 2b) The numbers behind each radar (category averages, current vs required) so they can be edited or charted in Excel.
+                if (chartSkillData?.catalog?.length) {
+                    const radarSheet = workbook.addWorksheet('Skill Radar', { views: [{ state: 'frozen', ySplit: 1 }] });
+                    radarSheet.columns = [['ID', 10], ['Name', 28], ['Position', 24], ['Department', 16], ['Line', 18], ...SKILL_CATEGORIES.flatMap(c => [[`${c.label.split(' / ')[0]} (level)`, 15], [`${c.label.split(' / ')[0]} (required)`, 17]]), ['Required met', 13], ['Required skills', 15], ['Stations L3+', 13]].map(([header, width]) => ({ header, width }));
+                    const peopleById = new Map(filteredAll.map(e => [e.id, e]));
+                    chartRows.forEach(r => {
+                        const employee = peopleById.get(r.id);
+                        const axes = employee ? computeSkillRadar(employee, chartSkillData.catalog, chartSkillData.levels, [], 'category').axes : [];
+                        if (!axes.length) return;
+                        const summary = skillSummaries.get(r.id);
+                        radarSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, ...SKILL_CATEGORIES.flatMap(c => { const axis = axes.find(a => a.label === c.label.split(' / ')[0]); return axis ? [Math.round(axis.value * 100) / 100, Math.round(axis.required * 100) / 100] : ['', '']; }), summary ? summary.met : '', summary ? summary.required : '', summary ? summary.stations : '']);
+                    });
+                    radarSheet.getRow(1).font = { bold: true };
+                    radarSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 + SKILL_CATEGORIES.length * 2 + 3 } };
+                }
 
                 // 3) Job descriptions, one person per row with the full text wrapped (row height is left to Excel so long text is not cut off).
                 const jdSheet = workbook.addWorksheet('Job Description', { views: [{ state: 'frozen', ySplit: 1 }] });
