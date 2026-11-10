@@ -696,8 +696,6 @@
             // With the Skill display on, anyone who has a skill radar gets the wide card: photo and details on the left, radar on the right.
             const skillSummary = React.useContext(SkillSummaryContext)?.get(employee.id);
             const wide = !isStaging && Boolean(skillSummary?.radar);
-            const Left = wide ? 'div' : React.Fragment;
-            const leftProps = wide ? { className: 'flex w-[116px] shrink-0 flex-col items-center' } : {};
             let bgClass = "bg-white"; let borderClass = "border-gray-200"; let radiusClass = shapeClass?.cls || 'rounded-xl'; let badgeClass = isSub ? 'bg-orange-500' : 'bg-blue-600';
             if (employee.customColor && THEMES[employee.customColor]) { const styles = THEMES[employee.customColor].lv0.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; } else if (className) { const styles = className.split(' '); bgClass = styles.find(s => s.startsWith('bg-')) || bgClass; borderClass = styles.find(s => s.startsWith('border-')) || borderClass; }
             if (employee.customShape && SHAPES[employee.customShape]) radiusClass = SHAPES[employee.customShape].cls;
@@ -705,6 +703,20 @@
             
             const currentGrid = employee.gridCols ? parseInt(employee.gridCols) : 0;
             const displayGrid = (isNaN(currentGrid) || currentGrid === 0) ? 'Auto' : currentGrid;
+            const renderGridPill = (position) => (
+                <div className={`${position} grid-control-pill z-20`} onClick={e=>e.stopPropagation()}>
+                    <div className="grid-btn" onClick={()=>onGridColChange(employee.id, -1)}><Icons.Minus size={10}/></div>
+                    <div className="grid-val">{displayGrid}</div>
+                    <div className="grid-btn" onClick={()=>onGridColChange(employee.id, 1)}><Icons.Plus size={10}/></div>
+                </div>
+            );
+            const renderJdButton = (position) => (
+                <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`${position} rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>
+            );
+            // Wide (formal) card: neutral white card, the theme / custom colour only as the side stripe.
+            const stripeClass = String(borderClass).replace(/^border-/, 'bg-').replace(/-(?:100|200|300|400)$/, '-500');
+            const scoreRatio = skillSummary?.required ? skillSummary.met / skillSummary.required : null;
+            const scoreTone = scoreRatio === null ? 'text-slate-700' : scoreRatio >= 1 ? 'text-emerald-600' : scoreRatio >= 0.5 ? 'text-amber-600' : 'text-rose-600';
 
             // [V10] Determine if draggable based on smart lock logic
             // Admin/Sup can always drag. Leaders can drag ONLY if they have permission over this node.
@@ -716,8 +728,8 @@
             const canDrag = !isLocked || (isLeaderRole && canEditThis);
 
             return (
-                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex ${wide ? 'w-[350px] flex-row items-center gap-2' : 'w-36 flex-col items-center sm:w-40'} p-3 border-b-4 shadow-sm transition-transform duration-200 cursor-pointer group ${bgClass} ${borderClass} ${radiusClass} ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
-                    <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>
+                <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col ${wide ? 'w-[350px] rounded-md border border-slate-300 bg-white shadow-sm' : `w-36 items-center sm:w-40 p-3 border-b-4 shadow-sm ${bgClass} ${borderClass} ${radiusClass}`} transition-transform duration-200 cursor-pointer group ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${wide ? '' : className}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
+                    {!wide && <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>}
 
                     {/* [V24] Department Badge for ALL DEPTS view */}
                     {isAllDepts && employee.dept && (
@@ -727,20 +739,46 @@
                     )}
                     
                     {/* [NEW] Capsule Grid Control (+/-) */}
-                    {isLeader && canDrag && !isViewOnly && !isStaging && (
-                        <div className="absolute top-2 right-2 grid-control-pill z-20" onClick={e=>e.stopPropagation()}>
-                            <div className="grid-btn" onClick={()=>onGridColChange(employee.id, -1)}><Icons.Minus size={10}/></div>
-                            <div className="grid-val">{displayGrid}</div>
-                            <div className="grid-btn" onClick={()=>onGridColChange(employee.id, 1)}><Icons.Plus size={10}/></div>
-                        </div>
-                    )}
+                    {isLeader && canDrag && !isViewOnly && !isStaging && !wide && renderGridPill('absolute top-2 right-2')}
 
                     {selectionMode && <div className={`absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected?'bg-purple-600 border-purple-600':'border-gray-300 bg-white'}`}>{isSelected && <Icons.Check size={12} className="text-white"/>}</div>}
                     {canDrag && !isStaging && !selectionMode && !isViewOnly && ( <>
                         <div className="reorder-controls" style={{left: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, -4); }}><Icons.ArrowUp size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, -1)}}><Icons.ArrowLeft size={8}/></button> </div> 
                         <div className="reorder-controls" style={{right: '-10px'}}> <button className="reorder-btn" onClick={(e)=>{ e.stopPropagation(); onReorder(employee.id, 4); }}><Icons.ArrowDown size={8}/></button> <button className="reorder-btn" onClick={(e)=>{e.stopPropagation(); onReorder(employee.id, 1)}}><Icons.ArrowRight size={8}/></button> </div> 
                     </> )}
-                    <Left {...leftProps}>
+                    {wide ? (
+                        <>
+                            <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 rounded-l-md ${stripeClass}`}></span>
+                            <div className="flex items-center gap-2.5 border-b border-slate-200 py-2.5 pl-4 pr-3" style={textColorStyle}>
+                                <div className="relative shrink-0"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="pointer-events-none h-[52px] w-[52px] rounded-md border border-slate-200 bg-slate-200 object-cover"/><div className="absolute -bottom-1 -right-1 rounded-full bg-white p-0.5 shadow"><div className={`h-2.5 w-2.5 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
+                                <div className="min-w-0 flex-1 text-left">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{employee.id} · {isSub ? 'Subcontract' : 'Permanent'}</p>
+                                    <h3 className="truncate text-sm font-bold leading-tight text-slate-900" title={employee.name}>{employee.name}</h3>
+                                    <p className="truncate text-[11px] text-slate-600">{[employee.position, employee.subDept].filter(Boolean).join(' · ')}</p>
+                                    {isSub && employee.company && <p className="truncate text-[10px] font-bold text-orange-600">{employee.company}</p>}
+                                </div>
+                                <div className="shrink-0 text-right text-[10px] leading-snug text-slate-600">
+                                    {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <div>กะ <b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></div>}
+                                    {employee.showPhone && employee.phone && <div>{employee.phone}</div>}
+                                    {employee.startDate && <div>{calculateTenure(employee.startDate)}</div>}
+                                    <div className="mt-0.5 flex items-center justify-end gap-1">
+                                        {isLeader && canDrag && !isViewOnly && renderGridPill('')}
+                                        {!selectionMode && renderJdButton('')}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex cursor-pointer items-center gap-2 rounded-b-md bg-slate-50 py-2 pl-4 pr-3" title={`Skill Matrix (คลิกเพื่อดู Radar)\n${skillSummary.tooltip}`} role="button" onClick={(e) => { e.stopPropagation(); openSkillRadar(employee.id); }}>
+                                <div className="min-w-0 flex-1 text-left">
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Skill Matrix</p>
+                                    <p className={`text-2xl font-extrabold leading-tight ${scoreTone}`}>{skillSummary.required ? `${skillSummary.met}/${skillSummary.required}` : skillSummary.rated}</p>
+                                    <p className="text-[10px] text-slate-500">{skillSummary.required ? 'ผ่านเกณฑ์' : 'ทักษะที่ประเมิน'}</p>
+                                    {skillSummary.stations > 0 && <p className="mt-1 text-[10px] font-bold text-indigo-700" title="จำนวนสถานีที่ทำได้ระดับ 3 ขึ้นไป">★ {skillSummary.stations} สถานี</p>}
+                                </div>
+                                <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id}/>
+                            </div>
+                        </>
+                    ) : (
+                        <>
                     <div className="relative"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-white shadow-sm bg-gray-200 pointer-events-none"/><div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow"><div className={`w-3 h-3 rounded-full ${employee.status==='Active'?'bg-green-500':'bg-red-500'}`}></div></div></div>
                     <div className="mt-2 text-center w-full" style={textColorStyle}>
                         <p className="text-[10px] sm:text-xs font-bold opacity-60">{employee.id}</p>
@@ -751,16 +789,11 @@
                         {employee.showPhone && employee.phone && <p className="text-[10px] bg-gray-100 rounded px-1 mt-0.5 inline-block text-gray-600">📞 {employee.phone}</p>}
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
-                        {!isStaging && !wide && <SkillCardStrip employeeId={employee.id} />}
+                        {!isStaging && <SkillCardStrip employeeId={employee.id} />}
                     </div>
-                    </Left>
-                    {wide && (
-                        <div className={`flex min-w-0 flex-1 flex-col items-center ${isLeader ? 'mt-4' : ''}`}>
-                            <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id}/>
-                            <SkillCardStrip employeeId={employee.id} />
-                        </div>
+                        </>
                     )}
-                    {!isStaging && !selectionMode && <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`absolute bottom-1 right-1 rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>}
+                    {!wide && !isStaging && !selectionMode && renderJdButton('absolute bottom-1 right-1')}
                     {isStaging && canDrag && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onMoveInit(employee);}} className="absolute top-1 right-1 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full"><Icons.Move size={14}/></button>}
                 </div>
             );
