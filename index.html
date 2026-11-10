@@ -3347,7 +3347,7 @@
                     <div class="qr">${qr ? `<img src="${qr}" style="width:100%;height:100%">` : ''}</div>
                     <div class="binfo">
                         <div class="idrow"><span class="idl">ID</span><span class="idv" style="color:${color}">${idCardEsc(e.id)}</span></div>
-                        ${e.company ? `<div class="dept">${idCardEsc(e.company)}</div>` : ''}
+                        ${sub && e.company ? `<div class="dept">${idCardEsc(e.company)}</div>` : ''}
                         ${e.startDate ? `<div class="dept">เริ่มงาน / Start: ${idCardEsc(e.startDate)}</div>` : ''}
                         <div class="ret">หากพบบัตรนี้ กรุณาส่งคืนฝ่ายบุคคล<br>If found, please return to HR.</div>
                     </div>
@@ -3394,15 +3394,13 @@
                     if (withBack) sheets.push(`<div class="sheet">${cardBack(e)}</div>`);
                 });
             } else {
-                for (let i = 0; i < people.length; i += 8) {
-                    const chunk = people.slice(i, i + 8);
-                    sheets.push(`<div class="sheet">${chunk.map(cardFront).join('')}</div>`);
-                    if (withBack) {
-                        // Backs mirrored left-right so they line up when the sheet is flipped on its long edge (duplex printing).
-                        const mirrored = [];
-                        for (let j = 0; j < chunk.length; j += 2) { if (chunk[j + 1]) mirrored.push(chunk[j + 1]); mirrored.push(chunk[j]); }
-                        sheets.push(`<div class="sheet">${mirrored.map(cardBack).join('')}</div>`);
+                if (withBack) {
+                    // Front and back side by side on one row (4 people per A4 sheet), so one single-sided pass gives a complete set.
+                    for (let i = 0; i < people.length; i += 4) {
+                        sheets.push(`<div class="sheet">${people.slice(i, i + 4).map(e => cardFront(e) + cardBack(e)).join('')}</div>`);
                     }
+                } else {
+                    for (let i = 0; i < people.length; i += 8) sheets.push(`<div class="sheet">${people.slice(i, i + 8).map(cardFront).join('')}</div>`);
                 }
             }
             return `<!doctype html><html><head><meta charset="utf-8"><title>Employee ID Cards</title>
@@ -3447,7 +3445,7 @@
                 w.focus();
                 w.print();
             };
-            const sheetCount = layout === 'cr80' ? people.length * (withBack ? 2 : 1) : Math.ceil(people.length / 8) * (withBack ? 2 : 1);
+            const sheetCount = layout === 'cr80' ? people.length * (withBack ? 2 : 1) : Math.ceil(people.length / (withBack ? 4 : 8));
             return (
                 <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" aria-label="พิมพ์บัตรพนักงาน">
                     <div className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -3484,7 +3482,7 @@
                                 <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-sm">
                                     <label className="flex items-center gap-1.5"><span className="text-gray-600">รูปแบบ</span>
                                         <select value={layout} onChange={e => setLayout(e.target.value)} className="rounded-md border px-2 py-1">
-                                            <option value="a4">A4 (8 ใบ/หน้า พร้อมเส้นตัด)</option>
+                                            <option value="a4">A4 (หน้า-หลังคู่กัน 4 คน/แผ่น · ไม่ติ๊กด้านหลัง 8 ใบ/แผ่น)</option>
                                             <option value="cr80">1 บัตร/หน้า (CR80 สำหรับเครื่องพิมพ์บัตร)</option>
                                         </select>
                                     </label>
@@ -3498,7 +3496,7 @@
                                         ? <iframe ref={frameRef} title="ตัวอย่างบัตร" srcDoc={html} className="h-full w-full bg-white" />
                                         : <div className="flex h-full items-center justify-center text-sm text-gray-500">เลือกพนักงานทางซ้ายเพื่อดูตัวอย่างบัตร</div>}
                                 </div>
-                                {layout === 'a4' && withBack && <p className="border-t px-4 py-1.5 text-[11px] text-gray-500">พิมพ์สองหน้า: เลือก "พลิกด้านขอบยาว" (Flip on long edge) ด้านหลังจะตรงกับด้านหน้า</p>}
+                                {layout === 'a4' && withBack && <p className="border-t px-4 py-1.5 text-[11px] text-gray-500">แต่ละแถวคือบัตรหนึ่งใบ: ด้านหน้าอยู่ซ้าย ด้านหลังอยู่ขวา พิมพ์หน้าเดียวแล้วตัดตามเส้นประ พับครึ่งหรือเคลือบติดกันได้</p>}
                             </div>
                         </div>
                     </div>
