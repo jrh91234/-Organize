@@ -5237,7 +5237,7 @@
                     
                     {isManagePositionsOpen && <ManagePositionsModal positions={positions} onAdd={handleAddPosition} onDelete={handleDeletePosition} onRename={handleRenamePosition} canRename={currentUser?.role !== 'leader'} onClose={()=>setIsManagePositionsOpen(false)} />}
                     {isManageDeptsOpen && <ManageDeptsModal depts={departments} onAdd={handleAddDept} onDelete={handleDeleteDept} onClose={()=>setIsManageDeptsOpen(false)} />}
-                    {isIdCardOpen && <IdCardPrintModal employees={validEmployees.filter(e => e.reportsTo !== 'STAGING' && (!currentUser.dept || String(currentUser.dept).trim().toUpperCase() === 'ALL' || skillSameText(e.dept, currentUser.dept)) && (currentDept === 'ALL' || skillSameText(e.dept, currentDept)))} onClose={()=>setIsIdCardOpen(false)} />}
+                    {isIdCardOpen && <IdCardPrintModal employees={filteredAll} onClose={()=>setIsIdCardOpen(false)} />}
                     {isSummaryOpen && <SummaryDashboard employees={validEmployees} onClose={()=>setIsSummaryOpen(false)} departments={departments} />}
                 </div>
             );
