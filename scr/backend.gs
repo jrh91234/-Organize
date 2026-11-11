@@ -818,7 +818,8 @@ function attendanceEmployeeId_(employee) {
 
 function getAttendanceRoster_(actor) {
   const employees = getAttendanceOrgEmployees_();
-  const activeEmployees = employees.filter(employee => String(employee.status || '').trim().toLowerCase() !== 'resigned');
+  // Planned (future) hires are not on the roster until they actually start (status Active).
+  const activeEmployees = employees.filter(employee => !['resigned', 'planned'].includes(String(employee.status || '').trim().toLowerCase()));
   const byId = new Map();
   const childrenByManager = new Map();
   employees.forEach(employee => {
@@ -929,7 +930,7 @@ function getAttendanceCounts() {
   try {
     const window = getAttendanceWindow_(new Date());
     const employees = getAttendanceOrgEmployees_().filter(employee =>
-      String(employee.status || '').trim().toLowerCase() !== 'resigned' &&
+      !['resigned', 'planned'].includes(String(employee.status || '').trim().toLowerCase()) &&
       String(employee.dept || '').trim().toLowerCase() === 'assembly' &&
       String(employee.subDept || '').trim().toLowerCase() === 'h9'
     );
