@@ -713,6 +713,34 @@
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
         };
 
+        // Chain-of-command focus for the chart and its exports.
+        // person: that person, everyone under them, and their bosses up to the top.
+        // subDept: everyone in that sub-department (main or extra line) plus their bosses up to the top.
+        const computeChainScope = (people, focus) => {
+            const byId = new Map(people.map(e => [e.id, e]));
+            const ids = new Set();
+            let seeds = [];
+            if (focus?.type === 'person') {
+                if (!byId.has(focus.id)) return ids;
+                seeds = [focus.id];
+                const kids = new Map();
+                people.forEach(e => { if (!kids.has(e.reportsTo)) kids.set(e.reportsTo, []); kids.get(e.reportsTo).push(e.id); });
+                const stack = [focus.id];
+                while (stack.length) { const id = stack.pop(); if (ids.has(id)) continue; ids.add(id); (kids.get(id) || []).forEach(k => stack.push(k)); }
+            } else if (focus?.type === 'subDept') {
+                seeds = people.filter(e => employeeSkillLines(e).includes(focus.value)).map(e => e.id);
+                seeds.forEach(id => ids.add(id));
+            }
+            seeds.forEach(id => {
+                const guard = new Set();
+                let boss = byId.get(id)?.reportsTo;
+                while (boss && byId.has(boss) && !guard.has(boss)) { guard.add(boss); ids.add(boss); boss = byId.get(boss).reportsTo; }
+            });
+            return ids;
+        };
+        const chainFocusLabel = (focus, people) => !focus ? '' : focus.type === 'subDept' ? `สาย ${focus.value}` : `สาย ${(people || []).find(e => e.id === focus.id)?.name || focus.id}`;
+        const ChartFocusContext = React.createContext(null);
+
         // Toolbar dropdown: a trigger button plus a popover list. Closes on outside click, Escape, or after an item runs.
         // items: { key, label, icon, onClick, checked (boolean => checkbox row that stays open), disabled, tone, hint, divider }
         const ToolbarMenu = ({ label, icon, items, align = 'right', title, triggerClassName = '', badge }) => {
@@ -883,6 +911,7 @@
             const [isDragOver, setIsDragOver] = useState(false);
             const [isDragOverGroup, setIsDragOverGroup] = useState(false);
             const skillSummaries = React.useContext(SkillSummaryContext);
+            const chartFocus = React.useContext(ChartFocusContext);
             const gridScrollRef = useRef(null);
             const [scrollArrows, setScrollArrows] = useState({ left: false, right: false });
             const updateScrollArrows = useCallback(() => {
@@ -956,6 +985,7 @@
                         <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange} currentUser={currentUser} isAllDepts={isAllDepts}/>
                         {team && (team.total > 0 || team.planned > 0) && (
                             <div className="absolute left-full top-1/2 z-10 ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white/95 px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm" title="จำนวนลูกทีมทุกระดับ (ไม่นับผู้ที่ลาออก และไม่นับแผนรับ)">
+                                {chartFocus && !moveTargetId && !selectionMode && <button type="button" onClick={(e)=>{e.stopPropagation(); chartFocus.set(chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? null : { type: 'person', id: employee.id });}} title={chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'กลับไปดูทั้งแผนก' : 'ดูเฉพาะสายนี้ (ทีมนี้ + หัวหน้าตามสายขึ้นไป) — ใช้กับการส่งออกด้วย'} className={`mb-1 flex w-full items-center justify-center gap-0.5 rounded border px-1 py-0.5 text-[9px] font-bold ${chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'}`}><Icons.Eye size={10}/>{chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'ทั้งแผนก' : 'สายนี้'}</button>}
                                 <div className="text-gray-800">ลูกทีม {team.total}</div>
                                 <div className="text-green-700">ประจำ {team.regular}</div>
                                 <div className="text-orange-600">Sub {team.subcontract}</div>
@@ -4156,6 +4186,9 @@
             const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
             const [showPlannedList, setShowPlannedList] = useState(false);
             const [showPlannedOnChart, setShowPlannedOnChart] = useState(() => safeLocalLoad('showPlannedOnChart', true) !== false);
+            const [chartFocus, setChartFocus] = useState(null);
+            useEffect(() => { setChartFocus(null); }, [currentDept]);
+            const chartFocusValue = useMemo(() => ({ current: chartFocus, set: setChartFocus }), [chartFocus]);
             const [attendanceData, setAttendanceData] = useState({ date: '', mine: {}, records: [], employees: [], departments: [] });
             const [attendanceLoading, setAttendanceLoading] = useState(false);
             const [attendanceUpdatedAt, setAttendanceUpdatedAt] = useState(null);
@@ -4953,11 +4986,11 @@
                 document.body.appendChild(host);
                 const root = ReactDOM.createRoot(inner);
                 try {
-                    const stats = computeDashboardStats(currentEmployees, deptTab);
+                    const stats = computeDashboardStats(chainScope ? filteredAll.filter(e => !isPlannedEmployee(e)) : currentEmployees, deptTab);
                     ReactDOM.flushSync(() => root.render(
                         <div>
                             <div className="mb-5 flex items-end justify-between border-b pb-3">
-                                <h1 className="text-2xl font-bold text-gray-800">{deptTab === 'Overview' ? 'Summary — All Departments' : `Department Summary — ${deptTab}`}</h1>
+                                <h1 className="text-2xl font-bold text-gray-800">{deptTab === 'Overview' ? 'Summary — All Departments' : `Department Summary — ${deptTab}`}{focusLabel ? ` · ${focusLabel}` : ''}</h1>
                                 <span className="text-sm text-gray-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                             </div>
                             <DashboardContent stats={stats} activeTab={deptTab} printMode />
@@ -5022,7 +5055,7 @@
                         if (i > 0) pdf.addPage();
                         pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', margin + (maxW - w) / 2, margin, w, h);
                     }
-                    pdf.save(`job_descriptions_${currentDept}_${new Date().toISOString().slice(0, 10)}.pdf`);
+                    pdf.save(`job_descriptions_${currentDept}${focusFileSuffix}_${new Date().toISOString().slice(0, 10)}.pdf`);
                 } catch (err) {
                     console.error(err);
                     alert('สร้าง PDF ไม่สำเร็จ: ' + (err?.message || err));
@@ -5112,7 +5145,7 @@
                 const link = document.createElement('a');
                 link.setAttribute('hidden', '');
                 link.setAttribute('href', url);
-                link.setAttribute('download', `org_chart_${currentDept}_${today}.xlsx`);
+                link.setAttribute('download', `org_chart_${currentDept}${focusFileSuffix}_${today}.xlsx`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -5217,7 +5250,7 @@
                         pdf = new jsPDF({ unit: 'mm', format: chartPage, orientation: orient(chartPage), compress: true });
                     }
                     pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin, margin, innerW, innerH);
-                    pdf.save(`orgchart_${currentDept}_${new Date().toISOString().slice(0,10)}.pdf`);
+                    pdf.save(`orgchart_${currentDept}${focusFileSuffix}_${new Date().toISOString().slice(0,10)}.pdf`);
                 } catch (err) {
                     console.error(err);
                     alert('สร้าง PDF ไม่สำเร็จ: ' + (err?.message || err));
@@ -5281,7 +5314,14 @@
             const scopedPlannedCount = plannedEmployees.filter(e => currentDept === 'ALL' || e.dept === currentDept).length;
             const scopedHistoryCount = resignedEmployees.filter(e => currentDept === 'ALL' || (e.exitDept || e.dept) === currentDept).length;
             const stagingEmployees = validEmployees.filter(e => e.reportsTo === 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (!searchTerm || (e.name || '').toLowerCase().includes(searchTerm.toLowerCase())));
-            const filteredAll = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (showPlannedOnChart || !isPlannedEmployee(e)));
+            const deptChartEmployees = validEmployees.filter(e => e.reportsTo !== 'STAGING' && (currentDept === 'ALL' || e.dept === currentDept) && (showPlannedOnChart || !isPlannedEmployee(e)));
+            // Chain focus narrows the chart and every export (PDF, Excel, JD, ID cards) to one line of command.
+            const chainScope = chartFocus ? computeChainScope(deptChartEmployees, chartFocus) : null;
+            const filteredAll = chainScope ? deptChartEmployees.filter(e => chainScope.has(e.id)) : deptChartEmployees;
+            const focusLabel = chainFocusLabel(chartFocus, deptChartEmployees);
+            const focusFileSuffix = focusLabel ? `_${focusLabel.replace(/^สาย\s*/, '').replace(/[\\/:*?"<>|\s]+/g, '-')}` : '';
+            const focusSubDeptOptions = [...new Set(deptChartEmployees.flatMap(e => employeeSkillLines(e)).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            const focusPersonOptions = deptChartEmployees.filter(e => deptChartEmployees.some(c => c.reportsTo === e.id)).sort((a, b) => getPositionRank(b.position) - getPositionRank(a.position) || String(a.name).localeCompare(String(b.name)));
             // [V9 Fix] Sort root nodes by order!
             const rootEmployees = filteredAll
                 .filter(e => { const boss = filteredAll.find(b => b.id === e.reportsTo); return !boss; })
@@ -5353,6 +5393,14 @@
                                 {!isLocked && <button onClick={addAnnotation} aria-label="เพิ่มข้อความบนผัง" title="เพิ่มข้อความบนผัง" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
                                 {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
                                 <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
+                                {viewMode === 'chart' && (focusSubDeptOptions.length > 0 || focusPersonOptions.length > 0) && (
+                                    <select value={chartFocus ? `${chartFocus.type}:${chartFocus.type === 'person' ? chartFocus.id : chartFocus.value}` : ''} onChange={e => { const v = e.target.value; if (!v) { setChartFocus(null); return; } const idx = v.indexOf(':'); const type = v.slice(0, idx), val = v.slice(idx + 1); setChartFocus(type === 'person' ? { type, id: val } : { type, value: val }); }} aria-label="โฟกัสสายบังคับบัญชา" title="ดูเฉพาะสายบังคับบัญชา — การส่งออก PDF / Excel / JD / บัตร จะใช้สายนี้ด้วย" className={`h-7 max-w-[150px] rounded-md border px-1.5 text-xs font-semibold outline-none ${chartFocus ? 'border-violet-400 bg-violet-50 text-violet-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                        <option value="">สาย: ทั้งแผนก</option>
+                                        {focusSubDeptOptions.length > 0 && <optgroup label="ตามแผนกย่อย">{focusSubDeptOptions.map(l => <option key={l} value={`subDept:${l}`}>{l}</option>)}</optgroup>}
+                                        {focusPersonOptions.length > 0 && <optgroup label="ตามหัวหน้า">{focusPersonOptions.map(p => <option key={p.id} value={`person:${p.id}`}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}</optgroup>}
+                                    </select>
+                                )}
+                                {viewMode === 'chart' && chartFocus && <button type="button" onClick={() => setChartFocus(null)} aria-label="ล้างการโฟกัสสาย" title="กลับไปดูทั้งแผนก" className="flex h-7 w-6 items-center justify-center rounded-md text-violet-600 hover:bg-violet-50"><Icons.X size={14}/></button>}
                                 <div className="mx-0.5 h-5 w-px bg-gray-200" aria-hidden="true"></div>
                                 <ToolbarMenu label="การแสดงผล" title="ตัวเลือกการแสดงผล" icon={<Icons.Eye size={16}/>} items={[
                                     viewMode === 'chart' && { key: 'skill', label: 'แสดง Skill บนผัง', checked: showSkillOnChart, onClick: () => { const next = !showSkillOnChart; setShowSkillOnChart(next); localStorage.setItem('showSkillOnChart', JSON.stringify(next)); } },
@@ -5415,11 +5463,13 @@
                                     <DraggableLogo logo={logo} setLogo={setLogo} isLocked={isLocked} />
                                     {annotations.map(ann => <DraggableAnnotation key={ann.id} ann={ann} onUpdate={(id, up) => setAnnotations(prev=>prev.map(a=>a.id===id?{...a,...up}:a))} onDelete={(id)=>setAnnotations(prev=>prev.filter(a=>a.id!==id))} isLocked={isLocked} onLinkStart={setLinkStartId} />)}
                                     <div id="org-chart-full-view" className="bg-white p-8 rounded-2xl border shadow-xl inline-block min-w-[800px] org-chart-container relative">
-                                        <div className="mb-8 border-b-2 pb-2"><h1 className="text-3xl font-bold text-gray-800 uppercase">{deptName}</h1></div>
+                                        <div className="mb-8 border-b-2 pb-2"><h1 className="text-3xl font-bold text-gray-800 uppercase">{deptName}</h1>{focusLabel && <div className="mt-1 text-lg font-semibold text-violet-700">{focusLabel}</div>}</div>
                                         <SkillSummaryContext.Provider value={chartSkillSummaries}>
+                                        <ChartFocusContext.Provider value={chartFocusValue}>
                                         <div className="flex gap-16 justify-center">
                                             {rootEmployees.map(root => <EmployeeNode key={root.id} employee={root} allEmployees={filteredAll} onEdit={(e)=>{setEditingEmployee({...e, isNew:false}); setIsModalOpen(true);}} onDrop={handleDropNode} isLocked={isLocked} themeConf={THEMES[appTheme]} shapeClass={appShape} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={(id)=>setSelectedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev, id])} onAddChild={(p)=>{setEditingEmployee({isNew:true, reportsTo:p.id, dept:p.dept}); setIsModalOpen(true);}} layoutThreshold={layoutThreshold} searchTerm={searchTerm} onReorder={handleReorder} onGridColChange={handleGridColChange} currentUser={currentUser} isAllDepts={currentDept === 'ALL'}/>)}
                                         </div>
+                                        </ChartFocusContext.Provider>
                                         </SkillSummaryContext.Provider>
                                     </div>
                                 </div>
