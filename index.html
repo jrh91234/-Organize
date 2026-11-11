@@ -2094,7 +2094,7 @@
         const SkillRadarModal = ({ employee, employees, data, onClose }) => {
             const catalog = data?.catalog || [];
             const line = employeeSkillLines(employee)[0];
-            const colleagues = useMemo(() => (employees || []).filter(e => !isResignedEmployee(e) && skillSameText(e.dept, employee.dept) && inSkillLine(e, line)), [employees, employee, line]);
+            const colleagues = useMemo(() => (employees || []).filter(e => !isResignedEmployee(e) && !isPlannedEmployee(e) && skillSameText(e.dept, employee.dept) && inSkillLine(e, line)), [employees, employee, line]);
             const categoryAxes = useMemo(() => computeSkillRadar(employee, catalog, data?.levels, colleagues, 'category').axes.length, [employee, catalog, data, colleagues]);
             const [mode, setMode] = useState(categoryAxes >= 3 ? 'category' : 'skill');
             const [showAverage, setShowAverage] = useState(false);
@@ -2174,7 +2174,7 @@
             const catalog = data.catalog || [];
             const levelMap = new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l]));
             const inDept = (e) => dept === 'ALL' || e.dept === dept;
-            const active = employees.filter(e => !isResignedEmployee(e) && inDept(e));
+            const active = employees.filter(e => !isResignedEmployee(e) && !isPlannedEmployee(e) && inDept(e));
             const inLine = active.filter(e => line === 'ALL' || inSkillLine(e, line));
             const people = inLine.filter(e => (position === 'ALL' || e.position === position) && (shift === 'ALL' || (e.shift || '-') === shift));
             const skillsInScope = new Map();
@@ -2512,9 +2512,11 @@
             const nextReview = addMonthsToDay(doc.lastReviewDate || doc.effectiveDate, doc.reviewMonths || 6);
             const today = getLocalDateValue();
             const reviewState = !nextReview ? null : nextReview < today ? ['เลยกำหนดทบทวน', 'bg-rose-100 text-rose-700'] : nextReview <= addMonthsToDay(today, 1) ? ['ใกล้ถึงรอบทบทวน', 'bg-amber-100 text-amber-700'] : ['เป็นปัจจุบัน', 'bg-emerald-100 text-emerald-700'];
+            // Planned hires show what they must learn, but are not in the coverage totals (they are not here yet).
+            const currentRows = rows.filter(r => !isPlannedEmployee(r.emp));
             const footer = skills.map(skill => {
-                const qualified = rows.filter(r => (levelOf(r.emp.id, skill.id) ?? -1) >= (skill.targetLevel || 3)).length;
-                const release = (s) => rows.filter(r => (r.emp.shift || '') === s && (levelOf(r.emp.id, skill.id) ?? -1) >= SKILL_RELEASE_LEVEL).length;
+                const qualified = currentRows.filter(r => (levelOf(r.emp.id, skill.id) ?? -1) >= (skill.targetLevel || 3)).length;
+                const release = (s) => currentRows.filter(r => (r.emp.shift || '') === s && (levelOf(r.emp.id, skill.id) ?? -1) >= SKILL_RELEASE_LEVEL).length;
                 return { skill, qualified, releaseA: release('A'), releaseB: release('B') };
             });
             const stickyCell = printMode ? '' : 'sticky left-0 z-10';
@@ -2543,7 +2545,7 @@
                         <table className="border-separate border-spacing-0 text-xs">
                             <thead className={printMode ? '' : 'sticky top-0 z-20'}>
                                 <tr>
-                                    <th rowSpan={2} className={`${stickyCell} z-30 cursor-default ${headCell} min-w-[230px] px-3 py-2 text-left align-bottom text-[11px] font-bold text-gray-500 hover:bg-white`}>พนักงาน ({rows.length})</th>
+                                    <th rowSpan={2} className={`${stickyCell} z-30 cursor-default ${headCell} min-w-[230px] px-3 py-2 text-left align-bottom text-[11px] font-bold text-gray-500 hover:bg-white`}>พนักงาน ({currentRows.length}){rows.length > currentRows.length && <span className="ml-1 font-semibold text-violet-600">+ แผนรับ {rows.length - currentRows.length}</span>}</th>
                                     {groups.map((g, i) => { const cat = skillCategory(g.key); return <th key={`${g.key}${i}`} colSpan={g.count} className={`cursor-default border-b border-r border-white/40 px-2 py-1.5 text-center text-[11px] font-bold text-white ${cat.head}`}>{cat.label}</th>; })}
                                     <th colSpan={2} className="cursor-default border-b border-gray-200 bg-gray-800 px-2 py-1.5 text-center text-[11px] font-bold text-white">สรุป</th>
                                 </tr>
@@ -2568,13 +2570,13 @@
                             <tbody>
                                 {rows.length === 0 && <tr><td colSpan={skills.length + 3} className="px-4 py-10 text-center text-gray-400">ไม่มีพนักงานในไลน์นี้ตามตัวกรอง</td></tr>}
                                 {rows.map(row => (
-                                    <tr key={row.emp.id} className="group">
-                                        <td className={`${stickyCell} border-b border-r border-gray-200 bg-white px-3 py-1.5 group-hover:bg-violet-50/60`}>
+                                    <tr key={row.emp.id} className={`group ${isPlannedEmployee(row.emp) ? 'bg-violet-50/40' : ''}`}>
+                                        <td className={`${stickyCell} border-b border-r border-gray-200 px-3 py-1.5 group-hover:bg-violet-50/60 ${isPlannedEmployee(row.emp) ? 'border-l-4 border-l-violet-400 bg-violet-50' : 'bg-white'}`}>
                                             <div className="flex items-center gap-2">
                                                 {!printMode && <button type="button" onClick={() => openSkillRadar(row.emp.id)} title="ดู Skill Radar" aria-label={`ดู Skill Radar ของ ${row.emp.name}`} className="shrink-0 rounded-full hover:ring-2 hover:ring-blue-400"><SkillAvatar employee={row.emp} size={30}/></button>}
                                                 <div className="min-w-0">
-                                                    <div className={`${trunc} font-semibold text-gray-900`}>{row.emp.name}{skillLine(row.emp.subDept) !== line && <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-700" title={`ไลน์หลัก: ${skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL} · ดูแลไลน์นี้เพิ่ม`}>+ ไลน์หลัก {skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL}</span>}</div>
-                                                    <div className={`${trunc} text-[10px] text-gray-500`}>{row.emp.id} · {row.emp.position || '-'}{row.emp.shift ? ` · กะ ${row.emp.shift}` : ''}{row.emp.startDate ? ` · ${calculateTenure(row.emp.startDate)}` : ''}</div>
+                                                    <div className={`${trunc} font-semibold text-gray-900`}>{isPlannedEmployee(row.emp) && <span className="mr-1 rounded bg-violet-600 px-1 text-[9px] font-bold text-white" title="แผนรับคน — ยังไม่ได้เข้างาน แสดงเพื่อดูว่าต้องอบรมทักษะอะไร (ไม่นับในยอดสรุปด้านล่าง)">แผนรับ</span>}{row.emp.name}{skillLine(row.emp.subDept) !== line && <span className="ml-1 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-700" title={`ไลน์หลัก: ${skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL} · ดูแลไลน์นี้เพิ่ม`}>+ ไลน์หลัก {skillLine(row.emp.subDept) || SKILL_NO_LINE_LABEL}</span>}</div>
+                                                    <div className={`${trunc} text-[10px] text-gray-500`}>{row.emp.id} · {row.emp.position || '-'}{row.emp.shift ? ` · กะ ${row.emp.shift}` : ''}{row.emp.startDate ? (isPlannedEmployee(row.emp) ? ` · เริ่ม ${formatDate(row.emp.startDate)}` : ` · ${calculateTenure(row.emp.startDate)}`) : ''}</div>
                                                 </div>
                                             </div>
                                         </td>
@@ -2611,7 +2613,7 @@
                                         [`ปล่อยงานได้ กะ B (L${SKILL_RELEASE_LEVEL}+)`, f => `${f.releaseB}`, f => f.releaseB ? 'text-gray-800' : 'text-rose-400']
                                     ].map(([label, value, tone], i) => (
                                         <tr key={label}>
-                                            <td className={`${stickyCell} border-b border-r border-gray-200 bg-gray-50 px-3 py-1.5 text-right font-bold text-gray-600`}>{label}{i === 1 && <span className="ml-1 font-normal text-gray-400">(L ตามเป้าของสถานี)</span>}</td>
+                                            <td className={`${stickyCell} border-b border-r border-gray-200 bg-gray-50 px-3 py-1.5 text-right font-bold text-gray-600`}>{label}{i === 1 && <span className="ml-1 font-normal text-gray-400">(L ตามเป้าของสถานี)</span>}{i === 0 && rows.length > currentRows.length && <div className="text-[10px] font-normal text-violet-600">ยอดด้านล่างไม่นับแผนรับ</div>}</td>
                                             {footer.map(f => <td key={f.skill.id} className={`border-b border-r border-gray-100 bg-gray-50/60 py-1.5 text-center font-bold ${tone(f)}`}>{value(f)}</td>)}
                                             <td colSpan={2} className="border-b border-gray-100 bg-gray-50/60"></td>
                                         </tr>
@@ -2645,6 +2647,7 @@
         const SkillMatrixView = ({ employees, data, dept, line, canEdit, call, onReload, searchTerm }) => {
             const [shift, setShift] = useState('ALL');
             const [position, setPosition] = useState('ALL');
+            const [showPlanned, setShowPlanned] = useState(() => safeLocalLoad('skillShowPlanned', true) !== false);
             const [editMode, setEditMode] = useState(false);
             const [draft, setDraft] = useState({});
             const [picker, setPicker] = useState(null);
@@ -2663,11 +2666,12 @@
             }, [draft, levelMap]);
             const skills = useMemo(() => skillsForLine(data.catalog, dept, line), [data.catalog, dept, line]);
             const lineEmployees = useMemo(() => employees.filter(e => !isResignedEmployee(e) && e.dept === dept && inSkillLine(e, line)), [employees, dept, line]);
+            const plannedHere = lineEmployees.filter(isPlannedEmployee).length;
             const positionsHere = [...new Set(lineEmployees.map(e => e.position).filter(Boolean))].sort((a, b) => getPositionRank(b) - getPositionRank(a) || a.localeCompare(b));
             const query = String(searchTerm || '').trim().toLowerCase();
             const rows = lineEmployees
-                .filter(e => (shift === 'ALL' || (e.shift || '-') === shift) && (position === 'ALL' || e.position === position) && (!query || `${e.name} ${e.id} ${e.position}`.toLowerCase().includes(query)))
-                .sort((a, b) => getPositionRank(b.position) - getPositionRank(a.position) || String(a.shift || 'Z').localeCompare(String(b.shift || 'Z')) || String(a.id).localeCompare(String(b.id)))
+                .filter(e => (showPlanned || !isPlannedEmployee(e)) && (shift === 'ALL' || (e.shift || '-') === shift) && (position === 'ALL' || e.position === position) && (!query || `${e.name} ${e.id} ${e.position}`.toLowerCase().includes(query)))
+                .sort((a, b) => Number(isPlannedEmployee(a)) - Number(isPlannedEmployee(b)) || getPositionRank(b.position) - getPositionRank(a.position) || String(a.shift || 'Z').localeCompare(String(b.shift || 'Z')) || String(a.id).localeCompare(String(b.id)))
                 .map(emp => {
                     let gapSkills = 0, stations = 0;
                     const cells = skills.map(skill => {
@@ -2760,7 +2764,7 @@
                 const fillFor = ['FFF1F5F9', 'FFFEF3C7', 'FFE0F2FE', 'FFD1FAE5', 'FFE0E7FF'];
                 rows.forEach((row, r) => {
                     const excelRow = nameRow + 1 + r;
-                    [row.emp.id, row.emp.name, row.emp.position || '', row.emp.shift || ''].forEach((v, i) => { const c = ws.getCell(excelRow, i + 1); c.value = v; c.border = border; });
+                    [row.emp.id, isPlannedEmployee(row.emp) ? `[แผนรับ] ${row.emp.name}` : row.emp.name, row.emp.position || '', row.emp.shift || ''].forEach((v, i) => { const c = ws.getCell(excelRow, i + 1); c.value = v; c.border = border; });
                     row.cells.forEach((cell, i) => {
                         const c = ws.getCell(excelRow, firstSkillCol + i);
                         c.value = cell.level === null ? '' : cell.level;
@@ -2776,7 +2780,7 @@
                     [lastCol - 1, lastCol].forEach(c => { ws.getCell(excelRow, c).border = border; ws.getCell(excelRow, c).alignment = { horizontal: 'center' }; });
                 });
                 let footRow = nameRow + rows.length + 1;
-                [['Target (people)', s => s.targetCount || ''], ['At target level', s => rows.filter(r => (levelOf(r.emp.id, s.id) ?? -1) >= (s.targetLevel || 3)).length], [`Release shift A (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => r.emp.shift === 'A' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length], [`Release shift B (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => r.emp.shift === 'B' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length]].forEach(([label, fn]) => {
+                [['Target (people)', s => s.targetCount || ''], ['At target level', s => rows.filter(r => !isPlannedEmployee(r.emp) && (levelOf(r.emp.id, s.id) ?? -1) >= (s.targetLevel || 3)).length], [`Release shift A (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => !isPlannedEmployee(r.emp) && r.emp.shift === 'A' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length], [`Release shift B (L${SKILL_RELEASE_LEVEL}+)`, s => rows.filter(r => !isPlannedEmployee(r.emp) && r.emp.shift === 'B' && (levelOf(r.emp.id, s.id) ?? -1) >= SKILL_RELEASE_LEVEL).length]].forEach(([label, fn]) => {
                     ws.mergeCells(footRow, 1, footRow, 4);
                     ws.getCell(footRow, 1).value = label; ws.getCell(footRow, 1).font = { bold: true }; ws.getCell(footRow, 1).alignment = { horizontal: 'right' };
                     skills.forEach((s, i) => { const c = ws.getCell(footRow, firstSkillCol + i); c.value = fn(s); c.alignment = { horizontal: 'center' }; c.border = border; c.font = { bold: true }; });
@@ -2838,6 +2842,7 @@
                         <select value={position} onChange={e => setPosition(e.target.value)} aria-label="ตำแหน่ง" className="rounded-lg border bg-white px-2 py-1.5 text-xs font-semibold">
                             <option value="ALL">ทุกตำแหน่ง</option>{positionsHere.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
+                        {plannedHere > 0 && <label className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold ${showPlanned ? 'border-violet-300 bg-violet-50 text-violet-700' : 'bg-white text-gray-500'}`} title="แสดงคนที่วางแผนจะรับ เพื่อดูว่าต้องอบรมทักษะอะไรบ้าง (ไม่นับในยอดสรุป)"><input type="checkbox" checked={showPlanned} onChange={e => { setShowPlanned(e.target.checked); try { localStorage.setItem('skillShowPlanned', JSON.stringify(e.target.checked)); } catch (err) {} }} className="accent-violet-600"/>แสดงแผนรับ ({plannedHere})</label>}
                         <div className="ml-auto flex flex-wrap items-center gap-2">
                             <button type="button" onClick={exportExcel} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50"><Icons.FileSpreadsheet size={15}/>Excel</button>
                             <button type="button" onClick={exportPdf} disabled={exporting} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{exporting ? <Icons.Loader size={15}/> : <Icons.FileText size={15}/>}PDF (A3)</button>
@@ -5240,7 +5245,7 @@
                         <main className={`flex-1 bg-gray-100 overflow-auto relative ${viewMode === 'attendance' || viewMode === 'monitor' || viewMode === 'turnover' || viewMode === 'skills' ? 'p-4 sm:p-6' : 'p-8'}`}>
                             {showRulers && viewMode === 'chart' && <><Ruler orientation="horizontal" length={3000} /><Ruler orientation="vertical" length={2000} /></>}
                             {viewMode === 'skills' ? (
-                                <SkillMatrixPage employees={nonPlannedEmployees} currentDept={currentDept} departments={departments} subDepartments={subDepartments} positions={positions} currentUser={currentUser} driveUrl={driveUrl} apiCall={appApiCall} onSessionExpired={handleSkillSessionExpired} searchTerm={searchTerm} />
+                                <SkillMatrixPage employees={allEmployeesWithIds} currentDept={currentDept} departments={departments} subDepartments={subDepartments} positions={positions} currentUser={currentUser} driveUrl={driveUrl} apiCall={appApiCall} onSessionExpired={handleSkillSessionExpired} searchTerm={searchTerm} />
                             ) : viewMode === 'turnover' ? (
                                 <TurnoverDashboard employees={nonPlannedEmployees} currentDept={currentDept} />
                             ) : viewMode === 'monitor' ? (
