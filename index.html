@@ -5179,6 +5179,21 @@
                 clone.style.cssText += ';box-shadow:none;border:none;border-radius:0;margin:0;';
                 inner.appendChild(clone);
                 document.body.appendChild(host);
+                // html2canvas draws Sarabun about a third of an em lower than the browser, so text slips to the bottom of badges,
+                // the card header band and the team-count box (and gets clipped there). Lift every HTML text run by that amount;
+                // only the export copy changes. Edge spaces become no-break spaces so html2canvas does not drop them.
+                const PDF_TEXT_LIFT = '-0.32em';
+                const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT, { acceptNode: n => n.textContent.trim() && !n.parentElement?.closest('svg') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
+                const textNodes = [];
+                while (walker.nextNode()) textNodes.push(walker.currentNode);
+                textNodes.forEach(t => {
+                    t.textContent = t.textContent.replace(/^ +| +$/g, m => '\u00a0'.repeat(m.length));
+                    const span = document.createElement('span');
+                    span.style.position = 'relative';
+                    span.style.top = PDF_TEXT_LIFT;
+                    t.replaceWith(span);
+                    span.appendChild(t);
+                });
                 try {
                     // html2pdf would re-flow the chart to the page width, which squeezes and clips wide charts, so render the bitmap and build the page ourselves.
                     const [html2canvas, { jsPDF }] = await Promise.all([
