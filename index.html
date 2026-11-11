@@ -92,14 +92,184 @@
         const photoFrame = (e) => ({ zoom: clampNum(e && e.imageZoom, 1, 3, 1), x: clampNum(e && e.imagePosX, 0, 100, 50), y: clampNum(e && e.imagePosY, 0, 100, 35) });
         const photoImgStyle = (e) => { const f = photoFrame(e); return { objectPosition: `${f.x}% ${f.y}%`, transform: f.zoom === 1 ? undefined : `scale(${f.zoom})`, transformOrigin: `${f.x}% ${f.y}%` }; };
         const compressImage = (file, targetSizeKB = 512) => { return new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = (event) => { const img = new Image(); img.src = event.target.result; img.onload = () => { const canvas = document.createElement('canvas'); let width = img.width, height = img.height; const MAX = 1600; if (width > MAX || height > MAX) { if (width > height) { height *= MAX / width; width = MAX; } else { width *= MAX / height; height = MAX; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); let quality = 0.9, dataUrl = canvas.toDataURL('image/jpeg', quality); while (dataUrl.length * 0.75 > targetSizeKB * 1024 && quality > 0.1) { quality -= 0.1; dataUrl = canvas.toDataURL('image/jpeg', quality); } resolve(dataUrl); }; img.onerror = reject; }; reader.onerror = reject; }); };
-        const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }); };
+        const formatDate = (dateString) => { if (!dateString) return ""; const date = new Date(dateString); if (isNaN(date.getTime())) return dateString; return date.toLocaleDateString(appLocale(), { day: 'numeric', month: 'short', year: '2-digit' }); };
         const formatDateTime = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
         const getLocalDateValue = () => { const date = new Date(); const offset = date.getTimezoneOffset() * 60000; return new Date(date.getTime() - offset).toISOString().slice(0, 10); };
         const isResignedEmployee = (employee) => String(employee?.status || '').trim().toLowerCase() === 'resigned';
         // Planned (future) hires: shown on the chart for planning, but never counted in current headcount, attendance or skill stats.
         const isPlannedEmployee = (employee) => String(employee?.status || '').trim().toLowerCase() === 'planned';
+        // ---- Language (th / en / zh). Text keys are the original Thai/English UI strings; user-entered data is never translated. ----
+        const APP_LANGS = [{ code: 'th', label: 'ไทย' }, { code: 'en', label: 'English' }, { code: 'zh', label: '中文' }];
+        const I18N = {
+            "ผังองค์กร": { en: "Org chart", zh: "组织架构图" },
+            "รายชื่อ": { en: "Employee list", zh: "员工名单" },
+            "เช็คชื่อ": { en: "Attendance", zh: "考勤" },
+            "Monitor เช็คชื่อ": { en: "Attendance monitor", zh: "考勤监控" },
+            "Monitor": { en: "Monitor", zh: "监控" },
+            "Staff Turnover": { en: "Staff Turnover", zh: "人员流动" },
+            "Turnover": { en: "Turnover", zh: "人员流动" },
+            "Skill Matrix": { en: "Skill Matrix", zh: "技能矩阵" },
+            "มุมมอง": { en: "View", zh: "视图" },
+            "ค้นหา...": { en: "Search...", zh: "搜索..." },
+            "ค้นหา": { en: "Search", zh: "搜索" },
+            "เพิ่มข้อความบนผัง": { en: "Add text to chart", zh: "在图上添加文字" },
+            "เลือกหลายรายการ": { en: "Select multiple", zh: "多选" },
+            "แดชบอร์ดสรุป": { en: "Summary dashboard", zh: "汇总看板" },
+            "โฟกัสสายบังคับบัญชา": { en: "Focus on a chain of command", zh: "聚焦汇报线" },
+            "ดูเฉพาะสายบังคับบัญชา — การส่งออก PDF / Excel / JD / บัตร จะใช้สายนี้ด้วย": { en: "Show one chain of command only — PDF / Excel / JD / ID card exports use it too", zh: "仅显示一条汇报线 — PDF / Excel / JD / 工牌导出也使用此范围" },
+            "สาย: ทั้งแผนก": { en: "Chain: whole department", zh: "范围：整个部门" },
+            "ตามแผนกย่อย": { en: "By sub-department", zh: "按子部门" },
+            "ตามหัวหน้า": { en: "By leader", zh: "按主管" },
+            "ล้างการโฟกัสสาย": { en: "Clear chain focus", zh: "清除聚焦" },
+            "กลับไปดูทั้งแผนก": { en: "Back to whole department", zh: "返回整个部门" },
+            "การแสดงผล": { en: "Display", zh: "显示" },
+            "ตัวเลือกการแสดงผล": { en: "Display options", zh: "显示选项" },
+            "แสดง Skill บนผัง": { en: "Show skills on chart", zh: "在图上显示技能" },
+            "แสดงแผนรับคน": { en: "Show planned hires", zh: "显示计划招聘" },
+            "ไม้บรรทัด": { en: "Rulers", zh: "标尺" },
+            "ส่งออก": { en: "Export", zh: "导出" },
+            "ส่งออก / พิมพ์": { en: "Export / print", zh: "导出 / 打印" },
+            "ผังเป็น PDF": { en: "Chart as PDF", zh: "架构图 PDF" },
+            "ผังเป็น Excel": { en: "Chart as Excel", zh: "架构图 Excel" },
+            "Job Description (PDF)": { en: "Job Description (PDF)", zh: "岗位说明书 (PDF)" },
+            "พิมพ์บัตรพนักงาน": { en: "Print ID cards", zh: "打印员工工牌" },
+            "ตั้งค่าผู้ดูแล": { en: "Admin settings", zh: "管理员设置" },
+            "ออกจากระบบ": { en: "Log out", zh: "退出登录" },
+            "ภาษา": { en: "Language", zh: "语言" },
+            "{n} คน": { en: "{n} people", zh: "{n} 人" },
+            "สาย {name}": { en: "Chain: {name}", zh: "汇报线：{name}" },
+            "เมนูจัดการ": { en: "Menu", zh: "菜单" },
+            "มุมมองผัง": { en: "Chart view", zh: "架构图视图" },
+            "มุมมองตาราง": { en: "Table view", zh: "表格视图" },
+            "+ เพิ่มพนักงาน": { en: "+ Add employee", zh: "+ 添加员工" },
+            "บันทึกผังเป็น PDF": { en: "Save chart as PDF", zh: "将架构图保存为 PDF" },
+            "ส่งออกผังเป็น Excel": { en: "Export chart to Excel", zh: "将架构图导出为 Excel" },
+            "ส่งออก JD เป็น PDF": { en: "Export JDs as PDF", zh: "将岗位说明书导出为 PDF" },
+            "Admin Panel": { en: "Admin Panel", zh: "管理面板" },
+            "ซ่อนไม้บรรทัด": { en: "Hide rulers", zh: "隐藏标尺" },
+            "แสดงไม้บรรทัด": { en: "Show rulers", zh: "显示标尺" },
+            "Waiting Area": { en: "Waiting Area", zh: "待分配区" },
+            "Job description": { en: "Job description", zh: "岗位说明书" },
+            "แผนรับคน — ไม่นับรวมในยอดคนปัจจุบัน": { en: "Planned hire — not counted in current headcount", zh: "计划招聘 — 不计入当前人数" },
+            "แผนรับ": { en: "Planned", zh: "计划招聘" },
+            "Subcontract": { en: "Subcontract", zh: "外包" },
+            "Permanent": { en: "Permanent", zh: "正式" },
+            "Profile": { en: "Profile", zh: "个人资料" },
+            "กะ": { en: "Shift", zh: "班次" },
+            "กะ {s}": { en: "Shift {s}", zh: "{s} 班" },
+            "โทร": { en: "Tel", zh: "电话" },
+            "เริ่มงาน": { en: "Starts", zh: "入职" },
+            "เริ่ม {d}": { en: "Starts {d}", zh: "{d} 入职" },
+            "ยังไม่กำหนด": { en: "Not set", zh: "未定" },
+            "อายุงาน": { en: "Tenure", zh: "工龄" },
+            "บริษัท": { en: "Company", zh: "公司" },
+            "ผ่านเกณฑ์ / ทักษะที่ตำแหน่งต้องการ": { en: "Met / skills required for the position", zh: "达标 / 岗位要求技能" },
+            "ปัจจุบัน": { en: "Current", zh: "当前" },
+            "ที่ต้องการ": { en: "Required", zh: "要求" },
+            "เลือกเป็นหัวหน้า": { en: "Set as leader", zh: "设为主管" },
+            "จำนวนลูกทีมทุกระดับ (ไม่นับผู้ที่ลาออก และไม่นับแผนรับ)": { en: "Team members at all levels (excluding resigned and planned)", zh: "所有层级的团队成员（不含离职和计划招聘）" },
+            "ดูเฉพาะสายนี้ (ทีมนี้ + หัวหน้าตามสายขึ้นไป) — ใช้กับการส่งออกด้วย": { en: "Show this chain only (this team + bosses above) — also used for exports", zh: "仅显示此汇报线（本团队 + 上级）— 导出也使用" },
+            "ทั้งแผนก": { en: "All", zh: "全部" },
+            "สายนี้": { en: "This chain", zh: "此线" },
+            "ลูกทีม": { en: "Team", zh: "团队" },
+            "ประจำ": { en: "Permanent", zh: "正式" },
+            "แผนรับคน (ไม่รวมในยอดลูกทีม)": { en: "Planned hires (not in team total)", zh: "计划招聘（不计入团队人数）" },
+            "Add Member": { en: "Add Member", zh: "添加成员" },
+            "{y} ปี {m} ด.": { en: "{y}y {m}m", zh: "{y}年{m}个月" },
+            "New": { en: "New", zh: "新员工" },
+            "Edit Employee": { en: "Edit Employee", zh: "编辑员工" },
+            "Add Employee": { en: "Add Employee", zh: "添加员工" },
+            "General Info": { en: "General Info", zh: "基本信息" },
+            "Details & Style": { en: "Details & Style", zh: "详情与样式" },
+            "Access Denied": { en: "Access Denied", zh: "无权限" },
+            "คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก": { en: "You cannot edit employees in a higher position or another department", zh: "您无权编辑职位更高或其他部门的员工" },
+            "Close": { en: "Close", zh: "关闭" },
+            "ปรับตำแหน่งรูป": { en: "Adjust photo", zh: "调整照片" },
+            "รีเซ็ต": { en: "Reset", zh: "重置" },
+            "ซูม": { en: "Zoom", zh: "缩放" },
+            "ซ้าย-ขวา": { en: "Left-right", zh: "左右" },
+            "บน-ล่าง": { en: "Up-down", zh: "上下" },
+            "ID": { en: "ID", zh: "工号" },
+            "แผนกหลัก": { en: "Department", zh: "部门" },
+            "แผนกย่อย / ทีม": { en: "Sub-department / team", zh: "子部门 / 小组" },
+            "ไม่ระบุแผนกย่อย": { en: "No sub-department", zh: "未指定子部门" },
+            "เพิ่มแผนกย่อย": { en: "Add sub-department", zh: "添加子部门" },
+            "ลบแผนกย่อยที่เลือก": { en: "Delete selected sub-department", zh: "删除所选子部门" },
+            "ไลน์อื่นที่ดูแลเพิ่ม ": { en: "Other lines also covered ", zh: "同时负责的其他产线 " },
+            "(ใช้ใน Skill Matrix เท่านั้น ไม่เปลี่ยนตำแหน่งในผัง)": { en: "(Skill Matrix only; does not move them on the chart)", zh: "（仅用于技能矩阵，不改变在架构图中的位置）" },
+            "เพิ่ม": { en: "Add", zh: "添加" },
+            "Name": { en: "Name", zh: "姓名" },
+            "กะทำงาน": { en: "Shift", zh: "班次" },
+            "ไม่มีกะ": { en: "No shift", zh: "无班次" },
+            "Position": { en: "Position", zh: "职位" },
+            "Manage Positions": { en: "Manage Positions", zh: "管理职位" },
+            "Reports To": { en: "Reports To", zh: "直属上级" },
+            "-- Waiting Area --": { en: "-- Waiting Area --", zh: "-- 待分配区 --" },
+            "-- Top Management --": { en: "-- Top Management --", zh: "-- 最高管理层 --" },
+            " · ลาออกแล้ว": { en: " · resigned", zh: " · 已离职" },
+            "Type": { en: "Type", zh: "类型" },
+            "Company Name": { en: "Company Name", zh: "公司名称" },
+            "Subcontractor Company...": { en: "Subcontractor Company...", zh: "外包公司..." },
+            "Phone Number": { en: "Phone Number", zh: "电话号码" },
+            "Show on card": { en: "Show on card", zh: "在卡片上显示" },
+            "Start Date": { en: "Start Date", zh: "入职日期" },
+            "Tenure": { en: "Tenure", zh: "工龄" },
+            "Card Color Override": { en: "Card Color Override", zh: "卡片颜色" },
+            "Shape Override": { en: "Shape Override", zh: "卡片形状" },
+            "None": { en: "None", zh: "无" },
+            "Default": { en: "Default", zh: "默认" },
+            "Employee Status": { en: "Employee Status", zh: "员工状态" },
+            "Active": { en: "Active", zh: "在职" },
+            "Planned (แผนรับ)": { en: "Planned (future hire)", zh: "计划招聘" },
+            "Resigned": { en: "Resigned", zh: "已离职" },
+            "แผนรับคน: แสดงบนผังแบบเส้นประ แต่ไม่นับรวมในยอดคนปัจจุบัน / เช็คชื่อ / Skill — ใช้ Start Date เป็นวันที่วางแผนจะเริ่มงาน เมื่อรับเข้าจริงให้เปลี่ยนเป็น Active": { en: "Planned hire: shown on the chart with a dashed outline but not counted in current headcount, attendance or skills. Use Start Date as the planned start date; change to Active once they join.", zh: "计划招聘：在架构图上以虚线显示，但不计入当前人数、考勤和技能统计。入职日期填写计划入职日，正式入职后改为“在职”。" },
+            "วันสิ้นสุดการทำงาน": { en: "Last working day", zh: "最后工作日" },
+            "สาเหตุที่ออก": { en: "Reason for leaving", zh: "离职原因" },
+            "ไม่ระบุ": { en: "Not specified", zh: "未指定" },
+            "หมายเหตุ": { en: "Note", zh: "备注" },
+            "รายละเอียดเพิ่มเติม (ถ้ามี)": { en: "More details (optional)", zh: "更多说明（可选）" },
+            "บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน ระบบจะจำทีมและหัวหน้า ณ วันที่ออกไว้ใน Staff Turnover": { en: "Saved to history and removed from the current employee list. The team and leader at the exit date are kept for Staff Turnover.", zh: "将保存为历史记录并从当前员工名单中移除，离职时的团队和主管会保留在人员流动报表中。" },
+            "Delete": { en: "Delete", zh: "删除" },
+            "Confirm": { en: "Confirm", zh: "确认" },
+            "No": { en: "No", zh: "否" },
+            "Cancel": { en: "Cancel", zh: "取消" },
+            "Save": { en: "Save", zh: "保存" },
+            "กรุณาเลือกแผนกหลักก่อนเพิ่มแผนกย่อย": { en: "Please choose a department before adding a sub-department", zh: "请先选择部门再添加子部门" },
+            "อัปโหลดรูปไม่สำเร็จ: ": { en: "Photo upload failed: ", zh: "照片上传失败：" },
+            "พนักงานปัจจุบัน ({n})": { en: "Current employees ({n})", zh: "在职员工 ({n})" },
+            "แผนรับ ({n})": { en: "Planned ({n})", zh: "计划招聘 ({n})" },
+            "ประวัติลาออก ({n})": { en: "Resigned history ({n})", zh: "离职记录 ({n})" },
+            "แสดง {n} รายการ": { en: "Showing {n}", zh: "显示 {n} 条" },
+            "คนที่วางแผนจะรับ (ไม่นับรวมในยอดพนักงานปัจจุบัน)": { en: "People planned to be hired (not in current headcount)", zh: "计划招聘人员（不计入在职人数）" },
+            "ค้นหาชื่อ รหัส แผนก ตำแหน่ง...": { en: "Search name, ID, department, position...", zh: "搜索姓名、工号、部门、职位..." },
+            "ค้นหาในตารางรายชื่อ": { en: "Search the employee table", zh: "搜索员工表" },
+            "ล้างคำค้นหา": { en: "Clear search", zh: "清除搜索" },
+            "Export CSV": { en: "Export CSV", zh: "导出 CSV" },
+            "Export PDF": { en: "Export PDF", zh: "导出 PDF" },
+            "Dept": { en: "Dept", zh: "部门" },
+            "Sub-dept": { en: "Sub-dept", zh: "子部门" },
+            "Shift": { en: "Shift", zh: "班次" },
+            "Status": { en: "Status", zh: "状态" },
+            "Phone": { en: "Phone", zh: "电话" },
+            "Company": { en: "Company", zh: "公司" },
+            "Exit Date": { en: "Exit Date", zh: "离职日期" },
+            "Leader at exit": { en: "Leader at exit", zh: "离职时主管" },
+            "Reason": { en: "Reason", zh: "原因" },
+            "ไม่มีกะ ": { en: "No shift", zh: "无班次" }
+        };
+        let APP_LANG = (() => { try { const v = JSON.parse(localStorage.getItem('appLang')); return ['th', 'en', 'zh'].includes(v) ? v : 'th'; } catch (e) { return 'th'; } })();
+        // tr('ข้อความ', { n: 3 }) -> text in the current language, with {n} placeholders filled; unknown keys fall back to the key itself.
+        const tr = (key, vars) => {
+            const entry = I18N[key];
+            let out = entry ? (entry[APP_LANG] ?? (APP_LANG === 'th' ? key : undefined) ?? key) : key;
+            if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m));
+            return out;
+        };
+        const appLocale = () => APP_LANG === 'en' ? 'en-GB' : APP_LANG === 'zh' ? 'zh-CN' : 'th-TH';
+        // Memoised components read this context so they re-render when the language changes.
+        const LangContext = React.createContext(APP_LANG);
         const statusDotClass = (employee) => isPlannedEmployee(employee) ? 'bg-violet-500' : employee?.status === 'Active' ? 'bg-green-500' : 'bg-red-500';
-        const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start.getTime())) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return "New"; return `${years} ปี ${months} ด.`; };
+        const calculateTenure = (dateString) => { if (!dateString) return ""; const start = new Date(dateString); const now = new Date(); if (isNaN(start.getTime())) return ""; let years = now.getFullYear() - start.getFullYear(); let months = now.getMonth() - start.getMonth(); if (months < 0 || (months === 0 && now.getDate() < start.getDate())) { years--; months += 12; } if (years < 0) return tr('New'); return tr('{y} ปี {m} ด.', { y: years, m: months }); };
         const safeLocalLoad = (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch (e) { console.warn(`Error loading ${key}, using fallback.`, e); return fallback; } };
         // Imported/cloud data may carry numeric IDs; the UI compares IDs with ===, so keep them as strings.
         const normalizeEmployees = (list) => (Array.isArray(list) ? list : []).filter(e => e && typeof e === 'object').map(e => ({
@@ -587,14 +757,14 @@
                         <div className="flex gap-2 mb-4 items-end bg-white p-4 rounded-xl shadow-sm flex-wrap border">
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">User</label><input value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} className="border p-2 rounded text-sm w-full" disabled={!!editingUsername}/></div>
                             <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Pass</label><input value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
-                            <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">Name</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
+                            <div className="flex-1 min-w-[100px]"><label className="text-xs text-gray-500">{tr("Name")}</label><input value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="border p-2 rounded text-sm w-full"/></div>
                             <div className="w-24"><label className="text-xs text-gray-500">Role</label><select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="border p-2 rounded text-sm w-full"><option value="admin">Admin</option><option value="supervisor">Sup</option><option value="leader">Leader</option><option value="viewer">View</option></select></div>
                             {/* [V16 Fix] Added Dept Selector */}
                             <div className="w-32"><label className="text-xs text-gray-500">Dept</label><select value={newUser.dept || 'ASSEMBLY'} onChange={e => setNewUser({...newUser, dept: e.target.value})} className="border p-2 rounded text-sm w-full bg-blue-50"><option value="ALL">ALL (Admin)</option>{depts.map(d=><option key={d} value={d}>{d}</option>)}</select></div>
                             <button onClick={saveUserAction} className={`${editingUsername ? 'bg-orange-500' : 'bg-green-600'} text-white p-2 rounded h-[38px] w-[38px] flex justify-center items-center shadow-sm`}>{editingUsername ? <Icons.Check size={18}/> : <Icons.Plus size={18}/>}</button>
                         </div> 
                         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                            <table className="w-full text-sm text-left"><thead className="bg-gray-100 text-gray-600 uppercase text-xs"><tr><th className="p-3">User</th><th className="p-3">Name</th><th className="p-3">Role</th><th className="p-3">Dept</th><th className="p-3">Action</th></tr></thead>
+                            <table className="w-full text-sm text-left"><thead className="bg-gray-100 text-gray-600 uppercase text-xs"><tr><th className="p-3">User</th><th className="p-3">{tr("Name")}</th><th className="p-3">Role</th><th className="p-3">Dept</th><th className="p-3">Action</th></tr></thead>
                             <tbody className="divide-y">{users.map((u, i) => <tr key={i} className="hover:bg-gray-50"><td className="p-3 font-medium">{u.username}</td><td className="p-3">{u.name}</td><td className="p-3"><span className={`px-2 py-0.5 rounded text-xs font-bold ${u.role==='admin'?'bg-red-100 text-red-800':u.role==='supervisor'?'bg-blue-100 text-blue-800':'bg-gray-100 text-gray-600'}`}>{u.role}</span></td><td className="p-3"><span className="px-2 py-0.5 rounded text-xs bg-gray-100 border">{u.dept || 'ALL'}</span></td><td className="p-3 flex gap-2"><button onClick={() => { setNewUser(u); setEditingUsername(u.username); }} className="text-orange-500 hover:bg-orange-50 p-1 rounded"><Icons.Edit size={16}/></button>{u.username !== 'admin' && <button onClick={() => deleteUserAction(u.username)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Icons.Trash2 size={16}/></button>}</td></tr>)}</tbody></table> 
                         </div>
                     </div>
@@ -738,7 +908,7 @@
             });
             return ids;
         };
-        const chainFocusLabel = (focus, people) => !focus ? '' : focus.type === 'subDept' ? `สาย ${focus.value}` : `สาย ${(people || []).find(e => e.id === focus.id)?.name || focus.id}`;
+        const chainFocusLabel = (focus, people) => !focus ? '' : tr('สาย {name}', { name: focus.type === 'subDept' ? focus.value : ((people || []).find(e => e.id === focus.id)?.name || focus.id) });
         const ChartFocusContext = React.createContext(null);
 
         // Toolbar dropdown: a trigger button plus a popover list. Closes on outside click, Escape, or after an item runs.
@@ -785,6 +955,7 @@
         };
 
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser, isAllDepts }) => {
+            React.useContext(LangContext);
             const isSub = isSubcontractEmployee(employee);
             const isPlanned = isPlannedEmployee(employee);
             const isLeader = (employee.position || "").toLowerCase().includes('leader');
@@ -806,7 +977,7 @@
                 </div>
             );
             const renderJdButton = (position) => (
-                <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`Job description ${employee.name}`} title="Job description" className={`${position} rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>
+                <button type="button" onClick={(e)=>openJobDescription(e, employee.id)} aria-label={`${tr('Job description')} ${employee.name}`} title={tr('Job description')} className={`${position} rounded-full p-1 hover:bg-white/70 ${hasJobDescription(employee) ? 'text-blue-600' : 'text-gray-400'}`}><Icons.FileText size={13}/></button>
             );
             // Wide (formal) card: white card with a dark header band in the theme / custom colour, a grey PROFILE panel and a white SKILL MATRIX panel.
             const headerClass = /^border-[a-z]+-\d{2,3}$/.test(String(borderClass)) ? String(borderClass).replace(/^border-/, 'bg-').replace(/-\d{2,3}$/, '-800') : 'bg-slate-800';
@@ -825,7 +996,7 @@
             return (
                 <div draggable={canDrag && !isViewOnly} onDragStart={(e) => canDrag && !isViewOnly && onDragStart && onDragStart(e, employee.id)} className={`relative flex flex-col ${wide ? 'w-[350px] rounded-[10px] border border-slate-300 bg-white shadow-sm' : `w-36 items-center sm:w-40 p-3 border-b-4 shadow-sm ${bgClass} ${borderClass} ${radiusClass}`} transition-transform duration-200 cursor-pointer group ${isSelected?'ring-4 ring-purple-500 scale-105 z-20 shadow-xl':'hover:scale-105'} ${(!canDrag || isViewOnly)?'cursor-default':'draggable-source'} ${wide ? '' : className} ${isPlanned ? 'planned-card' : ''}`} onClick={(e) => { e.stopPropagation(); if(selectionMode) toggleSelection(employee.id); else if(!isViewOnly || (isLeaderRole && canEditThis) || !isLocked) onClick(employee); }} id={`node-${employee.id}`}>
                     {!wide && <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-bold text-white ${badgeClass}`}>{isSub?'S':'P'}</div>}
-                    {isPlanned && <div className="absolute -top-2.5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow" title="แผนรับคน — ไม่นับรวมในยอดคนปัจจุบัน">แผนรับ{employee.startDate ? ` · ${formatDate(employee.startDate)}` : ''}</div>}
+                    {isPlanned && <div className="absolute -top-2.5 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow" title={tr("แผนรับคน — ไม่นับรวมในยอดคนปัจจุบัน")}>{tr('แผนรับ')}{employee.startDate ? ` · ${formatDate(employee.startDate)}` : ''}</div>}
 
                     {/* [V24] Department Badge for ALL DEPTS view */}
                     {isAllDepts && employee.dept && (
@@ -846,24 +1017,24 @@
                         <>
                             <div className={`flex items-center justify-between rounded-t-[9px] px-3 py-1.5 text-white ${headerClass}`}>
                                 <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider">
-                                    <span className={`inline-flex h-4 w-4 items-center justify-center rounded text-[10px] font-extrabold ${isSub ? 'bg-orange-500 text-white' : 'bg-white text-slate-900'}`} title={isSub ? 'Subcontract' : 'Permanent'}>{isSub ? 'S' : 'P'}</span>
-                                    {isSub ? 'Subcontract' : 'Permanent'} · {employee.id}
+                                    <span className={`inline-flex h-4 w-4 items-center justify-center rounded text-[10px] font-extrabold ${isSub ? 'bg-orange-500 text-white' : 'bg-white text-slate-900'}`} title={tr(isSub ? 'Subcontract' : 'Permanent')}>{isSub ? 'S' : 'P'}</span>
+                                    {tr(isSub ? 'Subcontract' : 'Permanent')} · {employee.id}
                                 </span>
                                 <span className="ml-2 min-w-0 truncate text-[10px] opacity-90">{[employee.dept, employee.subDept].filter(Boolean).join(' / ')}</span>
                             </div>
                             <div className="flex">
                                 <div className="flex w-[150px] shrink-0 flex-col rounded-bl-[9px] border-r border-slate-200 bg-slate-50 p-3" style={textColorStyle}>
-                                    <div className="mb-1 flex items-center justify-between"><p className="text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Profile</p>{!selectionMode && renderJdButton('-my-1 -mr-1')}</div>
+                                    <div className="mb-1 flex items-center justify-between"><p className="text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">{tr("Profile")}</p>{!selectionMode && renderJdButton('-my-1 -mr-1')}</div>
                                     <div className="relative aspect-square w-full overflow-hidden rounded-md border border-slate-200 bg-slate-200"><img src={formatDriveUrl(employee.image)} referrerPolicy="no-referrer" loading="eager" onError={(e)=>{e.target.onerror=null; e.target.src="https://placehold.co/100x100?text=No+Img"}} style={photoImgStyle(employee)} className="pointer-events-none h-full w-full object-cover"/><div className="absolute bottom-1.5 right-1.5 rounded-full bg-white p-0.5 shadow"><div className={`h-2.5 w-2.5 rounded-full ${statusDotClass(employee)}`}></div></div></div>
                                     <div className="mt-2 min-w-0 text-left">
                                         <h3 className="text-sm font-bold leading-tight text-slate-900" title={employee.name}>{employee.name}</h3>
                                         <p className="text-[11px] leading-tight text-slate-600">{employee.position}</p>
                                     </div>
                                     <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-left text-[10px]">
-                                        {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <><span className="text-slate-400">กะ</span><b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></>}
-                                        {employee.showPhone && employee.phone && <><span className="text-slate-400">โทร</span><b className="text-slate-800">{employee.phone}</b></>}
-                                        {isPlanned ? <><span className="text-violet-500">เริ่มงาน</span><b className="text-violet-700">{employee.startDate ? formatDate(employee.startDate) : 'ยังไม่กำหนด'}</b></> : employee.startDate && <><span className="text-slate-400">อายุงาน</span><b className="text-slate-800">{calculateTenure(employee.startDate)}</b></>}
-                                        {isSub && employee.company && <><span className="text-slate-400">บริษัท</span><b className="text-orange-600">{employee.company}</b></>}
+                                        {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <><span className="text-slate-400">{tr('กะ')}</span><b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></>}
+                                        {employee.showPhone && employee.phone && <><span className="text-slate-400">{tr('โทร')}</span><b className="text-slate-800">{employee.phone}</b></>}
+                                        {isPlanned ? <><span className="text-violet-500">{tr('เริ่มงาน')}</span><b className="text-violet-700">{employee.startDate ? formatDate(employee.startDate) : tr('ยังไม่กำหนด')}</b></> : employee.startDate && <><span className="text-slate-400">{tr('อายุงาน')}</span><b className="text-slate-800">{calculateTenure(employee.startDate)}</b></>}
+                                        {isSub && employee.company && <><span className="text-slate-400">{tr('บริษัท')}</span><b className="text-orange-600">{employee.company}</b></>}
                                     </div>
                                     <div className="mt-auto flex items-center gap-1 pt-2">
                                         {isLeader && canDrag && !isViewOnly && renderGridPill('')}
@@ -871,14 +1042,14 @@
                                 </div>
                                 <div className="flex min-w-0 flex-1 cursor-pointer flex-col items-center rounded-br-[9px] p-3" title={`Skill Matrix (คลิกเพื่อดู Radar)\n${skillSummary.tooltip}`} role="button" onClick={(e) => { e.stopPropagation(); openSkillRadar(employee.id); }}>
                                     <div className="flex w-full items-center justify-between">
-                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Skill Matrix</span>
-                                        <span className={`text-xs font-extrabold ${scoreTone}`} title={skillSummary.required ? 'ผ่านเกณฑ์ / ทักษะที่ตำแหน่งต้องการ' : 'ทักษะที่ประเมินแล้ว'}>{skillSummary.required ? `${skillSummary.met}/${skillSummary.required}` : skillSummary.rated}{skillSummary.stations > 0 && <span className="ml-1 text-[10px] text-indigo-700" title="สถานีที่ทำได้ระดับ 3 ขึ้นไป">★{skillSummary.stations}</span>}</span>
+                                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{tr('Skill Matrix')}</span>
+                                        <span className={`text-xs font-extrabold ${scoreTone}`} title={skillSummary.required ? tr('ผ่านเกณฑ์ / ทักษะที่ตำแหน่งต้องการ') : tr('ทักษะที่ประเมินแล้ว')}>{skillSummary.required ? `${skillSummary.met}/${skillSummary.required}` : skillSummary.rated}{skillSummary.stations > 0 && <span className="ml-1 text-[10px] text-indigo-700" title="สถานีที่ทำได้ระดับ 3 ขึ้นไป">★{skillSummary.stations}</span>}</span>
                                     </div>
                                     <div className="flex flex-1 flex-col items-center justify-center">
                                         <SkillMiniRadar axes={skillSummary.radar} employeeId={employee.id} width={176} height={132} radius={44}/>
                                         <div className="flex gap-3 text-[9px] text-slate-600">
-                                            <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-3 bg-green-600"></i>ปัจจุบัน</span>
-                                            <span className="flex items-center gap-1"><i className="inline-block h-0 w-3 border-t-2 border-dashed border-orange-500"></i>ที่ต้องการ</span>
+                                            <span className="flex items-center gap-1"><i className="inline-block h-0.5 w-3 bg-green-600"></i>{tr('ปัจจุบัน')}</span>
+                                            <span className="flex items-center gap-1"><i className="inline-block h-0 w-3 border-t-2 border-dashed border-orange-500"></i>{tr('ที่ต้องการ')}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -892,11 +1063,11 @@
                         <h3 className="text-xs sm:text-sm font-bold leading-tight truncate w-full">{employee.name}</h3>
                         <p className="text-[10px] sm:text-xs opacity-70 truncate w-full">{employee.position}</p>
                         {employee.subDept && <p className="text-[9px] sm:text-[10px] text-blue-700 opacity-80 truncate w-full">{employee.subDept}</p>}
-                        {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <span className="mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-bold text-indigo-700">กะ {String(employee.shift).toUpperCase()}</span>}
+                        {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <span className="mt-1 inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[9px] font-bold text-indigo-700">{tr('กะ {s}', { s: String(employee.shift).toUpperCase() })}</span>}
                         {employee.showPhone && employee.phone && <p className="text-[10px] bg-gray-100 rounded px-1 mt-0.5 inline-block text-gray-600">📞 {employee.phone}</p>}
                         {isSub && employee.company && <p className="text-[9px] text-orange-600 truncate mt-0.5 font-bold">🏢 {employee.company}</p>}
                         {employee.startDate && !isPlanned && <div className="text-[9px] bg-green-50 text-green-700 px-1 rounded mt-1 border border-green-100 font-medium">⏳ {calculateTenure(employee.startDate)}</div>}
-                        {isPlanned && <div className="text-[9px] bg-violet-50 text-violet-700 px-1 rounded mt-1 border border-violet-200 font-medium">📅 เริ่ม {employee.startDate ? formatDate(employee.startDate) : 'ยังไม่กำหนด'}</div>}
+                        {isPlanned && <div className="text-[9px] bg-violet-50 text-violet-700 px-1 rounded mt-1 border border-violet-200 font-medium">📅 {tr('เริ่ม {d}', { d: employee.startDate ? formatDate(employee.startDate) : tr('ยังไม่กำหนด') })}</div>}
                         {!isStaging && <SkillCardStrip employeeId={employee.id} />}
                     </div>
                         </>
@@ -912,6 +1083,7 @@
             const [isDragOverGroup, setIsDragOverGroup] = useState(false);
             const skillSummaries = React.useContext(SkillSummaryContext);
             const chartFocus = React.useContext(ChartFocusContext);
+            React.useContext(LangContext);
             const gridScrollRef = useRef(null);
             const [scrollArrows, setScrollArrows] = useState({ left: false, right: false });
             const updateScrollArrows = useCallback(() => {
@@ -981,15 +1153,15 @@
                 <div className="flex flex-col items-center">
                     {level > 0 && <div className="h-4 sm:h-6 w-px bg-gray-300"></div>}
                     <div onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();setIsDragOver(true);}}} onDragLeave={()=>setIsDragOver(false)} onDrop={handleDropInternal} onClick={()=>moveTargetId && (canDrag || !isLocked) && onMoveSelect(employee.id)} className={`relative z-10 group transition-all ${isDragOver?'scale-110 drop-target-hover':''} ${moveTargetId?'cursor-crosshair':''}`}>
-                        {moveTargetId && (canDrag || !isLocked) && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">เลือกเป็นหัวหน้า</span></div>}
+                        {moveTargetId && (canDrag || !isLocked) && <div className="absolute -inset-2 border-2 border-dashed border-blue-400 rounded-2xl bg-blue-50/50 z-20 flex items-center justify-center animate-pulse pointer-events-none"><span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full">{tr("เลือกเป็นหัวหน้า")}</span></div>}
                         <EmployeeCard employee={employee} onClick={onEdit} onDragStart={(e, id)=>{ const payload = (selectionMode && selectedIds.includes(id)) ? selectedIds : [id]; e.dataTransfer.setData("empIds", JSON.stringify(payload)); }} className={cardColor} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} isSelected={selectedIds.includes(employee.id)} toggleSelection={toggleSelection} onReorder={onReorder} onGridColChange={onGridColChange} currentUser={currentUser} isAllDepts={isAllDepts}/>
                         {team && (team.total > 0 || team.planned > 0) && (
-                            <div className="absolute left-full top-1/2 z-10 ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white/95 px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm" title="จำนวนลูกทีมทุกระดับ (ไม่นับผู้ที่ลาออก และไม่นับแผนรับ)">
-                                {chartFocus && !moveTargetId && !selectionMode && <button type="button" onClick={(e)=>{e.stopPropagation(); chartFocus.set(chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? null : { type: 'person', id: employee.id });}} title={chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'กลับไปดูทั้งแผนก' : 'ดูเฉพาะสายนี้ (ทีมนี้ + หัวหน้าตามสายขึ้นไป) — ใช้กับการส่งออกด้วย'} className={`mb-1 flex w-full items-center justify-center gap-0.5 rounded border px-1 py-0.5 text-[9px] font-bold ${chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'}`}><Icons.Eye size={10}/>{chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'ทั้งแผนก' : 'สายนี้'}</button>}
-                                <div className="text-gray-800">ลูกทีม {team.total}</div>
-                                <div className="text-green-700">ประจำ {team.regular}</div>
+                            <div className="absolute left-full top-1/2 z-10 ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white/95 px-1.5 py-1 text-[10px] font-semibold leading-tight shadow-sm" title={tr("จำนวนลูกทีมทุกระดับ (ไม่นับผู้ที่ลาออก และไม่นับแผนรับ)")}>
+                                {chartFocus && !moveTargetId && !selectionMode && <button type="button" onClick={(e)=>{e.stopPropagation(); chartFocus.set(chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? null : { type: 'person', id: employee.id });}} title={chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? tr('กลับไปดูทั้งแผนก') : tr('ดูเฉพาะสายนี้ (ทีมนี้ + หัวหน้าตามสายขึ้นไป) — ใช้กับการส่งออกด้วย')} className={`mb-1 flex w-full items-center justify-center gap-0.5 rounded border px-1 py-0.5 text-[9px] font-bold ${chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? 'border-violet-600 bg-violet-600 text-white' : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'}`}><Icons.Eye size={10}/>{chartFocus.current?.type === 'person' && chartFocus.current.id === employee.id ? tr('ทั้งแผนก') : tr('สายนี้')}</button>}
+                                <div className="text-gray-800">{tr('ลูกทีม')} {team.total}</div>
+                                <div className="text-green-700">{tr('ประจำ')} {team.regular}</div>
                                 <div className="text-orange-600">Sub {team.subcontract}</div>
-                                {team.planned > 0 && <div className="mt-0.5 border-t border-dashed border-violet-300 pt-0.5 text-violet-700" title="แผนรับคน (ไม่รวมในยอดลูกทีม)">แผนรับ +{team.planned}</div>}
+                                {team.planned > 0 && <div className="mt-0.5 border-t border-dashed border-violet-300 pt-0.5 text-violet-700" title={tr('แผนรับคน (ไม่รวมในยอดลูกทีม)')}>{tr('แผนรับ')} +{team.planned}</div>}
                             </div>
                         )}
                         {!moveTargetId && (canDrag || !isLocked) && !isViewOnly && !selectionMode && <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="add-btn absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white text-blue-600 border border-blue-200 rounded-full w-6 h-6 flex items-center justify-center shadow-md active:scale-95"><Icons.Plus size={14}/></button>}
@@ -1002,7 +1174,7 @@
                                 {scrollArrows.left && <button onClick={()=>scrollGrid(-1)} className="flex-shrink-0 z-10 mr-1 bg-white border border-gray-300 rounded-full w-8 h-8 flex items-center justify-center shadow-md hover:bg-gray-100 hover:border-blue-400 active:scale-90 transition-all"><Icons.ChevronLeft size={18}/></button>}
                                 <div ref={gridScrollRef} className={`gap-4 p-4 items-start rounded-xl border border-dashed transition-colors overflow-x-auto ${isDragOverGroup ? 'bg-blue-100 border-blue-500 ring-2 ring-blue-300' : 'bg-gray-50/50 border-gray-300'}`} style={{...gridStyle, maxWidth: '80vw'}} onDragOver={(e)=>{if(canDrag||!isLocked){e.preventDefault();e.stopPropagation();setIsDragOverGroup(true);}}} onDragLeave={(e)=>{e.stopPropagation();setIsDragOverGroup(false);}} onDrop={handleDropOnGroup}>
                                     {subordinates.map((sub) => (<EmployeeNode key={sub.id} employee={sub} allEmployees={allEmployees} onEdit={onEdit} onDrop={onDrop} onMoveSelect={onMoveSelect} moveTargetId={moveTargetId} level={level + 1} isLocked={isLocked} isViewOnly={isViewOnly} themeConf={themeConf} shapeClass={shapeClass} selectionMode={selectionMode} selectedIds={selectedIds} toggleSelection={toggleSelection} onReorder={onReorder} onAddChild={onAddChild} layoutThreshold={layoutThreshold} searchTerm={searchTerm} visitedIds={newVisited} onGridColChange={onGridColChange} currentUser={currentUser} isAllDepts={isAllDepts}/>))}
-                                    {(canDrag || !isLocked) && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">Add Member</span></button> )}
+                                    {(canDrag || !isLocked) && !isViewOnly && ( <button onClick={(e)=>{e.stopPropagation();onAddChild(employee);}} className="flex flex-col items-center justify-center w-36 h-32 border-2 border-dashed border-gray-300 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-all gap-2 group"><div className="p-2 rounded-full bg-gray-100 group-hover:bg-blue-100"><Icons.Plus size={24}/></div><span className="text-xs font-bold">{tr("Add Member")}</span></button> )}
                                 </div>
                                 {scrollArrows.right && <button onClick={()=>scrollGrid(1)} className="flex-shrink-0 z-10 ml-1 bg-white border border-gray-300 rounded-full w-8 h-8 flex items-center justify-center shadow-md hover:bg-gray-100 hover:border-blue-400 active:scale-90 transition-all"><Icons.ChevronRight size={18}/></button>}
                             </> ) : (
@@ -1110,7 +1282,7 @@
             useEffect(() => { if (isEditMode && employee) { setFormData({ type: 'Permanent', company: '', phone: '', showPhone: true, startDate: '', shift: '', subDept: '', exitDate: '', exitDept: '', exitSubDept: '', ...employee }); } else { const defaultDept = [employee?.dept, currentUser?.dept].find(d => d && safeDepts.includes(d)) || safeDepts[0] || ''; setFormData({ id: Math.floor(60000 + Math.random() * 9000).toString(), name: '', position: employee?.position || safePositions[0] || '', dept: defaultDept, subDept: '', shift: '', reportsTo: employee?.reportsTo || '', image: null, status: 'Active', exitDate: '', exitDept: '', exitSubDept: '', type: 'Permanent', company: '', customColor: '', textColor: '#1f2937', startDate: '', phone: '', showPhone: true }); } }, [employee]);
             // Keep the form on the new name when a position is renamed from the gear button while this form is open.
             useEffect(() => { if (positionRename) setFormData(previous => previous.position === positionRename.from ? { ...previous, position: positionRename.to } : previous); }, [positionRename]);
-            const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert('อัปโหลดรูปไม่สำเร็จ: ' + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert('อัปโหลดรูปไม่สำเร็จ: ' + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
+            const handleImageUpload = async (e) => { const input = e.target; const file = input.files[0]; if (!file) return; try { setIsUploading(true); const compressedBase64 = await compressImage(file, 512); if (driveUrl) { const res = await fetch(driveUrl, { method: 'POST', body: JSON.stringify({ action: 'upload', file: compressedBase64.split(',')[1], filename: `emp_${formData.id}.jpg`, mimetype: 'image/jpeg', oldFileUrl: formData.image }) }); const result = await res.json(); if (result?.url) { setFormData(prev => ({ ...prev, image: result.url })); } else { alert(tr('อัปโหลดรูปไม่สำเร็จ: ') + (result?.message || 'unknown error')); } } else { setFormData(prev => ({ ...prev, image: compressedBase64 })); } } catch (err) { alert(tr('อัปโหลดรูปไม่สำเร็จ: ') + (err?.message || err)); } finally { setIsUploading(false); input.value = ''; } };
             const filteredSupervisors = useMemo(() => { 
                 if (!supervisors) return []; 
                 return supervisors.filter(s => { 
@@ -1133,7 +1305,7 @@
             const subDeptOptions = useMemo(() => subDepartments?.[formData.dept] || [], [subDepartments, formData.dept]);
             const addSubDepartment = () => {
                 const name = newSubDeptName.trim();
-                if (!formData.dept) return alert('กรุณาเลือกแผนกหลักก่อนเพิ่มแผนกย่อย');
+                if (!formData.dept) return alert(tr('กรุณาเลือกแผนกหลักก่อนเพิ่มแผนกย่อย'));
                 if (!name) return;
                 const existing = subDeptOptions.find(item => item.toLocaleLowerCase() === name.toLocaleLowerCase());
                 if (existing) {
@@ -1145,13 +1317,13 @@
                 setNewSubDeptName('');
                 setIsAddingSubDept(false);
             };
-            if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">Access Denied</h2> <p className="text-gray-500 mt-2">คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
+            if (!hasPermission) { return ( <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4"> <div className="bg-white p-6 rounded-xl shadow-xl text-center"> <Icons.Lock size={48} className="mx-auto text-red-500 mb-4"/> <h2 className="text-xl font-bold text-gray-700">{tr("Access Denied")}</h2> <p className="text-gray-500 mt-2">{tr("คุณไม่มีสิทธิ์แก้ไขพนักงานที่มีตำแหน่งสูงกว่าหรือต่างแผนก")}</p> <button onClick={onCancel} className="mt-6 bg-gray-200 px-4 py-2 rounded-lg">Close</button> </div> </div> ); }
 
             return (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
                     <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"><h2 className="text-lg font-bold">{isEditMode ? 'Edit Employee' : 'Add Employee'}</h2><button onClick={onCancel}><Icons.X/></button></div>
-                        <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>General Info</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Details & Style</button></div>
+                        <div className="bg-gray-50 px-6 py-4 border-b flex justify-between items-center"><h2 className="text-lg font-bold">{tr(isEditMode ? 'Edit Employee' : 'Add Employee')}</h2><button onClick={onCancel}><Icons.X/></button></div>
+                        <div className="flex border-b"><button onClick={()=>setTab('info')} className={`flex-1 py-3 text-sm font-medium ${tab==='info'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>{tr("General Info")}</button><button onClick={()=>setTab('style')} className={`flex-1 py-3 text-sm font-medium ${tab==='style'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>{tr("Details & Style")}</button></div>
                         <form className="p-6 space-y-4 overflow-y-auto grow" onSubmit={e=>e.preventDefault()}>
                             {tab === 'info' ? (<> 
                             <div className="flex flex-col items-center mb-4"><div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center overflow-hidden cursor-pointer relative group" onClick={()=>fileInputRef.current.click()}>{isUploading ? <Icons.Loader/> : (formData.image ? <img src={formatDriveUrl(formData.image)} style={photoImgStyle(formData)} className="w-full h-full object-cover"/> : <Icons.Camera size={24} className="text-gray-400"/>)}</div><input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
@@ -1160,29 +1332,29 @@
                                         <div className="flex items-start gap-3">
                                             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border border-gray-300 bg-gray-200"><img src={formatDriveUrl(formData.image)} referrerPolicy="no-referrer" style={photoImgStyle(formData)} className="h-full w-full object-cover"/></div>
                                             <div className="flex-1 space-y-1 text-xs text-gray-600">
-                                                <div className="flex items-center justify-between font-semibold text-gray-700"><span>ปรับตำแหน่งรูป</span><button type="button" onClick={()=>setFormData(prev=>{ const n={...prev}; delete n.imageZoom; delete n.imagePosX; delete n.imagePosY; return n; })} className="text-blue-600 hover:underline">รีเซ็ต</button></div>
-                                                <label className="flex items-center gap-2"><span className="w-14">ซูม</span><input type="range" min="1" max="3" step="0.05" value={fr.zoom} onChange={e=>setFrame('imageZoom', e.target.value)} className="flex-1"/><span className="w-9 text-right">{fr.zoom.toFixed(2)}×</span></label>
-                                                <label className="flex items-center gap-2"><span className="w-14">ซ้าย-ขวา</span><input type="range" min="0" max="100" step="1" value={fr.x} onChange={e=>setFrame('imagePosX', e.target.value)} className="flex-1"/></label>
-                                                <label className="flex items-center gap-2"><span className="w-14">บน-ล่าง</span><input type="range" min="0" max="100" step="1" value={fr.y} onChange={e=>setFrame('imagePosY', e.target.value)} className="flex-1"/></label>
+                                                <div className="flex items-center justify-between font-semibold text-gray-700"><span>{tr("ปรับตำแหน่งรูป")}</span><button type="button" onClick={()=>setFormData(prev=>{ const n={...prev}; delete n.imageZoom; delete n.imagePosX; delete n.imagePosY; return n; })} className="text-blue-600 hover:underline">{tr("รีเซ็ต")}</button></div>
+                                                <label className="flex items-center gap-2"><span className="w-14">{tr("ซูม")}</span><input type="range" min="1" max="3" step="0.05" value={fr.zoom} onChange={e=>setFrame('imageZoom', e.target.value)} className="flex-1"/><span className="w-9 text-right">{fr.zoom.toFixed(2)}×</span></label>
+                                                <label className="flex items-center gap-2"><span className="w-14">{tr("ซ้าย-ขวา")}</span><input type="range" min="0" max="100" step="1" value={fr.x} onChange={e=>setFrame('imagePosX', e.target.value)} className="flex-1"/></label>
+                                                <label className="flex items-center gap-2"><span className="w-14">{tr("บน-ล่าง")}</span><input type="range" min="0" max="100" step="1" value={fr.y} onChange={e=>setFrame('imagePosY', e.target.value)} className="flex-1"/></label>
                                             </div>
                                         </div>
                                     </div>); })()}
                             </div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">แผนกหลัก</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value, subDept: ''})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">ID</label><input name="id" value={formData.id} onChange={e=>setFormData({...formData, id: e.target.value})} className="w-full border p-2 rounded" /></div><div><label className="text-xs text-gray-500">{tr("แผนกหลัก")}</label><select name="dept" value={formData.dept} onChange={e=>setFormData({...formData, dept: e.target.value, subDept: ''})} className="w-full border p-2 rounded bg-blue-50" disabled={currentUser.role !== 'admin' && currentUser.dept !== 'ALL'}>{safeDepts.map(d=><option key={d} value={d}>{d}</option>)}</select></div></div>
                             <div>
-                                <label className="text-xs text-gray-500">แผนกย่อย / ทีม</label>
+                                <label className="text-xs text-gray-500">{tr("แผนกย่อย / ทีม")}</label>
                                 <div className="flex gap-2">
                                     <select value={formData.subDept || ''} onChange={e=>setFormData({...formData, subDept: e.target.value})} className="w-full min-w-0 border p-2 rounded bg-white" disabled={!formData.dept}>
-                                        <option value="">ไม่ระบุแผนกย่อย</option>
+                                        <option value="">{tr("ไม่ระบุแผนกย่อย")}</option>
                                         {subDeptOptions.map(name=><option key={name} value={name}>{name}</option>)}
                                         {formData.subDept && !subDeptOptions.includes(formData.subDept) && <option value={formData.subDept}>{formData.subDept}</option>}
                                     </select>
-                                    <button type="button" onClick={()=>{setIsAddingSubDept(value=>!value);setNewSubDeptName('');}} aria-label="เพิ่มแผนกย่อย" title="เพิ่มแผนกย่อย" className="shrink-0 rounded border border-blue-200 bg-blue-50 px-3 text-blue-700 hover:bg-blue-100"><Icons.Plus size={18}/></button>
-                                    {formData.subDept && <button type="button" onClick={()=>{if(onDeleteSubDept(formData.dept, formData.subDept)) setFormData(previous=>({...previous, subDept: ''}));}} aria-label={`ลบแผนกย่อย ${formData.subDept}`} title="ลบแผนกย่อยที่เลือก" className="shrink-0 rounded border border-red-200 bg-red-50 px-3 text-red-600 hover:bg-red-100"><Icons.Trash2 size={17}/></button>}
+                                    <button type="button" onClick={()=>{setIsAddingSubDept(value=>!value);setNewSubDeptName('');}} aria-label={tr('เพิ่มแผนกย่อย')} title={tr('เพิ่มแผนกย่อย')} className="shrink-0 rounded border border-blue-200 bg-blue-50 px-3 text-blue-700 hover:bg-blue-100"><Icons.Plus size={18}/></button>
+                                    {formData.subDept && <button type="button" onClick={()=>{if(onDeleteSubDept(formData.dept, formData.subDept)) setFormData(previous=>({...previous, subDept: ''}));}} aria-label={`ลบแผนกย่อย ${formData.subDept}`} title={tr('ลบแผนกย่อยที่เลือก')} className="shrink-0 rounded border border-red-200 bg-red-50 px-3 text-red-600 hover:bg-red-100"><Icons.Trash2 size={17}/></button>}
                                 </div>
                                 {formData.dept && subDeptOptions.some(name => name !== formData.subDept) && (
                                     <div className="mt-2 rounded border border-sky-100 bg-sky-50/60 p-2">
-                                        <div className="mb-1 text-[11px] font-semibold text-sky-800">ไลน์อื่นที่ดูแลเพิ่ม <span className="font-normal text-sky-600">(ใช้ใน Skill Matrix เท่านั้น ไม่เปลี่ยนตำแหน่งในผัง)</span></div>
+                                        <div className="mb-1 text-[11px] font-semibold text-sky-800">{tr('ไลน์อื่นที่ดูแลเพิ่ม ')}<span className="font-normal text-sky-600">{tr('(ใช้ใน Skill Matrix เท่านั้น ไม่เปลี่ยนตำแหน่งในผัง)')}</span></div>
                                         <div className="flex flex-wrap gap-1.5">
                                             {subDeptOptions.filter(name => name !== formData.subDept).map(name => {
                                                 const extras = Array.isArray(formData.extraSubDepts) ? formData.extraSubDepts : [];
@@ -1195,31 +1367,31 @@
                                 )}
                                 {isAddingSubDept && <div className="mt-2 flex gap-2">
                                     <input autoFocus value={newSubDeptName} onChange={e=>setNewSubDeptName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();addSubDepartment();}}} className="min-w-0 flex-1 border p-2 rounded text-sm" placeholder={`เพิ่มแผนกย่อยใน ${formData.dept || 'แผนกหลัก'}`}/>
-                                    <button type="button" onClick={addSubDepartment} disabled={!newSubDeptName.trim() || !formData.dept} className="rounded bg-green-600 px-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">เพิ่ม</button>
+                                    <button type="button" onClick={addSubDepartment} disabled={!newSubDeptName.trim() || !formData.dept} className="rounded bg-green-600 px-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">{tr('เพิ่ม')}</button>
                                 </div>}
                             </div>
-                            <div><label className="text-xs text-gray-500">Name</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
-                            <div><label className="text-xs text-gray-500">กะทำงาน</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">ไม่มีกะ</option><option value="A">กะ A</option><option value="B">กะ B</option></select></div>
+                            <div><label className="text-xs text-gray-500">{tr("Name")}</label><input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} className="w-full border p-2 rounded" required/></div>
+                            <div><label className="text-xs text-gray-500">{tr("กะทำงาน")}</label><select value={formData.shift || ''} onChange={e=>setFormData({...formData, shift: e.target.value})} className="w-full border p-2 rounded bg-white"><option value="">{tr("ไม่มีกะ")}</option><option value="A">{tr('กะ {s}', { s: 'A' })}</option><option value="B">{tr('กะ {s}', { s: 'B' })}</option></select></div>
                             <div className="flex gap-2 items-end">
-                                <div className="flex-1"><label className="text-xs text-gray-500 flex justify-between">Position</label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
-                                <button type="button" onClick={onManagePositions} className="p-2 border rounded bg-orange-50 text-orange-600 hover:bg-orange-100 mb-0.5" title="Manage Positions"><Icons.Settings size={18}/></button>
+                                <div className="flex-1"><label className="text-xs text-gray-500 flex justify-between">{tr('Position')}</label><select value={formData.position} onChange={e=>setFormData({...formData, position: e.target.value})} className="w-full border p-2 rounded">{safePositions.map(p=><option key={p} value={p}>{p}</option>)}{!safePositions.includes(formData.position) && formData.position && <option value={formData.position}>{formData.position}</option>}</select></div>
+                                <button type="button" onClick={onManagePositions} className="p-2 border rounded bg-orange-50 text-orange-600 hover:bg-orange-100 mb-0.5" title={tr('Manage Positions')}><Icons.Settings size={18}/></button>
                             </div>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">Reports To</label><select value={formData.reportsTo} onChange={e=>setFormData({...formData, reportsTo: e.target.value})} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">-- Waiting Area --</option><option value="">-- Top Management --</option>{filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position}){isResignedEmployee(s) ? ' · ลาออกแล้ว' : ''}</option>)}</select></div><div><label className="text-xs text-gray-500">Type</label><select value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})} className="w-full border p-2 rounded"><option value="Permanent">Permanent</option><option value="Subcontract">Subcontract</option></select></div></div>
-                            {formData.type === 'Subcontract' && <div><label className="text-xs text-gray-500">Company Name</label><input value={formData.company} onChange={e=>setFormData({...formData, company: e.target.value})} className="w-full border p-2 rounded" placeholder="Subcontractor Company..."/></div>}
+                            <div className="grid grid-cols-2 gap-4"><div><label className="text-xs text-gray-500">{tr("Reports To")}</label><select value={formData.reportsTo} onChange={e=>setFormData({...formData, reportsTo: e.target.value})} className="w-full border p-2 rounded bg-gray-50"><option value="STAGING">{tr('-- Waiting Area --')}</option><option value="">{tr('-- Top Management --')}</option>{filteredSupervisors.map(s=><option key={s.id} value={s.id}>{s.name} ({s.position}){isResignedEmployee(s) ? tr(' · ลาออกแล้ว') : ''}</option>)}</select></div><div><label className="text-xs text-gray-500">{tr("Type")}</label><select value={formData.type} onChange={e=>setFormData({...formData, type: e.target.value})} className="w-full border p-2 rounded"><option value="Permanent">{tr('Permanent')}</option><option value="Subcontract">{tr('Subcontract')}</option></select></div></div>
+                            {formData.type === 'Subcontract' && <div><label className="text-xs text-gray-500">{tr("Company Name")}</label><input value={formData.company} onChange={e=>setFormData({...formData, company: e.target.value})} className="w-full border p-2 rounded" placeholder={tr('Subcontractor Company...')}/></div>}
                             </>) : (<div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100"><div className="col-span-2"><label className="text-xs text-gray-500 flex items-center justify-between">Phone Number <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={formData.showPhone} onChange={e=>setFormData({...formData, showPhone: e.target.checked})}/><span className="text-[10px]">Show on card</span></label></label><input type="tel" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="0xx-xxx-xxxx"/></div><div><label className="text-xs text-gray-500">Start Date</label><input type="date" value={formData.startDate} onChange={e=>setFormData({...formData, startDate: e.target.value})} className="w-full border p-2 rounded text-sm"/></div><div className="flex flex-col justify-end"><div className="text-xs text-gray-500 mb-1">Tenure</div><div className="bg-white border px-2 py-2 rounded text-sm font-bold text-green-700 h-[38px] flex items-center">{tenureText || '-'}</div></div></div>
-                                <div><label className="text-xs text-gray-500 mb-2 block">Card Color Override</label><div className="grid grid-cols-5 gap-2"><button type="button" onClick={()=>setFormData({...formData, customColor: ''})} className={`h-8 rounded-lg border bg-white text-xs ${formData.customColor===''?'ring-2 ring-blue-500':''}`}>None</button>{Object.entries(THEMES).map(([k,t]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customColor: k})} className={`h-8 rounded-lg ${t.lv0} ${formData.customColor===k?'ring-2 ring-blue-500':''}`}></button>))}</div></div>
-                                <div><label className="text-xs text-gray-500 mb-2 block">Shape Override</label><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setFormData({...formData, customShape: ''})} className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>Default</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customShape: k})} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div>
-                                <div><label className="text-xs text-gray-500">Employee Status</label><select value={formData.status} onChange={e=>{const status=e.target.value;setFormData(previous=>status==='Resigned'&&previous.status!=='Resigned'?{...previous,status,exitDate:getLocalDateValue(),exitDept:previous.dept||'',exitSubDept:previous.subDept||''}:{...previous,status});}} className="w-full border p-2 rounded"><option value="Active">Active</option><option value="Planned">Planned (แผนรับ)</option><option value="Resigned">Resigned</option></select>{isPlannedEmployee(formData) && <p className="mt-1 text-[11px] text-violet-700">แผนรับคน: แสดงบนผังแบบเส้นประ แต่ไม่นับรวมในยอดคนปัจจุบัน / เช็คชื่อ / Skill — ใช้ Start Date เป็นวันที่วางแผนจะเริ่มงาน เมื่อรับเข้าจริงให้เปลี่ยนเป็น Active</p>}</div>
-                                {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">วันสิ้นสุดการทำงาน</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/>
-                                    <label className="mt-2 block text-xs font-semibold text-amber-900">สาเหตุที่ออก</label>
-                                    <select value={formData.exitReason || ''} onChange={e=>setFormData(previous=>({...previous,exitReason:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"><option value="">ไม่ระบุ</option>{Object.entries(EXIT_REASONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
-                                    <label className="mt-2 block text-xs font-semibold text-amber-900">หมายเหตุ</label>
-                                    <textarea rows={2} value={formData.exitNote || ''} onChange={e=>setFormData(previous=>({...previous,exitNote:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"/>
-                                    <p className="mt-1 text-xs text-amber-800">บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน ระบบจะจำทีมและหัวหน้า ณ วันที่ออกไว้ใน Staff Turnover</p></div>}
+                                <div className="grid grid-cols-2 gap-4 bg-blue-50 p-3 rounded-lg border border-blue-100"><div className="col-span-2"><label className="text-xs text-gray-500 flex items-center justify-between">{tr('Phone Number')} <label className="flex items-center gap-1 cursor-pointer"><input type="checkbox" checked={formData.showPhone} onChange={e=>setFormData({...formData, showPhone: e.target.checked})}/><span className="text-[10px]">{tr("Show on card")}</span></label></label><input type="tel" value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full border p-2 rounded text-sm" placeholder="0xx-xxx-xxxx"/></div><div><label className="text-xs text-gray-500">{tr("Start Date")}</label><input type="date" value={formData.startDate} onChange={e=>setFormData({...formData, startDate: e.target.value})} className="w-full border p-2 rounded text-sm"/></div><div className="flex flex-col justify-end"><div className="text-xs text-gray-500 mb-1">Tenure</div><div className="bg-white border px-2 py-2 rounded text-sm font-bold text-green-700 h-[38px] flex items-center">{tenureText || '-'}</div></div></div>
+                                <div><label className="text-xs text-gray-500 mb-2 block">{tr("Card Color Override")}</label><div className="grid grid-cols-5 gap-2"><button type="button" onClick={()=>setFormData({...formData, customColor: ''})} className={`h-8 rounded-lg border bg-white text-xs ${formData.customColor===''?'ring-2 ring-blue-500':''}`}>{tr("None")}</button>{Object.entries(THEMES).map(([k,t]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customColor: k})} className={`h-8 rounded-lg ${t.lv0} ${formData.customColor===k?'ring-2 ring-blue-500':''}`}></button>))}</div></div>
+                                <div><label className="text-xs text-gray-500 mb-2 block">{tr("Shape Override")}</label><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>setFormData({...formData, customShape: ''})} className={`px-3 py-1 border rounded bg-white text-xs ${formData.customShape===''?'bg-gray-200':''}`}>{tr("Default")}</button>{Object.entries(SHAPES).map(([k,s]) => (<button type="button" key={k} onClick={()=>setFormData({...formData, customShape: k})} className={`px-3 py-1 border text-xs ${s.cls} ${formData.customShape===k?'bg-blue-100 border-blue-500':''}`}>{s.name}</button>))}</div></div>
+                                <div><label className="text-xs text-gray-500">{tr("Employee Status")}</label><select value={formData.status} onChange={e=>{const status=e.target.value;setFormData(previous=>status==='Resigned'&&previous.status!=='Resigned'?{...previous,status,exitDate:getLocalDateValue(),exitDept:previous.dept||'',exitSubDept:previous.subDept||''}:{...previous,status});}} className="w-full border p-2 rounded"><option value="Active">{tr('Active')}</option><option value="Planned">{tr("Planned (แผนรับ)")}</option><option value="Resigned">{tr('Resigned')}</option></select>{isPlannedEmployee(formData) && <p className="mt-1 text-[11px] text-violet-700">{tr('แผนรับคน: แสดงบนผังแบบเส้นประ แต่ไม่นับรวมในยอดคนปัจจุบัน / เช็คชื่อ / Skill — ใช้ Start Date เป็นวันที่วางแผนจะเริ่มงาน เมื่อรับเข้าจริงให้เปลี่ยนเป็น Active')}</p>}</div>
+                                {isResignedEmployee(formData) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><label className="text-xs font-semibold text-amber-900">{tr("วันสิ้นสุดการทำงาน")}</label><input type="date" value={formData.exitDate || ''} onChange={e=>setFormData(previous=>({...previous,exitDate:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"/>
+                                    <label className="mt-2 block text-xs font-semibold text-amber-900">{tr("สาเหตุที่ออก")}</label>
+                                    <select value={formData.exitReason || ''} onChange={e=>setFormData(previous=>({...previous,exitReason:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm"><option value="">{tr('ไม่ระบุ')}</option>{Object.entries(EXIT_REASONS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+                                    <label className="mt-2 block text-xs font-semibold text-amber-900">{tr("หมายเหตุ")}</label>
+                                    <textarea rows={2} value={formData.exitNote || ''} onChange={e=>setFormData(previous=>({...previous,exitNote:e.target.value}))} className="mt-1 w-full rounded border border-amber-200 bg-white p-2 text-sm" placeholder={tr('รายละเอียดเพิ่มเติม (ถ้ามี)')}/>
+                                    <p className="mt-1 text-xs text-amber-800">{tr("บันทึกเป็นประวัติและนำออกจากรายชื่อพนักงานปัจจุบัน ระบบจะจำทีมและหัวหน้า ณ วันที่ออกไว้ใน Staff Turnover")}</p></div>}
                             </div>)}
                         </form>
-                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>Delete</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>Confirm</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>No</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={()=>onSave(formData)}>Save</Button></div>}</div>
+                        <div className="bg-gray-50 px-6 py-4 border-t flex justify-between">{isEditMode && (!showDeleteConfirm ? <Button variant="danger" onClick={()=>setShowDeleteConfirm(true)} icon={Icons.Trash2}>{tr('Delete')}</Button> : <div className="flex gap-2"><Button variant="danger" onClick={()=>onDelete(formData.id)}>{tr('Confirm')}</Button><Button variant="secondary" onClick={()=>setShowDeleteConfirm(false)}>{tr('No')}</Button></div>)}{!showDeleteConfirm && <div className="flex gap-2 ml-auto"><Button variant="secondary" onClick={onCancel}>{tr('Cancel')}</Button><Button variant="primary" onClick={()=>onSave(formData)}>{tr('Save')}</Button></div>}</div>
                     </div>
                 </div>
             );
@@ -3467,7 +3639,7 @@
                                     {isOpen && (
                                         <div className="mt-3 space-y-3 border-t pt-3">
                                             <table className="w-full text-xs">
-                                                <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">แผนกย่อย / ทีม</th><th className="px-2">กะที่ทำงาน</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">มาแล้ว</th><th className="pl-2 text-right">%</th></tr></thead>
+                                                <thead><tr className="text-left text-gray-500"><th className="py-1 pr-2">{tr("แผนกย่อย / ทีม")}</th><th className="px-2">กะที่ทำงาน</th><th className="px-2 text-right">ทั้งหมด</th><th className="px-2 text-right">มาแล้ว</th><th className="pl-2 text-right">%</th></tr></thead>
                                                 <tbody>
                                                     {dept.teams.map(team => (
                                                         <tr key={team.name} className="border-t">
@@ -4061,7 +4233,7 @@
                                 <option value="ALL">ทุกกะ</option>
                                 <option value="A">กะ A</option>
                                 <option value="B">กะ B</option>
-                                <option value="UNASSIGNED">ไม่มีกะ</option>
+                                <option value="UNASSIGNED">{tr("ไม่มีกะ")}</option>
                             </select>
                         </label>
                         <label className="min-w-0 text-sm font-semibold text-gray-700 xl:col-span-3">
@@ -4186,6 +4358,8 @@
             const [showEmployeeHistory, setShowEmployeeHistory] = useState(false);
             const [showPlannedList, setShowPlannedList] = useState(false);
             const [showPlannedOnChart, setShowPlannedOnChart] = useState(() => safeLocalLoad('showPlannedOnChart', true) !== false);
+            const [lang, setLang] = useState(APP_LANG);
+            const changeLang = useCallback((code) => { APP_LANG = code; try { localStorage.setItem('appLang', JSON.stringify(code)); } catch (e) {} document.documentElement.lang = code; setLang(code); }, []);
             const [chartFocus, setChartFocus] = useState(null);
             useEffect(() => { setChartFocus(null); }, [currentDept]);
             const chartFocusValue = useMemo(() => ({ current: chartFocus, set: setChartFocus }), [chartFocus]);
@@ -5391,43 +5565,43 @@
                         <div className="hidden lg:flex items-center gap-2">
                             <label className="flex h-9 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-gray-400 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
                                 <Icons.Search size={15}/>
-                                <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="ค้นหา..." aria-label="ค้นหา" className="w-24 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400 xl:w-32"/>
+                                <input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder={tr('ค้นหา...')} aria-label={tr('ค้นหา')} className="w-24 bg-transparent text-xs text-gray-700 outline-none placeholder:text-gray-400 xl:w-32"/>
                             </label>
 
-                            <div className="flex h-9 items-center rounded-lg border border-gray-200 bg-gray-50 p-1" role="group" aria-label="มุมมอง">
-                                <button onClick={()=>setViewMode('chart')} aria-label="ผังองค์กร" title="ผังองค์กร" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='chart'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Grid size={15}/><span className="hidden 2xl:inline">ผังองค์กร</span></button>
-                                <button onClick={()=>setViewMode('list')} aria-label="รายชื่อ" title="รายชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='list'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.List size={15}/><span className="hidden 2xl:inline">รายชื่อ</span></button>
-                                <button onClick={()=>setViewMode('attendance')} aria-label="เช็คชื่อ" title="เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">เช็คชื่อ</span></button>
-                                <button onClick={()=>setViewMode('monitor')} aria-label="Monitor เช็คชื่อ" title="Monitor เช็คชื่อ" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='monitor'?'bg-blue-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Chart size={15}/><span className="hidden 2xl:inline">Monitor</span></button>
-                                {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>setViewMode('turnover')} aria-label="Staff Turnover" title="Staff Turnover" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='turnover'?'bg-rose-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Users size={15}/><span className="hidden 2xl:inline">Turnover</span></button>}
-                                <button onClick={()=>setViewMode('skills')} aria-label="Skill Matrix" title="Skill Matrix" className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='skills'?'bg-violet-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.GraduationCap size={15}/><span className="hidden 2xl:inline">Skill Matrix</span></button>
+                            <div className="flex h-9 items-center rounded-lg border border-gray-200 bg-gray-50 p-1" role="group" aria-label={tr('มุมมอง')}>
+                                <button onClick={()=>setViewMode('chart')} aria-label={tr("ผังองค์กร")} title={tr("ผังองค์กร")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='chart'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Grid size={15}/><span className="hidden 2xl:inline">{tr("ผังองค์กร")}</span></button>
+                                <button onClick={()=>setViewMode('list')} aria-label={tr("รายชื่อ")} title={tr("รายชื่อ")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='list'?'bg-white text-blue-700 shadow-sm ring-1 ring-gray-200':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.List size={15}/><span className="hidden 2xl:inline">{tr("รายชื่อ")}</span></button>
+                                <button onClick={()=>setViewMode('attendance')} aria-label={tr("เช็คชื่อ")} title={tr("เช็คชื่อ")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='attendance'?'bg-green-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Check size={15}/><span className="hidden 2xl:inline">{tr("เช็คชื่อ")}</span></button>
+                                <button onClick={()=>setViewMode('monitor')} aria-label={tr("Monitor เช็คชื่อ")} title={tr("Monitor เช็คชื่อ")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='monitor'?'bg-blue-700 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Chart size={15}/><span className="hidden 2xl:inline">{tr("Monitor")}</span></button>
+                                {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>setViewMode('turnover')} aria-label={tr("Staff Turnover")} title={tr("Staff Turnover")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='turnover'?'bg-rose-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.Users size={15}/><span className="hidden 2xl:inline">{tr("Turnover")}</span></button>}
+                                <button onClick={()=>setViewMode('skills')} aria-label={tr("Skill Matrix")} title={tr("Skill Matrix")} className={`flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors ${viewMode==='skills'?'bg-violet-600 text-white shadow-sm':'text-gray-500 hover:bg-white hover:text-gray-800'}`}><Icons.GraduationCap size={15}/><span className="hidden 2xl:inline">{tr("Skill Matrix")}</span></button>
                             </div>
 
                             <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true"></div>
                             <div className="flex h-9 items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
-                                {!isLocked && <button onClick={addAnnotation} aria-label="เพิ่มข้อความบนผัง" title="เพิ่มข้อความบนผัง" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
-                                {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
-                                <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
+                                {!isLocked && <button onClick={addAnnotation} aria-label={tr("เพิ่มข้อความบนผัง")} title={tr("เพิ่มข้อความบนผัง")} className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
+                                {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label={tr("เลือกหลายรายการ")} title={tr("เลือกหลายรายการ")} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
+                                <button onClick={()=>setIsSummaryOpen(true)} aria-label={tr("แดชบอร์ดสรุป")} title={tr("แดชบอร์ดสรุป")} className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
                                 {viewMode === 'chart' && (focusSubDeptOptions.length > 0 || focusPersonOptions.length > 0) && (
-                                    <select value={chartFocus ? `${chartFocus.type}:${chartFocus.type === 'person' ? chartFocus.id : chartFocus.value}` : ''} onChange={e => { const v = e.target.value; if (!v) { setChartFocus(null); return; } const idx = v.indexOf(':'); const type = v.slice(0, idx), val = v.slice(idx + 1); setChartFocus(type === 'person' ? { type, id: val } : { type, value: val }); }} aria-label="โฟกัสสายบังคับบัญชา" title="ดูเฉพาะสายบังคับบัญชา — การส่งออก PDF / Excel / JD / บัตร จะใช้สายนี้ด้วย" className={`h-7 max-w-[150px] rounded-md border px-1.5 text-xs font-semibold outline-none ${chartFocus ? 'border-violet-400 bg-violet-50 text-violet-700' : 'border-gray-200 bg-white text-gray-600'}`}>
-                                        <option value="">สาย: ทั้งแผนก</option>
-                                        {focusSubDeptOptions.length > 0 && <optgroup label="ตามแผนกย่อย">{focusSubDeptOptions.map(l => <option key={l} value={`subDept:${l}`}>{l}</option>)}</optgroup>}
-                                        {focusPersonOptions.length > 0 && <optgroup label="ตามหัวหน้า">{focusPersonOptions.map(p => <option key={p.id} value={`person:${p.id}`}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}</optgroup>}
+                                    <select value={chartFocus ? `${chartFocus.type}:${chartFocus.type === 'person' ? chartFocus.id : chartFocus.value}` : ''} onChange={e => { const v = e.target.value; if (!v) { setChartFocus(null); return; } const idx = v.indexOf(':'); const type = v.slice(0, idx), val = v.slice(idx + 1); setChartFocus(type === 'person' ? { type, id: val } : { type, value: val }); }} aria-label={tr('โฟกัสสายบังคับบัญชา')} title={tr('ดูเฉพาะสายบังคับบัญชา — การส่งออก PDF / Excel / JD / บัตร จะใช้สายนี้ด้วย')} className={`h-7 max-w-[150px] rounded-md border px-1.5 text-xs font-semibold outline-none ${chartFocus ? 'border-violet-400 bg-violet-50 text-violet-700' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                        <option value="">{tr("สาย: ทั้งแผนก")}</option>
+                                        {focusSubDeptOptions.length > 0 && <optgroup label={tr('ตามแผนกย่อย')}>{focusSubDeptOptions.map(l => <option key={l} value={`subDept:${l}`}>{l}</option>)}</optgroup>}
+                                        {focusPersonOptions.length > 0 && <optgroup label={tr('ตามหัวหน้า')}>{focusPersonOptions.map(p => <option key={p.id} value={`person:${p.id}`}>{p.name}{p.position ? ` (${p.position})` : ''}</option>)}</optgroup>}
                                     </select>
                                 )}
-                                {viewMode === 'chart' && chartFocus && <button type="button" onClick={() => setChartFocus(null)} aria-label="ล้างการโฟกัสสาย" title="กลับไปดูทั้งแผนก" className="flex h-7 w-6 items-center justify-center rounded-md text-violet-600 hover:bg-violet-50"><Icons.X size={14}/></button>}
+                                {viewMode === 'chart' && chartFocus && <button type="button" onClick={() => setChartFocus(null)} aria-label={tr('ล้างการโฟกัสสาย')} title={tr('กลับไปดูทั้งแผนก')} className="flex h-7 w-6 items-center justify-center rounded-md text-violet-600 hover:bg-violet-50"><Icons.X size={14}/></button>}
                                 <div className="mx-0.5 h-5 w-px bg-gray-200" aria-hidden="true"></div>
-                                <ToolbarMenu label="การแสดงผล" title="ตัวเลือกการแสดงผล" icon={<Icons.Eye size={16}/>} items={[
-                                    viewMode === 'chart' && { key: 'skill', label: 'แสดง Skill บนผัง', checked: showSkillOnChart, onClick: () => { const next = !showSkillOnChart; setShowSkillOnChart(next); localStorage.setItem('showSkillOnChart', JSON.stringify(next)); } },
-                                    viewMode === 'chart' && { key: 'planned', label: 'แสดงแผนรับคน', hint: `${scopedPlannedCount} คน`, checked: showPlannedOnChart, onClick: () => { const next = !showPlannedOnChart; setShowPlannedOnChart(next); localStorage.setItem('showPlannedOnChart', JSON.stringify(next)); } },
-                                    { key: 'rulers', label: 'ไม้บรรทัด', checked: showRulers, onClick: () => setShowRulers(!showRulers) }
+                                <ToolbarMenu label={tr('การแสดงผล')} title={tr('ตัวเลือกการแสดงผล')} icon={<Icons.Eye size={16}/>} items={[
+                                    viewMode === 'chart' && { key: 'skill', label: tr('แสดง Skill บนผัง'), checked: showSkillOnChart, onClick: () => { const next = !showSkillOnChart; setShowSkillOnChart(next); localStorage.setItem('showSkillOnChart', JSON.stringify(next)); } },
+                                    viewMode === 'chart' && { key: 'planned', label: tr('แสดงแผนรับคน'), hint: tr('{n} คน', { n: scopedPlannedCount }), checked: showPlannedOnChart, onClick: () => { const next = !showPlannedOnChart; setShowPlannedOnChart(next); localStorage.setItem('showPlannedOnChart', JSON.stringify(next)); } },
+                                    { key: 'rulers', label: tr('ไม้บรรทัด'), checked: showRulers, onClick: () => setShowRulers(!showRulers) }
                                 ]}/>
-                                <ToolbarMenu label="ส่งออก" title="ส่งออก / พิมพ์" icon={<Icons.Download size={16}/>} items={[
-                                    viewMode === 'chart' && { key: 'pdf', label: 'ผังเป็น PDF', icon: <Icons.FileText size={16} className="text-red-600"/>, onClick: exportChartPDF, disabled: isExportingChartPdf },
-                                    viewMode === 'chart' && { key: 'xlsx', label: 'ผังเป็น Excel', icon: <Icons.FileSpreadsheet size={16} className="text-green-700"/>, onClick: exportChartExcel },
-                                    viewMode === 'chart' && { key: 'jd', label: 'Job Description (PDF)', icon: <Icons.FileText size={16} className="text-blue-700"/>, onClick: exportJobDescriptionsPDF },
+                                <ToolbarMenu label={tr('ส่งออก')} title={tr('ส่งออก / พิมพ์')} icon={<Icons.Download size={16}/>} items={[
+                                    viewMode === 'chart' && { key: 'pdf', label: tr("ผังเป็น PDF"), icon: <Icons.FileText size={16} className="text-red-600"/>, onClick: exportChartPDF, disabled: isExportingChartPdf },
+                                    viewMode === 'chart' && { key: 'xlsx', label: tr("ผังเป็น Excel"), icon: <Icons.FileSpreadsheet size={16} className="text-green-700"/>, onClick: exportChartExcel },
+                                    viewMode === 'chart' && { key: 'jd', label: tr("Job Description (PDF)"), icon: <Icons.FileText size={16} className="text-blue-700"/>, onClick: exportJobDescriptionsPDF },
                                     viewMode === 'chart' && canPrintIdCards(currentUser) && { divider: true },
-                                    canPrintIdCards(currentUser) && { key: 'idcard', label: 'พิมพ์บัตรพนักงาน', icon: <Icons.Users size={16} className="text-indigo-700"/>, onClick: () => setIsIdCardOpen(true) }
+                                    canPrintIdCards(currentUser) && { key: 'idcard', label: tr("พิมพ์บัตรพนักงาน"), icon: <Icons.Users size={16} className="text-indigo-700"/>, onClick: () => setIsIdCardOpen(true) }
                                 ]}/>
                             </div>
 
@@ -5435,21 +5609,24 @@
                                 <ToolbarMenu title={`${currentUser.name || currentUser.username} (${currentUser.role})`} icon={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">{String(currentUser.name || currentUser.username || '?').trim().charAt(0).toUpperCase()}</span>} items={[
                                     { key: 'who', header: <div><div className="text-sm font-bold text-gray-800">{currentUser.name || currentUser.username}</div><div className="text-[11px] text-gray-500">{currentUser.role}{currentUser.dept ? ` · ${currentUser.dept}` : ''}</div></div> },
                                     { divider: true },
-                                    currentUser.role === 'admin' && { key: 'settings', label: 'ตั้งค่าผู้ดูแล', icon: <Icons.Settings size={16}/>, onClick: () => setIsAdminPanelOpen(true) },
-                                    { key: 'logout', label: 'ออกจากระบบ', icon: <Icons.LogOut size={16}/>, tone: 'danger', onClick: () => { localStorage.removeItem('currentUser'); setCurrentUser(null); } }
+                                    { key: 'langh', header: <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400">{tr('ภาษา')} / Language / 语言</div> },
+                                    ...APP_LANGS.map(l => ({ key: `lang-${l.code}`, label: l.label, checked: lang === l.code, onClick: () => changeLang(l.code) })),
+                                    { divider: true },
+                                    currentUser.role === 'admin' && { key: 'settings', label: tr("ตั้งค่าผู้ดูแล"), icon: <Icons.Settings size={16}/>, onClick: () => setIsAdminPanelOpen(true) },
+                                    { key: 'logout', label: tr("ออกจากระบบ"), icon: <Icons.LogOut size={16}/>, tone: 'danger', onClick: () => { localStorage.removeItem('currentUser'); setCurrentUser(null); } }
                                 ]}/>
                             </div>
                         </div>
                     </nav>
 
-                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">เมนูจัดการ</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> เช็คชื่อ</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> Monitor เช็คชื่อ</button> {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>{setViewMode('turnover'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 font-bold text-rose-700"><Icons.Users/> Staff Turnover</button>} <button onClick={()=>{setViewMode('skills'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-violet-50 p-3 font-bold text-violet-700"><Icons.GraduationCap/> Skill Matrix</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> มุมมองผัง</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> มุมมองตาราง</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">+ เพิ่มพนักงาน</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> Waiting Area ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> แดชบอร์ดสรุป</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> บันทึกผังเป็น PDF</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> ส่งออกผังเป็น Excel</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> ส่งออก JD เป็น PDF</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> Admin Panel</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'}</button> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> ออกจากระบบ</button> </div> </div> </div> )}
+                    {isMobileMenuOpen && ( <div className="fixed inset-0 z-[110] lg:hidden"> <div className="absolute inset-0 bg-black/50" onClick={()=>setIsMobileMenuOpen(false)}></div> <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl flex flex-col p-4 animate-in slide-in-from-left duration-200"> <div className="flex justify-between items-center mb-6 border-b pb-2"><span className="font-bold">{tr('เมนูจัดการ')}</span><button onClick={()=>setIsMobileMenuOpen(false)}><Icons.X/></button></div> <div className="flex flex-col gap-4 overflow-y-auto"> <button onClick={()=>{setViewMode('attendance'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-green-50 p-3 font-bold text-green-700"><Icons.Check/> {tr('เช็คชื่อ')}</button> <button onClick={()=>{setViewMode('monitor'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-blue-50 p-3 font-bold text-blue-700"><Icons.Chart/> {tr('Monitor เช็คชื่อ')}</button> {['admin', 'supervisor', 'engineer'].includes(currentUser?.role) && <button onClick={()=>{setViewMode('turnover'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-rose-50 p-3 font-bold text-rose-700"><Icons.Users/> {tr('Staff Turnover')}</button>} <button onClick={()=>{setViewMode('skills'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 rounded-xl bg-violet-50 p-3 font-bold text-violet-700"><Icons.GraduationCap/> {tr('Skill Matrix')}</button> <button onClick={()=>{setViewMode('chart'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Grid/> {tr('มุมมองผัง')}</button> <button onClick={()=>{setViewMode('list'); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.List/> {tr('มุมมองตาราง')}</button> {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo: 'STAGING', dept: currentDept}); setIsModalOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 bg-blue-50 text-blue-600 rounded font-bold">{tr('+ เพิ่มพนักงาน')}</button>} <button onClick={()=>{setViewMode('chart'); setIsSidebarCollapsed(false); setIsSidebarOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Users/> {tr('Waiting Area')} ({stagingEmployees.length})</button> <button onClick={()=>{setIsSummaryOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Chart/> {tr('แดชบอร์ดสรุป')}</button> {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartPDF();}} disabled={isExportingChartPdf} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded disabled:opacity-50"><Icons.FileText/> {tr('บันทึกผังเป็น PDF')}</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportChartExcel();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileSpreadsheet/> {tr('ส่งออกผังเป็น Excel')}</button>} {viewMode === 'chart' && <button onClick={()=>{setIsMobileMenuOpen(false); exportJobDescriptionsPDF();}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.FileText/> {tr('ส่งออก JD เป็น PDF')}</button>} {currentUser.role === 'admin' && <button onClick={()=>{setIsAdminPanelOpen(true); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.Settings/> {tr('Admin Panel')}</button>} <button onClick={()=>{setShowRulers(!showRulers); setIsMobileMenuOpen(false);}} className="flex items-center gap-3 p-2 hover:bg-gray-100 rounded"><Icons.RulerIcon/> {tr(showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด')}</button> <div className="flex gap-1 rounded-lg bg-gray-50 p-1" role="group" aria-label={tr('ภาษา')}>{APP_LANGS.map(l => <button key={l.code} type="button" onClick={()=>changeLang(l.code)} aria-pressed={lang === l.code} className={`flex-1 rounded-md px-2 py-1.5 text-sm font-semibold ${lang === l.code ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'}`}>{l.label}</button>)}</div> <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} className="flex items-center gap-3 p-2 text-red-600 hover:bg-red-50 mt-auto border-t"><Icons.LogOut/> {tr('ออกจากระบบ')}</button> </div> </div> </div> )}
 
                     <div className="flex flex-1 overflow-hidden relative">
                         {viewMode === 'chart' && (
                             <>
                             <aside ref={sidebarRef} className={`fixed inset-y-0 left-0 z-40 bg-white border-r transform transition-transform duration-300 pt-14 lg:pt-0 ${isSidebarOpen?'translate-x-0':'-translate-x-full'} ${isSidebarCollapsed?'w-0 overflow-hidden':''} lg:relative lg:translate-x-0`} style={{ width: isSidebarCollapsed?'0px':(window.innerWidth>1024?`${sidebarWidth}px`:'16rem') }}>
                                 <div className="p-4 flex justify-between items-center shrink-0">
-                                    <h2 className="font-bold text-xs text-gray-400 uppercase">Waiting Area ({stagingEmployees.length})</h2>
+                                    <h2 className="font-bold text-xs text-gray-400 uppercase">{tr('Waiting Area')} ({stagingEmployees.length})</h2>
                                     {canAddEmployee && <button onClick={()=>{setEditingEmployee({isNew:true, reportsTo:'STAGING', dept: currentDept}); setIsModalOpen(true);}}><Icons.Plus size={18} className="text-blue-600"/></button>}
                                     <button onClick={()=>setIsSidebarOpen(false)} className="lg:hidden text-gray-400 hover:text-red-500"><Icons.X size={18}/></button>
                                 </div>
@@ -5492,19 +5669,19 @@
                                 <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border overflow-hidden">
                                     <div className="flex flex-col gap-3 border-b bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <button type="button" onClick={()=>{setShowEmployeeHistory(false); setShowPlannedList(false);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${!showEmployeeHistory && !showPlannedList ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>พนักงานปัจจุบัน ({scopedActiveCount})</button>
-                                            <button type="button" onClick={()=>{setShowEmployeeHistory(false); setShowPlannedList(true);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${!showEmployeeHistory && showPlannedList ? 'bg-violet-600 text-white' : 'bg-white text-violet-700 hover:bg-violet-50'}`} title="คนที่วางแผนจะรับ (ไม่นับรวมในยอดพนักงานปัจจุบัน)">แผนรับ ({scopedPlannedCount})</button>
-                                            <button type="button" onClick={()=>{setShowEmployeeHistory(true); setShowPlannedList(false);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${showEmployeeHistory ? 'bg-slate-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>ประวัติลาออก ({scopedHistoryCount})</button>
-                                            <span className="text-xs text-gray-500">แสดง {processedEmployees.length} รายการ</span>
+                                            <button type="button" onClick={()=>{setShowEmployeeHistory(false); setShowPlannedList(false);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${!showEmployeeHistory && !showPlannedList ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>{tr('พนักงานปัจจุบัน ({n})', { n: scopedActiveCount })}</button>
+                                            <button type="button" onClick={()=>{setShowEmployeeHistory(false); setShowPlannedList(true);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${!showEmployeeHistory && showPlannedList ? 'bg-violet-600 text-white' : 'bg-white text-violet-700 hover:bg-violet-50'}`} title={tr('คนที่วางแผนจะรับ (ไม่นับรวมในยอดพนักงานปัจจุบัน)')}>{tr('แผนรับ ({n})', { n: scopedPlannedCount })}</button>
+                                            <button type="button" onClick={()=>{setShowEmployeeHistory(true); setShowPlannedList(false);}} className={`rounded-lg px-3 py-2 text-sm font-bold ${showEmployeeHistory ? 'bg-slate-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>{tr('ประวัติลาออก ({n})', { n: scopedHistoryCount })}</button>
+                                            <span className="text-xs text-gray-500">{tr('แสดง {n} รายการ', { n: processedEmployees.length })}</span>
                                         </div>
                                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                                             <label className="flex min-h-10 min-w-0 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-gray-400 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 sm:w-80">
                                                 <Icons.Search size={16}/>
-                                                <input value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder="ค้นหาชื่อ รหัส แผนก ตำแหน่ง..." aria-label="ค้นหาในตารางรายชื่อ" className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"/>
-                                                {searchTerm && <button type="button" onClick={()=>setSearchTerm('')} aria-label="ล้างคำค้นหา" className="text-gray-400 hover:text-gray-700"><Icons.X size={15}/></button>}
+                                                <input value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder={tr('ค้นหาชื่อ รหัส แผนก ตำแหน่ง...')} aria-label={tr('ค้นหาในตารางรายชื่อ')} className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"/>
+                                                {searchTerm && <button type="button" onClick={()=>setSearchTerm('')} aria-label={tr('ล้างคำค้นหา')} className="text-gray-400 hover:text-gray-700"><Icons.X size={15}/></button>}
                                             </label>
-                                            <button onClick={exportCSV} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"><Icons.FileSpreadsheet size={16}/> Export CSV</button>
-                                            <button onClick={exportPDF} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-sm text-white shadow-sm hover:bg-red-700"><Icons.FileText size={16}/> Export PDF</button>
+                                            <button onClick={exportCSV} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-green-600 px-3 text-sm text-white shadow-sm hover:bg-green-700"><Icons.FileSpreadsheet size={16}/> {tr('Export CSV')}</button>
+                                            <button onClick={exportPDF} className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 text-sm text-white shadow-sm hover:bg-red-700"><Icons.FileText size={16}/> {tr('Export PDF')}</button>
                                         </div>
                                     </div>
                                     <div className="overflow-auto flex-1">
@@ -5513,7 +5690,7 @@
                                                 <tr>
                                                     {['ID','Name','Dept','Sub-dept','Shift','Position','Type','Status','Phone','Start Date','Company', ...(showEmployeeHistory ? ['Exit Date', 'Leader at exit', 'Reason'] : [])].map(h => (
                                                         <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider hover:bg-gray-200 transition-colors" onClick={()=>requestSort(h==='ID'?'id':h==='Name'?'name':h==='Dept'?'dept':h==='Sub-dept'?'subDept':h==='Shift'?'shift':h==='Position'?'position':h==='Type'?'type':h==='Status'?'status':h==='Phone'?'phone':h==='Start Date'?'startDate':h==='Exit Date'?'exitDate':'company')}>
-                                                            <div className="flex items-center">{h} <Icons.Sort size={12} className="ml-1 opacity-50"/></div>
+                                                            <div className="flex items-center">{tr(h)} <Icons.Sort size={12} className="ml-1 opacity-50"/></div>
                                                         </th>
                                                     ))}
                                                 </tr>
@@ -5526,7 +5703,7 @@
                                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 flex items-center gap-2"><img src={formatDriveUrl(emp.image)} className="w-6 h-6 rounded-full bg-gray-200"/>{emp.name}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-xs">{showEmployeeHistory ? (emp.exitDept || emp.dept) : emp.dept}</span></td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{(showEmployeeHistory ? (emp.exitSubDept || emp.subDept) : emp.subDept) || <span className="text-gray-400">ไม่ระบุ</span>}</td>
-                                                        <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">ไม่มีกะ</span>}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{['A', 'B'].includes(String(emp.shift || '').toUpperCase()) ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">กะ {String(emp.shift).toUpperCase()}</span> : <span className="text-gray-400">{tr("ไม่มีกะ")}</span>}</td>
                                                         <td className="px-4 py-3 text-sm text-gray-600">{emp.position}</td>
                                                         <td className="px-4 py-3 text-sm"><span className={`px-2 py-1 rounded-full text-xs font-bold ${emp.type==='Permanent'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}`}>{emp.type}</span></td>
                                                         <td className="px-4 py-3 text-sm"><span className={`w-2 h-2 rounded-full inline-block mr-2 ${statusDotClass(emp)}`}></span>{isPlannedEmployee(emp) ? 'Planned (แผนรับ)' : emp.status}</td>
