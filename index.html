@@ -834,7 +834,7 @@
                                     <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-left text-[10px]">
                                         {['A', 'B'].includes(String(employee.shift || '').toUpperCase()) && <><span className="text-slate-400">กะ</span><b className="text-slate-800">{String(employee.shift).toUpperCase()}</b></>}
                                         {employee.showPhone && employee.phone && <><span className="text-slate-400">โทร</span><b className="text-slate-800">{employee.phone}</b></>}
-                                        {employee.startDate && <><span className="text-slate-400">อายุงาน</span><b className="text-slate-800">{calculateTenure(employee.startDate)}</b></>}
+                                        {isPlanned ? <><span className="text-violet-500">เริ่มงาน</span><b className="text-violet-700">{employee.startDate ? formatDate(employee.startDate) : 'ยังไม่กำหนด'}</b></> : employee.startDate && <><span className="text-slate-400">อายุงาน</span><b className="text-slate-800">{calculateTenure(employee.startDate)}</b></>}
                                         {isSub && employee.company && <><span className="text-slate-400">บริษัท</span><b className="text-orange-600">{employee.company}</b></>}
                                     </div>
                                     <div className="mt-auto flex items-center gap-1 pt-2">
@@ -1864,7 +1864,7 @@
             if (!catalog.length) return result;
             const levelMap = new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l.level]));
             (employees || []).forEach(emp => {
-                if (!emp || isResignedEmployee(emp) || isPlannedEmployee(emp)) return;
+                if (!emp || isResignedEmployee(emp)) return; // planned hires keep their card so the required skills show
                 const skills = skillsForEmployee(catalog, emp);
                 if (!skills.length) return;
                 let required = 0, met = 0, stations = 0, rated = 0;
