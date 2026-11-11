@@ -1812,7 +1812,7 @@
         const SKILL_LEVEL_COLORS = ['#94a3b8', '#f59e0b', '#0ea5e9', '#10b981', '#6366f1'];
         const SKILL_RELEASE_LEVEL = 2;
         const SKILL_CATEGORIES = [
-            { key: 'process', label: 'Station / Process', head: 'bg-blue-600', soft: 'bg-blue-50', text: 'text-blue-700', hex: '2563EB' },
+            { key: 'process', label: 'Station / Process', short: 'Process', head: 'bg-blue-600', soft: 'bg-blue-50', text: 'text-blue-700', hex: '2563EB' },
             { key: 'machine', label: 'Machine / Tool', head: 'bg-violet-600', soft: 'bg-violet-50', text: 'text-violet-700', hex: '7C3AED' },
             { key: 'quality', label: 'Quality', head: 'bg-emerald-600', soft: 'bg-emerald-50', text: 'text-emerald-700', hex: '059669' },
             { key: 'safety', label: 'Safety', head: 'bg-amber-500', soft: 'bg-amber-50', text: 'text-amber-700', hex: 'F59E0B' },
@@ -2030,7 +2030,7 @@
             const avgOf = (skillList, fn) => skillList.length ? skillList.reduce((n, sk) => n + fn(sk), 0) / skillList.length : 0;
             const others = (colleagues || []).filter(e => e.id !== employee.id);
             const groups = mode === 'category'
-                ? SKILL_CATEGORIES.map(c => ({ label: c.label.split(' / ')[0], full: c.label, skills: skills.filter(sk => sk.category === c.key) })).filter(g => g.skills.length)
+                ? SKILL_CATEGORIES.map(c => ({ label: (c.short || c.label.split(' / ')[0]), full: c.label, skills: skills.filter(sk => sk.category === c.key) })).filter(g => g.skills.length)
                 : skills.map((sk, i) => ({ label: sk.code || `#${i + 1}`, full: sk.name, skills: [sk] }));
             const axes = groups.map(g => {
                 const requiredSkills = g.skills.filter(sk => requiredSkillLevel(sk, employee.position) > 0);
@@ -4910,14 +4910,14 @@
                 // 2b) The numbers behind each radar (category averages, current vs required) so they can be edited or charted in Excel.
                 if (chartSkillData?.catalog?.length) {
                     const radarSheet = workbook.addWorksheet('Skill Radar', { views: [{ state: 'frozen', ySplit: 1 }] });
-                    radarSheet.columns = [['ID', 10], ['Name', 28], ['Position', 24], ['Department', 16], ['Line', 18], ...SKILL_CATEGORIES.flatMap(c => [[`${c.label.split(' / ')[0]} (level)`, 15], [`${c.label.split(' / ')[0]} (required)`, 17]]), ['Required met', 13], ['Required skills', 15], ['Stations L3+', 13]].map(([header, width]) => ({ header, width }));
+                    radarSheet.columns = [['ID', 10], ['Name', 28], ['Position', 24], ['Department', 16], ['Line', 18], ...SKILL_CATEGORIES.flatMap(c => [[`${(c.short || c.label.split(' / ')[0])} (level)`, 15], [`${(c.short || c.label.split(' / ')[0])} (required)`, 17]]), ['Required met', 13], ['Required skills', 15], ['Stations L3+', 13]].map(([header, width]) => ({ header, width }));
                     const peopleById = new Map(filteredAll.map(e => [e.id, e]));
                     chartRows.forEach(r => {
                         const employee = peopleById.get(r.id);
                         const axes = employee ? computeSkillRadar(employee, chartSkillData.catalog, chartSkillData.levels, [], 'category').axes : [];
                         if (!axes.length) return;
                         const summary = skillSummaries.get(r.id);
-                        radarSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, ...SKILL_CATEGORIES.flatMap(c => { const axis = axes.find(a => a.label === c.label.split(' / ')[0]); return axis ? [Math.round(axis.value * 100) / 100, Math.round(axis.required * 100) / 100] : ['', '']; }), summary ? summary.met : '', summary ? summary.required : '', summary ? summary.stations : '']);
+                        radarSheet.addRow([r.id, r.name, r.position, r.dept, r.subDept, ...SKILL_CATEGORIES.flatMap(c => { const axis = axes.find(a => a.label === (c.short || c.label.split(' / ')[0])); return axis ? [Math.round(axis.value * 100) / 100, Math.round(axis.required * 100) / 100] : ['', '']; }), summary ? summary.met : '', summary ? summary.required : '', summary ? summary.stations : '']);
                     });
                     radarSheet.getRow(1).font = { bold: true };
                     radarSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 + SKILL_CATEGORIES.length * 2 + 3 } };
