@@ -2058,11 +2058,13 @@
             return (
                 <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="max-w-full cursor-pointer" role="button" aria-label="Skill radar" onClick={(e) => { e.stopPropagation(); openSkillRadar(employeeId); }}>
                     <title>คลิกเพื่อดู Skill Radar ขนาดใหญ่</title>
-                    {[2, 4].map(level => <polygon key={level} points={polygon(() => level)} fill="none" stroke="#cbd5e1" strokeWidth="1" strokeDasharray={level === SKILL_RELEASE_LEVEL ? '3 2' : undefined}/>)}
+                    {[1, 2, 3, 4].map(level => <polygon key={level} points={polygon(() => level)} fill={level === 2 ? '#f8fafc' : 'none'} stroke="#cbd5e1" strokeWidth="1" strokeDasharray={level === SKILL_RELEASE_LEVEL ? '3 2' : undefined}/>)}
                     {axes.map((a, i) => { const [x, y] = point(i, SKILL_MAX_LEVEL); return <line key={a.label} x1={width / 2} y1={height / 2} x2={x} y2={y} stroke="#e2e8f0" strokeWidth="1"/>; })}
+                    {[1, 2, 3, 4].map(level => <text key={level} x={width / 2 + 2} y={height / 2 - (level / SKILL_MAX_LEVEL) * radius - 1.5} fontSize="6" fill="#94a3b8">L{level}</text>)}
                     <polygon points={polygon(a => a.required)} fill="none" stroke="#f97316" strokeWidth="1.5" strokeDasharray="4 3"/>
                     <polygon points={polygon(a => a.value)} fill="#22c55e44" stroke="#16a34a" strokeWidth="2"/>
-                    {axes.map((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 9); return <text key={a.label} x={x} y={y + 3} fontSize="8" fontWeight="600" fill="#475569" textAnchor={cos > 0.25 ? 'start' : cos < -0.25 ? 'end' : 'middle'}>{a.label}</text>; })}
+                    {axes.map((a, i) => { const [x, y] = point(i, a.value); return <circle key={`p${a.label}`} cx={x} cy={y} r="2" fill="#16a34a"/>; })}
+                    {axes.map((a, i) => { const [x, y, cos] = point(i, SKILL_MAX_LEVEL, 9); const sin = Math.sin(-Math.PI / 2 + (i * 2 * Math.PI) / n); return <text key={a.label} x={x} y={y + 3 + (sin < -0.9 ? -4 : 0)} fontSize="8" fontWeight="600" fill="#475569" textAnchor={cos > 0.25 ? 'start' : cos < -0.25 ? 'end' : 'middle'}>{a.label}</text>; })}
                 </svg>
             );
         };
