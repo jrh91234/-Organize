@@ -316,7 +316,7 @@
                 return `
                 <section style="box-sizing:border-box;display:flex;flex-direction:column;min-height:1050px;padding:8px 6px 0">
                     <div style="border-bottom:2px solid #1f2937;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end">
-                        <div><h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1><div style="font-size:13px;color:#4b5563">ใบกำหนดหน้าที่และความรับผิดชอบ</div></div>
+                        <div style="display:flex;align-items:center;gap:12px"><img src="${ID_CARD_LOGO}" alt="" style="height:44px;width:auto"><div><h1 style="margin:0;font-size:24px;font-weight:700">Job Description</h1><div style="font-size:13px;color:#4b5563">ใบกำหนดหน้าที่และความรับผิดชอบ</div></div></div>
                         <span style="font-size:12px;color:#6b7280">${esc(printedOn)}</span>
                     </div>
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px">
@@ -517,7 +517,7 @@
             });
             return { cards, vlines, bars, units: Math.max(unit - 1, 1), rows, cardRows };
         };
-        const renderOrgChartSheet = (sheet, layout, theme, title, photoIds = new Map(), radarIds = new Map()) => {
+        const renderOrgChartSheet = (sheet, layout, theme, title, photoIds = new Map(), radarIds = new Map(), logoId = null) => {
             const COL0 = 2;
             const ROW0 = 3;
             const colL = unit => COL0 + unit * 3;
@@ -530,8 +530,12 @@
                 sheet.getColumn(colR(u)).width = 13;
                 sheet.getColumn(colL(u) + 2).width = 2.5;
             }
-            sheet.getCell(1, 2).value = title;
-            sheet.getCell(1, 2).font = { name: FONT, size: 14, bold: true };
+            // Company logo top-left (B1), title beside it.
+            const titleCol = logoId !== null ? 4 : 2;
+            if (logoId !== null) { sheet.getRow(1).height = 34; sheet.addImage(logoId, { tl: { col: 1, row: 0.1 }, ext: { width: 84, height: 40 } }); }
+            sheet.getCell(1, titleCol).value = title;
+            sheet.getCell(1, titleCol).font = { name: FONT, size: 14, bold: true };
+            sheet.getCell(1, titleCol).alignment = { vertical: 'middle' };
             const addBorder = (cell, side) => { cell.border = { ...(cell.border || {}), [side]: lineStyle }; };
             layout.vlines.forEach(v => addBorder(sheet.getCell(ROW0 + v.row, colL(v.unit)), 'right'));
             layout.bars.forEach(bar => { for (let c = colR(bar.from); c <= colL(bar.to); c++) addBorder(sheet.getCell(ROW0 + bar.row, c), 'bottom'); });
@@ -5164,7 +5168,7 @@
                     ReactDOM.flushSync(() => root.render(
                         <div>
                             <div className="mb-5 flex items-end justify-between border-b pb-3">
-                                <h1 className="text-2xl font-bold text-gray-800">{deptTab === 'Overview' ? 'Summary — All Departments' : `Department Summary — ${deptTab}`}{focusLabel ? ` · ${focusLabel}` : ''}</h1>
+                                <div className="flex items-center gap-3"><img src={ID_CARD_LOGO} alt="" style={{ height: 40, width: 'auto' }}/><h1 className="text-2xl font-bold text-gray-800">{deptTab === 'Overview' ? 'Summary — All Departments' : `Department Summary — ${deptTab}`}{focusLabel ? ` · ${focusLabel}` : ''}</h1></div>
                                 <span className="text-sm text-gray-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                             </div>
                             <DashboardContent stats={stats} activeTab={deptTab} printMode />
@@ -5260,7 +5264,8 @@
                         photoIds.set(employee.id, workbook.addImage({ base64: dataUrl, extension: 'png' }));
                     } catch (error) { /* no photo for this card */ }
                 }));
-                renderOrgChartSheet(chartSheet, layout, THEMES[appTheme], `Org Chart - ${currentDept} - ${today}`, photoIds, radarIds);
+                const logoId = workbook.addImage({ base64: ID_CARD_LOGO, extension: 'jpeg' });
+                renderOrgChartSheet(chartSheet, layout, THEMES[appTheme], `Org Chart - ${currentDept}${focusLabel ? ` - ${focusLabel}` : ''} - ${today}`, photoIds, radarIds, logoId);
 
                 // 2) The same people as a flat, filterable table.
                 const dataSheet = workbook.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -5351,6 +5356,20 @@
                     el.style.boxShadow = 'none';
                 });
                 clone.style.cssText += ';box-shadow:none;border:none;border-radius:0;margin:0;';
+                // Company logo at the top-left of the exported chart, beside the department heading.
+                const heading = clone.querySelector('h1')?.parentElement;
+                if (heading) {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:16px;';
+                    const logoImg = document.createElement('img');
+                    logoImg.src = ID_CARD_LOGO;
+                    logoImg.alt = '';
+                    logoImg.style.cssText = 'height:56px;width:auto;flex-shrink:0;';
+                    const titles = document.createElement('div');
+                    while (heading.firstChild) titles.appendChild(heading.firstChild);
+                    row.append(logoImg, titles);
+                    heading.appendChild(row);
+                }
                 inner.appendChild(clone);
                 document.body.appendChild(host);
                 // html2canvas draws Sarabun about a third of an em lower than the browser, so text slips to the bottom of badges,
