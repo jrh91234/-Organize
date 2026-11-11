@@ -2507,6 +2507,148 @@
             </div>
         );
 
+        // Import levels from another system's report (e.g. SafeTrain "Assessment by course"): one row per employee, one column per course,
+        // each course mapped to a skill category; the level is applied to every skill of that category in this line, as an unsaved draft.
+        const SKILL_IMPORT_ID_HEADER = /รหัส|employee|emp\.?\s*no|^id$|\bid\b/i;
+        const SKILL_IMPORT_NAME_HEADER = /ชื่อ|name/i;
+        const parseImportLevel = (cell) => {
+            const text = String(cell ?? '').trim();
+            const m = text.match(/(?:^|[^A-Za-z])L\s*([0-4])(?!\d)/i) || text.match(/^([0-4])(?:\.0+)?$/);
+            return m ? Number(m[1]) : null;
+        };
+        const guessImportCategory = (header, index) => {
+            const h = String(header || '');
+            if (/ปลอดภัย|safety/i.test(h)) return 'safety';
+            if (/คุณภาพ|quality|ตรวจสอบ/i.test(h)) return 'quality';
+            if (/ทั่วไป|general/i.test(h)) return 'general';
+            if (/เครื่องจักร|machine|tool/i.test(h)) return 'machine';
+            if (/ผลิต|ประกอบ|process|station|assembly/i.test(h)) return 'process';
+            return ['process', 'quality', 'general', 'safety'][index] || '';
+        };
+        const splitImportLine = (line) => line.includes('\t') ? line.split('\t') : line.includes(',') ? line.split(',') : line.split(/\s*\|\s*|\s{2,}/);
+        const parseSkillImport = (text) => {
+            const lines = String(text || '').split(/\r?\n/).map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
+            const table = lines.map(l => splitImportLine(l).map(c => c.trim()));
+            if (!table.length) return null;
+            const isHeader = (cells) => cells.every(c => parseImportLevel(c) === null) && cells.some(c => SKILL_IMPORT_ID_HEADER.test(c) || SKILL_IMPORT_NAME_HEADER.test(c) || guessImportCategory(c, 99));
+            const headerIndex = table.findIndex(isHeader);
+            const header = headerIndex >= 0 ? table[headerIndex] : [];
+            const body = table.filter((cells, i) => i !== headerIndex && cells.some(c => parseImportLevel(c) !== null));
+            const width = Math.max(header.length, ...body.map(r => r.length));
+            const levelCols = [...Array(width).keys()].filter(c => body.some(r => parseImportLevel(r[c]) !== null));
+            const textCols = [...Array(width).keys()].filter(c => !levelCols.includes(c));
+            const idCol = textCols.find(c => SKILL_IMPORT_ID_HEADER.test(header[c] || '')) ?? textCols[0];
+            const nameCol = textCols.find(c => c !== idCol && SKILL_IMPORT_NAME_HEADER.test(header[c] || '')) ?? textCols.find(c => c !== idCol);
+            return {
+                columns: levelCols.map((c, i) => ({ index: c, header: header[c] || `คอลัมน์ ${c + 1}`, category: guessImportCategory(header[c], i) })),
+                rows: body.map(r => ({ id: String(r[idCol] ?? '').trim(), name: nameCol === undefined ? '' : String(r[nameCol] ?? '').trim(), cells: r }))
+            };
+        };
+        const normImportKey = (value) => String(value || '').replace(/\s+/g, '').toLowerCase();
+
+        const SkillImportModal = ({ employees, allEmployees, skills, line, levelOf, assessedDate, onApply, onClose }) => {
+            const [text, setText] = useState('');
+            const [source, setSource] = useState('SafeTrain');
+            const [date, setDate] = useState(assessedDate);
+            const [keepHigher, setKeepHigher] = useState(true);
+            const [mapping, setMapping] = useState({});
+            const [manualMatch, setManualMatch] = useState({});
+            const parsed = useMemo(() => parseSkillImport(text), [text]);
+            useEffect(() => { setMapping({}); setManualMatch({}); }, [text]);
+            const categoriesHere = SKILL_CATEGORIES.filter(c => skills.some(s => s.category === c.key));
+            const columns = (parsed?.columns || []).map(col => ({ ...col, category: Object.prototype.hasOwnProperty.call(mapping, col.index) ? mapping[col.index] : col.category }));
+            const byId = new Map(employees.map(e => [normImportKey(e.id), e]));
+            const byName = new Map(employees.map(e => [normImportKey(e.name), e]));
+            const results = (parsed?.rows || []).map((row, r) => {
+                const manual = manualMatch[r];
+                const emp = manual !== undefined ? employees.find(e => e.id === manual) : (byId.get(normImportKey(row.id)) || (row.name && byName.get(normImportKey(row.name))));
+                const elsewhere = !emp && allEmployees.find(e => normImportKey(e.id) === normImportKey(row.id));
+                const changes = [];
+                let skipped = 0;
+                if (emp) columns.forEach(col => {
+                    const level = parseImportLevel(row.cells[col.index]);
+                    if (level === null || !col.category) return;
+                    skills.filter(s => s.category === col.category).forEach(skill => {
+                        const current = levelOf(emp.id, skill.id);
+                        if (current === level) return;
+                        if (keepHigher && current !== null && current > level) { skipped++; return; }
+                        changes.push({ emp, skill, level, note: `${source || 'Import'}: ${col.header} ${String(row.cells[col.index]).trim()}`.trim() });
+                    });
+                });
+                return { row, r, emp, elsewhere, changes, skipped };
+            });
+            const allChanges = results.flatMap(x => x.changes);
+            const input = 'rounded-lg border px-2 py-1.5 text-xs';
+            return (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+                    <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b px-5 py-3">
+                            <div>
+                                <div className="flex items-center gap-2 font-bold text-gray-900"><Icons.Upload size={18}/>นำเข้าคะแนน Skill — {line || SKILL_NO_LINE_LABEL}</div>
+                                <div className="text-xs text-gray-500">วางตาราง "ผลวัด Skill แยกตามคอร์ส" (คัดลอกจาก SafeTrain / Excel) แต่ละคอร์สจะใส่ระดับให้ทุกทักษะในหมวดที่เลือก</div>
+                            </div>
+                            <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100" aria-label="ปิด"><Icons.X size={18}/></button>
+                        </div>
+                        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                            <textarea value={text} onChange={e => setText(e.target.value)} rows={6} autoFocus placeholder={'รหัสพนักงาน\tชื่อพนักงาน\tการผลิตและการประกอบ\tคุณภาพและการตรวจสอบชิ้นงาน\tความรู้ทั่วไปในการทำงาน\tความปลอดภัยในการทำงาน\n65003\tพีรพล แสนสีม\tL3 · 80%\tL4 · 90%\tL4 · 90%\tL3 · 70%'} className="w-full rounded-xl border p-3 font-mono text-xs"/>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                                <label className="flex items-center gap-1.5">ที่มา<input value={source} onChange={e => setSource(e.target.value)} className={`${input} w-28`}/></label>
+                                <label className="flex items-center gap-1.5">วันที่ประเมิน<input type="date" value={date} onChange={e => setDate(e.target.value)} className={input}/></label>
+                                <label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={keepHigher} onChange={e => setKeepHigher(e.target.checked)} className="accent-violet-600"/>ไม่ลดระดับที่สูงกว่าอยู่แล้ว</label>
+                            </div>
+                            {parsed && columns.length === 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">ไม่พบคอลัมน์ระดับ (ต้องมีค่าแบบ L0–L4 หรือเลข 0–4)</div>}
+                            {columns.length > 0 && (
+                                <div className="rounded-xl border p-3">
+                                    <div className="mb-2 text-xs font-bold text-gray-700">จับคู่คอร์ส → หมวดทักษะในไลน์นี้</div>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {columns.map(col => (
+                                            <label key={col.index} className="flex items-center gap-2 text-xs">
+                                                <span className="min-w-0 flex-1 truncate font-semibold text-gray-800" title={col.header}>{col.header}</span>
+                                                <select value={col.category} onChange={e => setMapping(prev => ({ ...prev, [col.index]: e.target.value }))} className={`${input} w-44 font-semibold ${col.category ? skillCategory(col.category).text : 'text-gray-400'}`}>
+                                                    <option value="">— ไม่นำเข้า —</option>
+                                                    {SKILL_CATEGORIES.map(c => <option key={c.key} value={c.key} disabled={!categoriesHere.includes(c)}>{c.label} ({skills.filter(s => s.category === c.key).length})</option>)}
+                                                </select>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {results.length > 0 && (
+                                <div className="overflow-x-auto rounded-xl border">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-gray-50 text-gray-600"><tr><th className="px-2 py-1.5 text-left">จากไฟล์</th><th className="px-2 py-1.5 text-left">พนักงานในไลน์นี้</th>{columns.map(col => <th key={col.index} className="px-2 py-1.5 text-center">{col.header}</th>)}<th className="px-2 py-1.5 text-center">เปลี่ยน</th></tr></thead>
+                                        <tbody>
+                                            {results.map(x => (
+                                                <tr key={x.r} className={`border-t ${x.emp ? '' : 'bg-rose-50/60'}`}>
+                                                    <td className="px-2 py-1.5"><div className="font-semibold">{x.row.id || '-'}</div><div className="text-gray-500">{x.row.name}</div></td>
+                                                    <td className="px-2 py-1.5">
+                                                        <select value={x.emp?.id || ''} onChange={e => setManualMatch(prev => ({ ...prev, [x.r]: e.target.value }))} className={`${input} w-52 ${x.emp ? 'border-emerald-300' : 'border-rose-300 text-rose-700'}`}>
+                                                            <option value="">— ข้าม (ไม่พบ) —</option>
+                                                            {employees.map(e => <option key={e.id} value={e.id}>{e.id} · {e.name}</option>)}
+                                                        </select>
+                                                        {!x.emp && <div className="mt-0.5 text-[10px] text-rose-600">{x.elsewhere ? `อยู่แผนก/ไลน์อื่น (${x.elsewhere.dept} / ${x.elsewhere.subDept || '-'})` : 'ไม่พบรหัสนี้ในไลน์ — เลือกคนเองได้'}</div>}
+                                                    </td>
+                                                    {columns.map(col => { const lv = parseImportLevel(x.row.cells[col.index]); return <td key={col.index} className="px-2 py-1.5 text-center">{lv === null ? '–' : <span className="inline-flex items-center gap-1"><SkillPie level={lv} size={16}/>L{lv}</span>}</td>; })}
+                                                    <td className="px-2 py-1.5 text-center font-bold text-violet-700">{x.emp ? x.changes.length : '–'}{x.skipped > 0 && <div className="text-[10px] font-normal text-gray-400">ข้าม {x.skipped}</div>}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t px-5 py-3">
+                            <span className="text-xs text-gray-500">{allChanges.length ? `จะเปลี่ยน ${allChanges.length} ช่อง · ${results.filter(x => x.changes.length).length} คน — ตรวจในตารางแล้วกด "บันทึก"` : 'ยังไม่มีช่องที่จะเปลี่ยน'}</span>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
+                                <button type="button" disabled={!allChanges.length} onClick={() => onApply(allChanges, date)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white hover:bg-violet-700 disabled:opacity-40">ใส่ลงตาราง</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         // The printable sheet (doc header + matrix + legend), used for both the on-screen table and the PDF.
         const SkillMatrixSheet = ({ dept, line, doc, skills, rows, levelOf, draft, editMode, onCellClick, onCellKey, printMode = false, onEditDoc, canEdit }) => {
             const groups = [];
@@ -2657,9 +2799,11 @@
             const [saving, setSaving] = useState(false);
             const [message, setMessage] = useState(null);
             const [docOpen, setDocOpen] = useState(false);
+            const [importOpen, setImportOpen] = useState(false);
+            const [draftNotes, setDraftNotes] = useState({});
             const [exporting, setExporting] = useState(false);
             const printRef = useRef(null);
-            useEffect(() => { setDraft({}); setEditMode(false); setMessage(null); }, [dept, line]);
+            useEffect(() => { setDraft({}); setDraftNotes({}); setEditMode(false); setMessage(null); }, [dept, line]);
             const levelMap = useMemo(() => new Map((data.levels || []).map(l => [skillKey(l.employeeId, l.skillId), l])), [data.levels]);
             const levelOf = useCallback((employeeId, skillId) => {
                 const key = skillKey(employeeId, skillId);
@@ -2692,6 +2836,16 @@
                 const key = skillKey(emp.id, skill.id);
                 const original = levelMap.get(key)?.level ?? null;
                 setDraft(prev => { const next = { ...prev }; if (level === original) delete next[key]; else next[key] = level; return next; });
+                setDraftNotes(prev => { if (!(key in prev)) return prev; const next = { ...prev }; delete next[key]; return next; });
+            };
+            const applyImport = (changes, date) => {
+                const levels = {}, notes = {};
+                changes.forEach(c => { const key = skillKey(c.emp.id, c.skill.id); levels[key] = c.level; notes[key] = c.note; });
+                setDraft(prev => ({ ...prev, ...levels }));
+                setDraftNotes(prev => ({ ...prev, ...notes }));
+                if (date) setAssessedDate(date);
+                setEditMode(true); setImportOpen(false);
+                setMessage({ ok: true, text: `ใส่คะแนนที่นำเข้าแล้ว ${changes.length} ช่อง — ตรวจในตารางแล้วกด "บันทึก" ด้านล่าง` });
             };
             const onCellClick = (emp, cell) => { if (editMode) setPicker({ emp, skill: cell.skill, req: cell.req }); };
             const onCellKey = (e, emp, cell) => {
@@ -2703,11 +2857,11 @@
                 if (!draftCount) return;
                 setSaving(true); setMessage(null);
                 try {
-                    const items = Object.entries(draft).map(([key, level]) => { const [employeeId, skillId] = key.split('|'); return { employeeId, skillId, level }; });
+                    const items = Object.entries(draft).map(([key, level]) => { const [employeeId, skillId] = key.split('|'); return draftNotes[key] && level !== null ? { employeeId, skillId, level, note: draftNotes[key] } : { employeeId, skillId, level }; });
                     const result = await call('saveSkillLevels', { items, assessedDate });
                     if (result?.status !== 'success') throw new Error(result?.message || 'บันทึกไม่สำเร็จ');
                     await onReload();
-                    setDraft({});
+                    setDraft({}); setDraftNotes({});
                     setMessage({ ok: !result.errors?.length, text: result.errors?.length ? `บันทึกแล้ว ${result.changed} ช่อง · ${result.errors.join(' · ')}` : `บันทึกแล้ว ${result.changed} ช่อง` });
                 } catch (error) {
                     setMessage({ ok: false, text: error?.message || 'บันทึกไม่สำเร็จ' });
@@ -2848,7 +3002,8 @@
                         <div className="ml-auto flex flex-wrap items-center gap-2">
                             <button type="button" onClick={exportExcel} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50"><Icons.FileSpreadsheet size={15}/>Excel</button>
                             <button type="button" onClick={exportPdf} disabled={exporting} className="flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">{exporting ? <Icons.Loader size={15}/> : <Icons.FileText size={15}/>}PDF (A3)</button>
-                            {canEdit && <button type="button" onClick={() => { if (editMode && draftCount && !window.confirm('ยกเลิกการแก้ไขที่ยังไม่บันทึก?')) return; setEditMode(!editMode); setDraft({}); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm ${editMode ? 'bg-gray-800 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}><Icons.Paint size={15}/>{editMode ? 'ออกจากโหมดแก้ไข' : 'แก้ไขระดับ'}</button>}
+                            {canEdit && <button type="button" onClick={() => setImportOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" title="วางผลประเมินจาก SafeTrain / Excel แล้วใส่ลงตาราง"><Icons.Upload size={15}/>นำเข้าคะแนน</button>}
+                            {canEdit && <button type="button" onClick={() => { if (editMode && draftCount && !window.confirm('ยกเลิกการแก้ไขที่ยังไม่บันทึก?')) return; setEditMode(!editMode); setDraft({}); setDraftNotes({}); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm ${editMode ? 'bg-gray-800 text-white' : 'bg-violet-600 text-white hover:bg-violet-700'}`}><Icons.Paint size={15}/>{editMode ? 'ออกจากโหมดแก้ไข' : 'แก้ไขระดับ'}</button>}
                         </div>
                     </div>
                     {message && <div className={`rounded-xl border px-4 py-2 text-sm font-semibold ${message.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{message.text}</div>}
@@ -2858,12 +3013,13 @@
                         <div className="sticky bottom-3 z-30 mx-auto flex w-fit flex-wrap items-center gap-3 rounded-2xl border border-violet-200 bg-white/95 px-4 py-2.5 shadow-xl backdrop-blur">
                             <span className="text-sm font-bold text-violet-700">แก้ไข {draftCount} ช่อง</span>
                             <label className="flex items-center gap-1.5 text-xs text-gray-600">วันที่ประเมิน<input type="date" value={assessedDate} onChange={e => setAssessedDate(e.target.value)} className="rounded border p-1 text-xs"/></label>
-                            <button type="button" onClick={() => setDraft({})} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
+                            <button type="button" onClick={() => { setDraft({}); setDraftNotes({}); }} className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">ยกเลิก</button>
                             <button type="button" onClick={save} disabled={saving} className="rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50">{saving ? 'กำลังบันทึก...' : 'บันทึก'}</button>
                         </div>
                     )}
                     {picker && <SkillLevelPicker employee={picker.emp} skill={picker.skill} required={picker.req} current={levelOf(picker.emp.id, picker.skill.id)} onPick={level => { setLevel(picker.emp, picker.skill, level); setPicker(null); }} onClose={() => setPicker(null)}/>}
                     {docOpen && <SkillDocModal doc={doc} saving={saving} onSave={saveDoc} onClose={() => setDocOpen(false)}/>}
+                    {importOpen && <SkillImportModal employees={lineEmployees} allEmployees={employees} skills={skills} line={line} levelOf={levelOf} assessedDate={assessedDate} onApply={applyImport} onClose={() => setImportOpen(false)}/>}
                     {exporting && (
                         <div style={{ position: 'fixed', left: 0, top: 0, width: 0, height: 0, overflow: 'hidden', zIndex: -1 }} aria-hidden="true">
                             <div ref={printRef} style={{ position: 'absolute', left: 0, top: 0, width: 'max-content', background: '#fff' }}>
