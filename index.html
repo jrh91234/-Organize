@@ -522,7 +522,11 @@
             Settings: (p) => ( <svg xmlns="http://www.w3.org/2000/svg" width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="currentColor" stroke="none" className={p.className}> <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/> </svg> ),
             Move: (p)=><IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="9 19 12 22 15 19"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></IconBase>, Menu: (p)=><IconBase {...p}><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></IconBase>, 
             Grid: (p)=><IconBase {...p}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></IconBase>, List: (p)=><IconBase {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></IconBase>, 
-            ChevronLeft: (p)=><IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>, ChevronRight: (p)=><IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>, 
+            ChevronLeft: (p)=><IconBase {...p}><polyline points="15 18 9 12 15 6"/></IconBase>, ChevronRight: (p)=><IconBase {...p}><polyline points="9 18 15 12 9 6"/></IconBase>,
+            ChevronDown: (p)=><IconBase {...p}><polyline points="6 9 12 15 18 9"/></IconBase>,
+            Eye: (p)=><IconBase {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></IconBase>,
+            Download: (p)=><IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>,
+            User: (p)=><IconBase {...p}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></IconBase>, 
             ArrowUp: (p)=><IconBase {...p}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></IconBase>, ArrowDown: (p)=><IconBase {...p}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></IconBase>, ArrowLeft: (p)=><IconBase {...p}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></IconBase>, ArrowRight: (p)=><IconBase {...p}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></IconBase>, 
             RotateCcw: (p)=><IconBase {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></IconBase>, 
             RulerIcon: (p)=><IconBase {...p}><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"/><line x1="14.5" y1="3.2" x2="18.8" y2="7.5"/><line x1="12.5" y1="5.2" x2="16.8" y2="9.5"/><line x1="10.5" y1="7.2" x2="14.8" y2="11.5"/><line x1="8.5" y1="9.2" x2="12.8" y2="13.5"/><line x1="6.5" y1="11.2" x2="10.8" y2="15.5"/><line x1="4.5" y1="13.2" x2="8.8" y2="17.5"/></IconBase>, 
@@ -707,6 +711,49 @@
 
         const ManageDeptsModal = ({ depts, onAdd, onDelete, onClose }) => { const [newD, setNewD] = useState("");
             return ( <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]"> <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm"> <div className="flex justify-between items-center mb-4"><h3 className="font-bold flex items-center"><Icons.Grid className="mr-2"/> Manage Departments</h3><button onClick={onClose}><Icons.X/></button></div> <div className="flex gap-2 mb-4"><input value={newD} onChange={e=>setNewD(e.target.value)} placeholder="New Dept..." className="flex-1 border p-2 rounded text-sm"/><button onClick={()=>{if(newD){onAdd(newD);setNewD('');}}} className="bg-green-600 text-white p-2 rounded"><Icons.Plus/></button></div> <div className="max-h-60 overflow-y-auto space-y-2">{depts.map(d => (<div key={d} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm group"><span>{d}</span><button onClick={()=>onDelete(d)} className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Icons.Trash2 size={16}/></button></div>))}</div> </div> </div> );
+        };
+
+        // Toolbar dropdown: a trigger button plus a popover list. Closes on outside click, Escape, or after an item runs.
+        // items: { key, label, icon, onClick, checked (boolean => checkbox row that stays open), disabled, tone, hint, divider }
+        const ToolbarMenu = ({ label, icon, items, align = 'right', title, triggerClassName = '', badge }) => {
+            const [open, setOpen] = useState(false);
+            const ref = useRef(null);
+            useEffect(() => {
+                if (!open) return;
+                const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+                const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+                document.addEventListener('mousedown', onDown);
+                document.addEventListener('keydown', onKey);
+                return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+            }, [open]);
+            const visible = (items || []).filter(Boolean);
+            if (!visible.some(i => !i.divider)) return null;
+            return (
+                <div className="relative" ref={ref}>
+                    <button type="button" onClick={()=>setOpen(o=>!o)} aria-haspopup="menu" aria-expanded={open} title={title || label} className={`flex h-7 items-center gap-1 rounded-md px-1.5 text-xs font-semibold transition-colors ${open ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'} ${triggerClassName}`}>
+                        {icon}{label && <span className="hidden xl:inline">{label}</span>}{badge}<Icons.ChevronDown size={12} className="opacity-60"/>
+                    </button>
+                    {open && (
+                        <div role="menu" className={`absolute top-full z-[120] mt-1.5 min-w-[220px] rounded-xl border border-gray-200 bg-white p-1 shadow-lg ${align === 'right' ? 'right-0' : 'left-0'}`}>
+                            {visible.map((item, idx) => item.divider
+                                ? <div key={`d${idx}`} className="my-1 border-t border-gray-100"></div>
+                                : item.header
+                                    ? <div key={item.key} className="px-3 py-2">{item.header}</div>
+                                    : (
+                                <button key={item.key} type="button" role={typeof item.checked === 'boolean' ? 'menuitemcheckbox' : 'menuitem'} aria-checked={typeof item.checked === 'boolean' ? item.checked : undefined} disabled={item.disabled}
+                                    onClick={()=>{ item.onClick && item.onClick(); if (typeof item.checked !== 'boolean') setOpen(false); }}
+                                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors disabled:opacity-50 ${item.tone === 'danger' ? 'text-red-600 hover:bg-red-50' : 'text-gray-700 hover:bg-gray-50'}`}>
+                                    {typeof item.checked === 'boolean'
+                                        ? <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${item.checked ? 'border-violet-600 bg-violet-600 text-white' : 'border-gray-300 bg-white'}`}>{item.checked && <Icons.Check size={11}/>}</span>
+                                        : <span className="flex w-4 shrink-0 justify-center">{item.icon}</span>}
+                                    <span className="flex-1">{item.label}</span>
+                                    {item.hint && <span className="text-[11px] text-gray-400">{item.hint}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
         };
 
         const EmployeeCard = React.memo(({ employee, onClick, onDragStart, onMoveInit, className="", isStaging=false, isSelected=false, isLocked=false, isViewOnly=false, themeConf, shapeClass, selectionMode, toggleSelection, onReorder, onGridColChange, currentUser, isAllDepts }) => {
@@ -5142,18 +5189,30 @@
                             <div className="flex h-9 items-center gap-0.5 rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
                                 {!isLocked && <button onClick={addAnnotation} aria-label="เพิ่มข้อความบนผัง" title="เพิ่มข้อความบนผัง" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Type size={18}/></button>}
                                 {!isLocked && <button onClick={()=>{setSelectionMode(!selectionMode); setSelectedIds([]);}} aria-label="เลือกหลายรายการ" title="เลือกหลายรายการ" className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${selectionMode?'bg-purple-600 text-white':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.CheckSquare size={17}/></button>}
-                                {viewMode === 'chart' && <button onClick={()=>{ const next = !showSkillOnChart; setShowSkillOnChart(next); localStorage.setItem('showSkillOnChart', JSON.stringify(next)); }} aria-label={showSkillOnChart ? 'ซ่อน Skill บนผัง' : 'แสดง Skill บนผัง'} aria-pressed={showSkillOnChart} title={showSkillOnChart ? 'ซ่อนระดับ Skill บนผัง' : 'แสดงระดับ Skill บนผัง'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showSkillOnChart ? 'bg-violet-100 text-violet-700' : 'text-gray-400 hover:bg-violet-50 hover:text-violet-600'}`}><Icons.GraduationCap size={17}/></button>}
-                                {viewMode === 'chart' && <button onClick={()=>{ const next = !showPlannedOnChart; setShowPlannedOnChart(next); localStorage.setItem('showPlannedOnChart', JSON.stringify(next)); }} aria-label={showPlannedOnChart ? 'ซ่อนแผนรับคนบนผัง' : 'แสดงแผนรับคนบนผัง'} aria-pressed={showPlannedOnChart} title={`${showPlannedOnChart ? 'ซ่อน' : 'แสดง'}แผนรับคน (Future team) บนผัง — ปัจจุบัน ${scopedActiveCount} คน, แผนรับ ${scopedPlannedCount} คน`} className={`flex h-7 items-center gap-0.5 rounded-md px-1.5 transition-colors ${showPlannedOnChart ? 'bg-violet-100 text-violet-700' : 'text-gray-400 hover:bg-violet-50 hover:text-violet-600'}`}><Icons.Users size={16}/><span className="text-[10px] font-bold">แผนรับ{scopedPlannedCount > 0 ? ` ${scopedPlannedCount}` : ''}</span></button>}
-                                {viewMode === 'chart' && <button onClick={exportChartPDF} disabled={isExportingChartPdf} aria-label="บันทึกผังเป็น PDF" title="บันทึกผังเป็น PDF" className="flex h-7 w-8 items-center justify-center rounded-md text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"><Icons.FileText size={18}/></button>}
-                                {viewMode === 'chart' && <button onClick={exportChartExcel} aria-label="ส่งออกผังเป็น Excel" title="ส่งออกผังเป็น Excel" className="flex h-7 w-8 items-center justify-center rounded-md text-green-700 transition-colors hover:bg-green-50"><Icons.FileSpreadsheet size={18}/></button>}
-                                {viewMode === 'chart' && <button onClick={exportJobDescriptionsPDF} aria-label="ส่งออก Job Description เป็น PDF" title="ส่งออก Job Description เป็น PDF" className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-blue-700 transition-colors hover:bg-blue-50"><Icons.FileText size={16}/><span className="text-[10px] font-bold">JD</span></button>}
-                                {canPrintIdCards(currentUser) && <button onClick={()=>setIsIdCardOpen(true)} aria-label="พิมพ์บัตรพนักงาน" title="พิมพ์บัตรพนักงาน" className="flex h-7 items-center gap-0.5 rounded-md px-1.5 text-indigo-700 transition-colors hover:bg-indigo-50"><Icons.Users size={16}/><span className="text-[10px] font-bold">บัตร</span></button>}
                                 <button onClick={()=>setIsSummaryOpen(true)} aria-label="แดชบอร์ดสรุป" title="แดชบอร์ดสรุป" className="flex h-7 w-8 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-50"><Icons.Chart size={18}/></button>
-                                <button onClick={()=>setShowRulers(!showRulers)} aria-label={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} title={showRulers?'ซ่อนไม้บรรทัด':'แสดงไม้บรรทัด'} className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${showRulers?'bg-blue-50 text-blue-700':'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}><Icons.RulerIcon size={18}/></button>
-                                {currentUser.role === 'admin' && <button onClick={()=>setIsAdminPanelOpen(true)} aria-label="ตั้งค่าผู้ดูแล" title="ตั้งค่าผู้ดูแล" className="flex h-7 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"><Icons.Settings size={18}/></button>}
+                                <div className="mx-0.5 h-5 w-px bg-gray-200" aria-hidden="true"></div>
+                                <ToolbarMenu label="การแสดงผล" title="ตัวเลือกการแสดงผล" icon={<Icons.Eye size={16}/>} items={[
+                                    viewMode === 'chart' && { key: 'skill', label: 'แสดง Skill บนผัง', checked: showSkillOnChart, onClick: () => { const next = !showSkillOnChart; setShowSkillOnChart(next); localStorage.setItem('showSkillOnChart', JSON.stringify(next)); } },
+                                    viewMode === 'chart' && { key: 'planned', label: 'แสดงแผนรับคน', hint: `${scopedPlannedCount} คน`, checked: showPlannedOnChart, onClick: () => { const next = !showPlannedOnChart; setShowPlannedOnChart(next); localStorage.setItem('showPlannedOnChart', JSON.stringify(next)); } },
+                                    { key: 'rulers', label: 'ไม้บรรทัด', checked: showRulers, onClick: () => setShowRulers(!showRulers) }
+                                ]}/>
+                                <ToolbarMenu label="ส่งออก" title="ส่งออก / พิมพ์" icon={<Icons.Download size={16}/>} items={[
+                                    viewMode === 'chart' && { key: 'pdf', label: 'ผังเป็น PDF', icon: <Icons.FileText size={16} className="text-red-600"/>, onClick: exportChartPDF, disabled: isExportingChartPdf },
+                                    viewMode === 'chart' && { key: 'xlsx', label: 'ผังเป็น Excel', icon: <Icons.FileSpreadsheet size={16} className="text-green-700"/>, onClick: exportChartExcel },
+                                    viewMode === 'chart' && { key: 'jd', label: 'Job Description (PDF)', icon: <Icons.FileText size={16} className="text-blue-700"/>, onClick: exportJobDescriptionsPDF },
+                                    viewMode === 'chart' && canPrintIdCards(currentUser) && { divider: true },
+                                    canPrintIdCards(currentUser) && { key: 'idcard', label: 'พิมพ์บัตรพนักงาน', icon: <Icons.Users size={16} className="text-indigo-700"/>, onClick: () => setIsIdCardOpen(true) }
+                                ]}/>
                             </div>
 
-                            <button onClick={()=>{localStorage.removeItem('currentUser'); setCurrentUser(null);}} aria-label="ออกจากระบบ" title="ออกจากระบบ" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition-colors hover:border-red-200 hover:bg-red-50"><Icons.LogOut size={18}/></button>
+                            <div className="flex h-9 items-center rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+                                <ToolbarMenu title={`${currentUser.name || currentUser.username} (${currentUser.role})`} icon={<span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-700">{String(currentUser.name || currentUser.username || '?').trim().charAt(0).toUpperCase()}</span>} items={[
+                                    { key: 'who', header: <div><div className="text-sm font-bold text-gray-800">{currentUser.name || currentUser.username}</div><div className="text-[11px] text-gray-500">{currentUser.role}{currentUser.dept ? ` · ${currentUser.dept}` : ''}</div></div> },
+                                    { divider: true },
+                                    currentUser.role === 'admin' && { key: 'settings', label: 'ตั้งค่าผู้ดูแล', icon: <Icons.Settings size={16}/>, onClick: () => setIsAdminPanelOpen(true) },
+                                    { key: 'logout', label: 'ออกจากระบบ', icon: <Icons.LogOut size={16}/>, tone: 'danger', onClick: () => { localStorage.removeItem('currentUser'); setCurrentUser(null); } }
+                                ]}/>
+                            </div>
                         </div>
                     </nav>
 
