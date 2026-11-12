@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "test": "node scripts/check-inline-babel-module.js"
+    "test": "node scripts/check-inline-babel-module.js && node --test scripts/test-pl-sync.js"
   }
 }
